@@ -51,14 +51,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/change-password', [ProfileController::class, 'changePassword'])->name('password.change');
 });
 
-Route::middleware('auth:sanctum')->group(function () {
-    Route::middleware('role:salon_owner')->prefix('salons')->group(function () {
-        // Route::get('barbers/index', [BarberController::class, 'index'])->name('barbers.index');
-        // Route::post('barbers/store', [BarberController::class, 'store'])->name('barbers.store');
-        // Route::get('barbers/{id}', [BarberController::class, 'show'])->name('barbers.show');
-        // Route::put('barbers/{id}', [BarberController::class, 'update'])->name('barbers.update');
-        // Route::delete('barbers/{id}', [BarberController::class, 'destroy'])->name('barbers.destroy');
-        Route::resource('barbers', BarberController::class);
+Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group(function () {
+
+    
+    Route::apiResource('barbers', BarberController::class);
+
+
+    Route::prefix('barbers')->group(function () {
+        Route::post('/{id}/deactivate', [BarberController::class, 'deactivate'])->name('barbers.deactivate');
+        Route::post('/{id}/activate', [BarberController::class, 'activate'])->name('barbers.activate');
+        Route::post('/{id}/toggle', [BarberController::class, 'toggleStatus'])->name('barbers.toggle');
     });
 });
 

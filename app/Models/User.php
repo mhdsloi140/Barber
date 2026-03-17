@@ -18,7 +18,7 @@ class User extends Authenticatable implements HasMedia
     protected $fillable = [
         'name',
         'phone',
-        'email',
+      
         'password',
         'role',
         'is_active',
@@ -52,7 +52,7 @@ class User extends Authenticatable implements HasMedia
             });
     }
 
-   
+
     public function getAvatarUrlAttribute(): ?string
     {
         return $this->getFirstMediaUrl('avatar', 'medium') ?: null;

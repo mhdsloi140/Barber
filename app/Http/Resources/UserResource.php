@@ -20,12 +20,12 @@ class UserResource extends JsonResource
             'avatar' => $this->getFirstMediaUrl('avatar'),
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
-
+            'token' => $this->token,
             // التوكن إذا وجد
-            $this->when(isset($this->token), [
-                'token' => $this->token,
-                'token_type' => 'Bearer',
-            ]),
+            // $this->when(isset($this->token), [
+
+            //     'token_type' => 'Bearer',
+            // ]),
 
             // بيانات المدير
             // $this->when($this->hasRole('admin'), [
