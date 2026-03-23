@@ -34,7 +34,7 @@ return [
 
     // ========== الأقسام الجديدة المضافة ==========
     'defaults' => [
-        'guard' => 'api', // غيرناها إلى api
+        'guard' => 'api', 
         'permissions' => [],
     ],
 

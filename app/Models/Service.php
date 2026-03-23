@@ -3,15 +3,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Service extends Model
 {
-    use HasFactory;
-
-    protected $table = 'services';
-
     protected $fillable = [
         'salon_id',
         'name',
@@ -20,29 +15,41 @@ class Service extends Model
         'description_ar',
         'price',
         'duration_minutes',
-        'category',
-        'for_all_barbers',
         'is_active',
-        'sort_order'
     ];
 
+    protected $casts = [
+        'price' => 'decimal:2',
+        'duration_minutes' => 'integer',
+        'is_active' => 'boolean',
+    ];
+
+  
+
     /**
-     * العلاقات
+     * العلاقة مع الصالون
+     * خدمة -> تتبع صالون واحد
      */
     public function salon()
     {
         return $this->belongsTo(Salon::class);
     }
 
-    public function barbers()
+
+    public function barberServices()
     {
-        return $this->belongsToMany(User::class, 'barber_service', 'service_id', 'barber_id')
-                    ->withPivot('price', 'duration_minutes')
-                    ->withTimestamps();
+        return $this->hasMany(BarberService::class, 'service_id');
     }
+
 
     public function appointments()
     {
         return $this->hasMany(Appointment::class);
+    }
+
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
     }
 }

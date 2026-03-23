@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\API\AuthController;
+
+use App\Http\Controllers\API\Barbers\ServicesController;
 use App\Http\Controllers\API\ProfileController;
 use App\Http\Controllers\API\Salon\BarberController;
 use Illuminate\Http\Request;
@@ -53,7 +55,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group(function () {
 
-    
+
     Route::apiResource('barbers', BarberController::class);
 
 
@@ -63,4 +65,14 @@ Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group
         Route::post('/{id}/toggle', [BarberController::class, 'toggleStatus'])->name('barbers.toggle');
     });
 });
+Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(function () {
 
+    // مسارات الخدمات
+    Route::apiResource('services', ServicesController::class);
+
+    // مسارات إضافية
+    Route::post('services/{id}/toggle', [ServicesController::class, 'toggleStatus']);
+    Route::delete('services/{id}/force', [ServicesController::class, 'forceDelete']);
+    Route::get('services/trashed', [ServicesController::class, 'trashed']);
+    Route::post('services/{id}/restore', [ServicesController::class, 'restore']);
+});
