@@ -13,7 +13,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 class User extends Authenticatable implements HasMedia
 {
     use HasApiTokens, Notifiable, HasRoles, SoftDeletes, InteractsWithMedia;
-  protected $guard_name = 'api'; 
+  protected $guard_name = 'api';
     protected $fillable = [
         'name',
         'phone',
@@ -42,10 +42,7 @@ class User extends Authenticatable implements HasMedia
 
     // ========== العلاقات ==========
 
-    /**
-     * العلاقة مع الصالون الذي يملكه (لصاحب الصالون)
-     * صاحب صالون -> لديه صالون واحد
-     */
+
     public function ownedSalon()
     {
         return $this->hasOne(Salon::class, 'owner_id');
@@ -97,6 +94,7 @@ class User extends Authenticatable implements HasMedia
     {
         return $this->morphMany(WorkingHour::class, 'workable');
     }
+    
 
     /**
      * العلاقة مع التقييمات (كحلاق)

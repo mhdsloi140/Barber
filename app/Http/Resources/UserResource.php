@@ -34,41 +34,41 @@ class UserResource extends JsonResource
             // ]),
 
             // بيانات صاحب الصالون
-            $this->when($this->hasRole('salon_owner') && $this->relationLoaded('ownedSalon'), [
-                'salon' => [
-                    'id' => $this->ownedSalon?->id,
-                    'name' => $this->ownedSalon?->name,
-                    'address' => $this->ownedSalon?->address,
-                    'phone' => $this->ownedSalon?->phone,
-                    'description' => $this->ownedSalon?->description,
-                    'latitude' => $this->ownedSalon?->latitude,
-                    'longitude' => $this->ownedSalon?->longitude,
-                    'is_active' => $this->ownedSalon?->is_active,
-                    'barbers_count' => $this->ownedSalon?->barbers()->count(),
-                    'services_count' => $this->ownedSalon?->services()->count(),
-                ],
-            ]),
+            // $this->when($this->hasRole('salon_owner') && $this->relationLoaded('ownedSalon'), [
+            //     'salon' => [
+            //         'id' => $this->ownedSalon?->id,
+            //         'name' => $this->ownedSalon?->name,
+            //         'address' => $this->ownedSalon?->address,
+            //         'phone' => $this->ownedSalon?->phone,
+            //         'description' => $this->ownedSalon?->description,
+            //         'latitude' => $this->ownedSalon?->latitude,
+            //         'longitude' => $this->ownedSalon?->longitude,
+            //         'is_active' => $this->ownedSalon?->is_active,
+            //         'barbers_count' => $this->ownedSalon?->barbers()->count(),
+            //         'services_count' => $this->ownedSalon?->services()->count(),
+            //     ],
+            // ]),
 
             // بيانات الحلاق
-            $this->when($this->hasRole('barber') && $this->relationLoaded('salons'), [
-                'salons' => $this->salons->map(fn($salon) => [
-                    'id' => $salon->id,
-                    'name' => $salon->name,
-                    'phone' => $salon->phone,
-                ]),
-                'appointments_today' => $this->barberAppointments()
-                    ->whereDate('appointment_date', today())
-                    ->count(),
-            ]),
+            // $this->when($this->hasRole('barber') && $this->relationLoaded('salons'), [
+            //     'salons' => $this->salons->map(fn($salon) => [
+            //         'id' => $salon->id,
+            //         'name' => $salon->name,
+            //         'phone' => $salon->phone,
+            //     ]),
+            //     'appointments_today' => $this->barberAppointments()
+            //         ->whereDate('appointment_date', today())
+            //         ->count(),
+            // ]),
 
             // بيانات الزبون
-            $this->when($this->hasRole('customer'), [
-                'appointments_count' => $this->customerAppointments()->count(),
-                'upcoming_count' => $this->customerAppointments()
-                    ->where('appointment_date', '>=', today())
-                    ->whereIn('status', ['pending', 'confirmed'])
-                    ->count(),
-            ]),
+            // $this->when($this->hasRole('customer'), [
+            //     'appointments_count' => $this->customerAppointments()->count(),
+            //     'upcoming_count' => $this->customerAppointments()
+            //         ->where('appointment_date', '>=', today())
+            //         ->whereIn('status', ['pending', 'confirmed'])
+            //         ->count(),
+            // ]),
         ];
     }
 }

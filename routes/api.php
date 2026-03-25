@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\API\AuthController;
 
+use App\Http\Controllers\API\Barber\WorkingHourController;
 use App\Http\Controllers\API\Barbers\ServicesController;
 use App\Http\Controllers\API\ProfileController;
 use App\Http\Controllers\API\Salon\BarberController;
@@ -67,12 +68,15 @@ Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group
 });
 Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(function () {
 
-    // مسارات الخدمات
+ 
     Route::apiResource('services', ServicesController::class);
 
-    // مسارات إضافية
+
     Route::post('services/{id}/toggle', [ServicesController::class, 'toggleStatus']);
     Route::delete('services/{id}/force', [ServicesController::class, 'forceDelete']);
     Route::get('services/trashed', [ServicesController::class, 'trashed']);
     Route::post('services/{id}/restore', [ServicesController::class, 'restore']);
+    Route::get('working-hours', [WorkingHourController::class, 'index']);
+    Route::put('working-hours', [WorkingHourController::class, 'update']);
+    Route::post('working-hours/reset', [WorkingHourController::class, 'reset']);
 });

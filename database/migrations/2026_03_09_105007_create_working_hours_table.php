@@ -10,10 +10,10 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        // database/migrations/xxxx_create_working_hours_table.php
+
         Schema::create('working_hours', function (Blueprint $table) {
             $table->id();
-            $table->morphs('workable'); // للصالون أو الحلاق
+            $table->morphs('workable'); // workable_type, workable_id
             $table->enum('day_of_week', ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']);
             $table->boolean('is_open')->default(true);
             $table->time('shift1_start')->nullable();
