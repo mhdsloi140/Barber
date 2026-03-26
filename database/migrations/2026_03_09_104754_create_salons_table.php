@@ -22,6 +22,7 @@ return new class extends Migration {
             $table->string('longitude')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 
