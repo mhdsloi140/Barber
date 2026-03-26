@@ -6,6 +6,7 @@ use App\Http\Controllers\API\Barber\WorkingHourController;
 use App\Http\Controllers\API\Barbers\ServicesController;
 use App\Http\Controllers\API\ProfileController;
 use App\Http\Controllers\API\Salon\BarberController;
+use App\Http\Controllers\API\Salon\SalonServiceController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -58,8 +59,9 @@ Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group
 
 
     Route::apiResource('barbers', BarberController::class);
-
-
+ // عرض خدمات حلاق معين في الصالون
+    Route::get('barbers/{barber_id}/services', [SalonServiceController::class, 'getBarberServices']);
+    Route::get('services', [SalonServiceController::class, 'index']);
     Route::prefix('barbers')->group(function () {
         Route::post('/{id}/deactivate', [BarberController::class, 'deactivate'])->name('barbers.deactivate');
         Route::post('/{id}/activate', [BarberController::class, 'activate'])->name('barbers.activate');
@@ -68,7 +70,7 @@ Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group
 });
 Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(function () {
 
- 
+
     Route::apiResource('services', ServicesController::class);
 
 
