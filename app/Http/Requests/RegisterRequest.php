@@ -20,7 +20,7 @@ class RegisterRequest extends FormRequest
             return [
                 'owner_name' => ['required', 'string', 'max:255'],
                 'phone' => ['required', 'unique:users,phone', 'regex:/^[0-9]+$/', 'min:10', 'max:15'],
-                'password' => ['required', 'string', 'min:8', 'confirmed'],
+                'password' => ['required', 'string', 'min:8'],
                 'salon_name' => ['required', 'string', 'max:255'],
                 'salon_location' => ['required', 'string', 'max:255'],
                 'salon_phone' => ['nullable', 'string', 'max:15'],
@@ -32,7 +32,7 @@ class RegisterRequest extends FormRequest
             return [
                 'name' => ['required', 'string', 'max:255'],
                 'phone' => ['required', 'unique:users,phone', 'regex:/^[0-9]+$/', 'min:10', 'max:15'],
-                'password' => ['required', 'string', 'min:8', 'confirmed'],
+                'password' => ['required', 'string', 'min:8'],
             ];
         }
     }
