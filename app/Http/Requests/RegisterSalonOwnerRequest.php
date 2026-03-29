@@ -18,7 +18,7 @@ class RegisterSalonOwnerRequest extends FormRequest
             // بيانات المستخدم
             'name' => ['required', 'string', 'max:255'],
             'phone' => ['required', 'string', 'unique:users,phone', 'regex:/^[0-9]+$/', 'min:10', 'max:15'],
-            'email' => ['nullable', 'email', 'unique:users,email'],
+          
             'password' => ['required', 'string', 'min:6'],
 
             // بيانات الصالون
@@ -28,9 +28,12 @@ class RegisterSalonOwnerRequest extends FormRequest
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
 
-            
+            //  هل يعمل كحلاق في الصالون؟
+            'works_as_barber' => ['nullable', 'boolean'],
+
+            // صور الصالون
             'images' => ['nullable', 'array'],
-            'images.*' => ['image', 'mimes:jpeg,png,jpg,webp', 'max:5120'], // 5MB لكل صورة
+            'images.*' => ['image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
 
             // أوقات العمل
             'working_hours' => ['nullable', 'array'],
@@ -45,12 +48,9 @@ class RegisterSalonOwnerRequest extends FormRequest
         ];
     }
 
-    /**
-     * تحويل القيم قبل التحقق
-     */
     protected function prepareForValidation(): void
     {
-        // تحويل working_hours من form-data إلى صيغة صحيحة
+        // تحويل working_hours
         if ($this->has('working_hours')) {
             $workingHours = $this->input('working_hours');
 
@@ -73,6 +73,13 @@ class RegisterSalonOwnerRequest extends FormRequest
                 $this->merge(['working_hours' => $converted]);
             }
         }
+
+        //  تحويل works_as_barber إلى boolean
+        if ($this->has('works_as_barber')) {
+            $this->merge([
+                'works_as_barber' => filter_var($this->works_as_barber, FILTER_VALIDATE_BOOLEAN)
+            ]);
+        }
     }
 
     public function messages(): array
@@ -84,16 +91,9 @@ class RegisterSalonOwnerRequest extends FormRequest
             'password.required' => 'كلمة المرور مطلوبة',
             'salon_name.required' => 'اسم الصالون مطلوب',
             'salon_address.required' => 'عنوان الصالون مطلوب',
-
-            // رسائل الصور
-            'images.array' => 'يجب إرسال الصور كمصفوفة',
             'images.*.image' => 'الملف يجب أن يكون صورة',
             'images.*.mimes' => 'الصورة يجب أن تكون من نوع: jpeg, png, jpg, webp',
-            'images.*.max' => 'حجم الصورة لا يجب أن يتجاوز 5 ميجابايت',
-
-            // رسائل أوقات العمل
             'working_hours.*.day.required_with' => 'اليوم مطلوب',
-            'working_hours.*.is_open.required_with' => 'حالة اليوم مطلوبة',
         ];
     }
 }

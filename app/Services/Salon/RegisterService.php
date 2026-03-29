@@ -28,12 +28,12 @@ class RegisterService
                     'name' => $data['name'],
                     'phone' => $data['phone'],
                     'password' => Hash::make($data['password']),
-                    'role' => 'salon_owner',
+                    'role' => 'salon_owner', // الدور الأساسي
                     'is_active' => true,
                 ]);
 
-                // 2. تعيين دور صاحب الصالون
-                $user->assignRole('salon_owner');
+                // 2. تعيين الأدوار (salon_owner + barber إذا كان يعمل كحلاق)
+                $this->assignRoles($user, $data);
 
                 // 3. إنشاء الصالون
                 $salon = Salon::create([
@@ -46,20 +46,22 @@ class RegisterService
                     'is_active' => true,
                 ]);
 
-              
+                // 4. رفع الصور
                 if ($images && is_array($images)) {
                     $this->uploadMultipleImages($salon, $images);
                 }
 
-                // 5. إضافة أوقات العمل
+                // 5. إضافة أوقات العمل للصالون
                 if (isset($data['working_hours']) && !empty($data['working_hours'])) {
                     $this->saveWorkingHours($salon, $data['working_hours']);
                 } else {
                     $this->createDefaultWorkingHours($salon);
                 }
 
-
-
+                // 6.  إذا كان يعمل كحلاق، أضف أوقات عمل خاصة به واربطه بالصالون
+                if (!empty($data['works_as_barber'])) {
+                    $this->addBarberToSalon($user, $salon, $data);
+                }
 
                 $result = [
                     'user' => [
@@ -67,6 +69,8 @@ class RegisterService
                         'name' => $user->name,
                         'phone' => $user->phone,
                         'role' => $user->role,
+                        'roles' => $user->getRoleNames(),
+                        'works_as_barber' => !empty($data['works_as_barber']),
                     ],
                     'salon' => [
                         'id' => $salon->id,
@@ -75,7 +79,7 @@ class RegisterService
                         'phone' => $salon->phone,
                         'latitude' => $salon->latitude,
                         'longitude' => $salon->longitude,
-                        'images' => $salon->getImagesUrlsAttribute(), // جميع الصور
+                        'images' => $salon->getImagesUrlsAttribute(),
                         'working_hours' => $this->getWorkingHoursFormatted($salon),
                     ],
                 ];
@@ -95,6 +99,95 @@ class RegisterService
     }
 
 
+    private function assignRoles(User $user, array $data): void
+    {
+        // تعيين دور صاحب الصالون
+        $user->assignRole('salon_owner');
+
+        //  إذا كان يعمل كحلاق، أضف دور الحلاق أيضاً
+        if (!empty($data['works_as_barber'])) {
+            $user->assignRole('barber');
+            Log::info('User assigned as barber too', ['user_id' => $user->id]);
+        }
+    }
+
+    /**
+     *  إضافة الحلاق إلى الصالون (ربط في جدول barber_salon)
+     */
+    private function addBarberToSalon(User $user, Salon $salon, array $data): void
+    {
+        // ربط الحلاق بالصالون
+        $user->salons()->attach($salon->id, [
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        //  إضافة أوقات عمل خاصة بالحلاق (يمكن استخدام نفس أوقات الصالون أو مختلفة)
+        $this->createBarberWorkingHours($user, $data);
+
+        Log::info('Barber added to salon', [
+            'barber_id' => $user->id,
+            'salon_id' => $salon->id
+        ]);
+    }
+
+
+    private function createBarberWorkingHours(User $barber, array $data): void
+    {
+        // إذا أرسل أوقات عمل خاصة بالحلاق
+        if (isset($data['barber_working_hours']) && !empty($data['barber_working_hours'])) {
+            foreach ($data['barber_working_hours'] as $hours) {
+                WorkingHour::create([
+                    'workable_type' => User::class,
+                    'workable_id' => $barber->id,
+                    'day_of_week' => $hours['day'],
+                    'is_open' => $hours['is_open'],
+                    'shift1_start' => $hours['shift1_start'] ?? null,
+                    'shift1_end' => $hours['shift1_end'] ?? null,
+                    'shift2_start' => $hours['shift2_start'] ?? null,
+                    'shift2_end' => $hours['shift2_end'] ?? null,
+                    'break_start' => $hours['break_start'] ?? null,
+                    'break_end' => $hours['break_end'] ?? null,
+                ]);
+            }
+        } else {
+            // استخدام أوقات عمل افتراضية للحلاق
+            $days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+            foreach ($days as $day) {
+                if (in_array($day, ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday'])) {
+                    WorkingHour::create([
+                        'workable_type' => User::class,
+                        'workable_id' => $barber->id,
+                        'day_of_week' => $day,
+                        'is_open' => true,
+                        'shift1_start' => '09:00',
+                        'shift1_end' => '22:00',
+                    ]);
+                } elseif ($day === 'friday') {
+                    WorkingHour::create([
+                        'workable_type' => User::class,
+                        'workable_id' => $barber->id,
+                        'day_of_week' => $day,
+                        'is_open' => false,
+                    ]);
+                } else {
+                    WorkingHour::create([
+                        'workable_type' => User::class,
+                        'workable_id' => $barber->id,
+                        'day_of_week' => $day,
+                        'is_open' => true,
+                        'shift1_start' => '10:00',
+                        'shift1_end' => '18:00',
+                    ]);
+                }
+            }
+        }
+    }
+
+    /**
+     * رفع عدة صور للصالون
+     */
     private function uploadMultipleImages(Salon $salon, array $images): void
     {
         foreach ($images as $image) {
@@ -132,7 +225,7 @@ class RegisterService
     }
 
     /**
-     * إنشاء أوقات عمل افتراضية
+     * إنشاء أوقات عمل افتراضية للصالون
      */
     private function createDefaultWorkingHours(Salon $salon): void
     {
