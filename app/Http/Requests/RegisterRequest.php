@@ -14,27 +14,15 @@ class RegisterRequest extends FormRequest
 
     public function rules(): array
     {
-        $isSalon = $this->has('salon_name') || $this->has('owner_name') || $this->has('salon_location');
+        // $isSalon = $this->has('salon_name') || $this->has('owner_name') || $this->has('salon_location');
 
-        if ($isSalon) {
-            return [
-                'owner_name' => ['required', 'string', 'max:255'],
-                'phone' => ['required', 'unique:users,phone', 'regex:/^[0-9]+$/', 'min:10', 'max:15'],
-                'password' => ['required', 'string', 'min:8'],
-                'salon_name' => ['required', 'string', 'max:255'],
-                'salon_location' => ['required', 'string', 'max:255'],
-                'salon_phone' => ['nullable', 'string', 'max:15'],
-                'salon_description' => ['nullable', 'string', 'max:500'],
-                'latitude' => ['nullable', 'numeric'],
-                'longitude' => ['nullable', 'numeric'],
-            ];
-        } else {
             return [
                 'name' => ['required', 'string', 'max:255'],
                 'phone' => ['required', 'unique:users,phone', 'regex:/^[0-9]+$/', 'min:10', 'max:15'],
                 'password' => ['required', 'string', 'min:8'],
             ];
-        }
+
+
     }
 
     public function messages(): array

@@ -39,8 +39,8 @@ class Salon extends Model implements HasMedia
     public function barbers()
     {
         return $this->belongsToMany(User::class, 'barber_salon', 'salon_id', 'barber_id')
-                    ->withPivot('is_active')
-                    ->withTimestamps();
+            ->withPivot('is_active')
+            ->withTimestamps();
     }
 
     public function workingHours()
@@ -77,7 +77,7 @@ class Salon extends Model implements HasMedia
         foreach ($this->getMedia('salon_images') as $media) {
             $urls[] = [
                 'id' => $media->id,
-                'original' => $media->getUrl(),
+                'original' => url($media->getUrl()),
                 'medium' => $media->getUrl('medium'),
                 'thumb' => $media->getUrl('thumb'),
                 'large' => $media->getUrl('large'),

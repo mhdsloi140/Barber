@@ -76,10 +76,10 @@ class AuthAllUserServices
                 // إنشاء المستخدم
                 $user = $this->createUser($request, $userType);
 
-                // إذا كان صاحب صالون، أنشئ الصالون
-                if ($userType === 'salon_owner') {
-                    $this->createSalonForOwner($request, $user);
-                }
+         
+                // if ($userType === 'salon_owner') {
+                //     $this->createSalonForOwner($request, $user);
+                // }
 
                 // تعيين الدور
                 $this->assignRole($user, $userType);
@@ -87,15 +87,15 @@ class AuthAllUserServices
                 // تحميل العلاقات
                 $this->loadUserRelations($user);
 
-                // إنشاء توكن
+
                 $token = $this->generateToken($user);
                 $user->token = $token;
 
                 // تسجيل العملية
-                Log::info('User registered', [
-                    'user_id' => $user->id,
-                    'role' => $user->role
-                ]);
+                // Log::info('User registered', [
+                //     'user_id' => $user->id,
+                //     'role' => $user->role
+                // ]);
 
                 // رسالة نجاح حسب الدور
                 $message = $this->getSuccessMessage($user);

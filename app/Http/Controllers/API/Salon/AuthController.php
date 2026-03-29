@@ -16,16 +16,19 @@ class AuthController extends Controller
     public function __construct(
         private RegisterService $registerService,
 
-    ) {}
+    ) {
+    }
 
 
 
-       public function registerSalonOwner(RegisterSalonOwnerRequest $request)
+    public function registerSalonOwner(RegisterSalonOwnerRequest $request)
     {
         // dd('as');
+        $images = $request->hasFile('images') ? $request->file('images') : null;
+
         $result = $this->registerService->registerSalonOwner(
             $request->validated(),
-            $request->file('image')
+            $images
         );
 
         return response()->json([

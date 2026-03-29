@@ -16,18 +16,17 @@ use Illuminate\Support\Facades\Schema;
 class RegisterService
 {
     /**
-     * تسجيل صاحب صالون جديد مع صورة وأوقات عمل
+     * تسجيل صاحب صالون جديد مع صور متعددة وأوقات عمل
      */
-    public function registerSalonOwner(array $data, ?UploadedFile $image = null): AuthResult
+    public function registerSalonOwner(array $data, ?array $images = null): AuthResult
     {
         try {
-            return DB::transaction(function () use ($data, $image) {
+            return DB::transaction(function () use ($data, $images) {
 
                 // 1. إنشاء المستخدم
                 $user = User::create([
                     'name' => $data['name'],
                     'phone' => $data['phone'],
-                    // 'email' => $data['email'] ?? null,
                     'password' => Hash::make($data['password']),
                     'role' => 'salon_owner',
                     'is_active' => true,
@@ -47,36 +46,26 @@ class RegisterService
                     'is_active' => true,
                 ]);
 
-                // 4. رفع الصورة
-                if ($image) {
-                    try {
-                        $salon->addMedia($image)
-                            ->usingFileName('salon_' . time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension())
-                            ->toMediaCollection('salon_images');
-                    } catch (\Exception $e) {
-                        Log::error('Image upload failed: ' . $e->getMessage());
-                    }
+              
+                if ($images && is_array($images)) {
+                    $this->uploadMultipleImages($salon, $images);
                 }
 
-                // 5. إضافة أوقات العمل (إذا أرسلها المستخدم أو استخدام الافتراضية)
+                // 5. إضافة أوقات العمل
                 if (isset($data['working_hours']) && !empty($data['working_hours'])) {
                     $this->saveWorkingHours($salon, $data['working_hours']);
                 } else {
                     $this->createDefaultWorkingHours($salon);
                 }
 
-                Log::info('Salon owner registered', [
-                    'user_id' => $user->id,
-                    'salon_id' => $salon->id,
-                ]);
 
-                // 6. تجهيز البيانات للإرجاع
+
+
                 $result = [
                     'user' => [
                         'id' => $user->id,
                         'name' => $user->name,
                         'phone' => $user->phone,
-                     
                         'role' => $user->role,
                     ],
                     'salon' => [
@@ -86,7 +75,7 @@ class RegisterService
                         'phone' => $salon->phone,
                         'latitude' => $salon->latitude,
                         'longitude' => $salon->longitude,
-                        'image' => $salon->getMainImageUrlAttribute(),
+                        'images' => $salon->getImagesUrlsAttribute(), // جميع الصور
                         'working_hours' => $this->getWorkingHoursFormatted($salon),
                     ],
                 ];
@@ -102,6 +91,22 @@ class RegisterService
                 null,
                 500
             );
+        }
+    }
+
+
+    private function uploadMultipleImages(Salon $salon, array $images): void
+    {
+        foreach ($images as $image) {
+            if ($image instanceof UploadedFile) {
+                try {
+                    $salon->addMedia($image)
+                        ->usingFileName('salon_' . time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension())
+                        ->toMediaCollection('salon_images');
+                } catch (\Exception $e) {
+                    Log::error('Image upload failed: ' . $e->getMessage());
+                }
+            }
         }
     }
 
