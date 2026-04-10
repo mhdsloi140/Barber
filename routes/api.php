@@ -7,6 +7,7 @@ use App\Http\Controllers\API\Barbers\ServicesController;
 use App\Http\Controllers\API\ProfileController;
 use App\Http\Controllers\API\Salon\BarberController;
 use App\Http\Controllers\API\Salon\SalonServiceController;
+use App\Http\Controllers\API\Customer\SalonController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -25,7 +26,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login'])->name('login');
     Route::post('register', [AuthController::class, 'register'])->name('register');
-     Route::post('register/salon-owner', [App\Http\Controllers\API\Salon\AuthController::class, 'registerSalonOwner']);
+    Route::post('register/salon-owner', [App\Http\Controllers\API\Salon\AuthController::class, 'registerSalonOwner']);
 });
 
 
@@ -60,7 +61,7 @@ Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group
 
 
     Route::apiResource('barbers', BarberController::class);
- // عرض خدمات حلاق معين في الصالون
+    // عرض خدمات حلاق معين في الصالون
     Route::get('barbers/{barber_id}/services', [SalonServiceController::class, 'getBarberServices']);
     Route::get('services', [SalonServiceController::class, 'index']);
     Route::prefix('barbers')->group(function () {
@@ -82,4 +83,11 @@ Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(func
     Route::get('working-hours', [WorkingHourController::class, 'index']);
     Route::put('working-hours', [WorkingHourController::class, 'update']);
     Route::post('working-hours/reset', [WorkingHourController::class, 'reset']);
+});
+
+Route::prefix('customer')->group(function () {
+
+    // عرض الصالونات
+    Route::get('salons', [SalonController::class, 'index']);
+    Route::get('salons/{id}', [SalonController::class, 'show']);
 });
