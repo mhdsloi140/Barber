@@ -33,10 +33,11 @@ class Appointment extends Model
         'cancelled_by',
         'cancelled_at',
         'reminder_sent_at',
-        'is_walk_in'
+        'is_walk_in',
+        'duration_minutes'
     ];
 
-    
+
     public function customer()
     {
         return $this->belongsTo(User::class, 'customer_id');

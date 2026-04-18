@@ -15,10 +15,11 @@ return new class extends Migration {
             $table->foreignId('salon_id')->constrained();
             $table->foreignId('service_id')->constrained();
 
-            // هذين الحقلين مهمين للتاريخ والوقت
-            $table->date('appointment_date');      // حقل التاريخ
-            $table->time('appointment_time');      // حقل الوقت
+            $table->date('appointment_date');
+            $table->time('appointment_time');
             $table->time('end_time')->nullable();
+
+            $table->integer('duration_minutes')->nullable();
 
             $table->enum('status', ['pending', 'confirmed', 'completed', 'cancelled'])->default('pending');
             $table->decimal('total_price', 8, 2);

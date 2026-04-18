@@ -44,4 +44,8 @@ class AuthResult
             'error' => $this->error,
         ];
     }
+    public static function errorWithData(string $message, $data = null, int $statusCode = 400): self
+{
+    return new self(false, $message, $data, null, $statusCode);
+}
 }

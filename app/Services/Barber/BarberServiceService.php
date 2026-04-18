@@ -25,21 +25,16 @@ class BarberServiceService
 
                 $service = BarberService::create([
                     'barber_id' => $barber->id,
-                    'service_id' => $data['service_id'] ?? null,
+                  //  'service_id' => $data['service_id'] ?? null,
                     'name' => $data['name'],
-                    'name_ar' => $data['name_ar'] ?? null,
+                    // 'name_ar' => $data['name_ar'] ?? null,
                     'description' => $data['description'] ?? null,
-                    'description_ar' => $data['description_ar'] ?? null,
+                    // 'description_ar' => $data['description_ar'] ?? null,
                     'price' => $data['price'],
                     'duration_minutes' => $data['duration_minutes'],
                     'is_active' => $data['is_active'] ?? true,
                 ]);
 
-                Log::info('Barber service added', [
-                    'service_id' => $service->id,
-                    'barber_id' => $barber->id,
-                    'name' => $service->name
-                ]);
 
                 return AuthResult::success(
                     'تم إضافة الخدمة بنجاح',
@@ -145,9 +140,9 @@ class BarberServiceService
 
                 $service->update([
                     'name' => $data['name'] ?? $service->name,
-                    'name_ar' => $data['name_ar'] ?? $service->name_ar,
+                    // 'name_ar' => $data['name_ar'] ?? $service->name_ar,
                     'description' => $data['description'] ?? $service->description,
-                    'description_ar' => $data['description_ar'] ?? $service->description_ar,
+                   // 'description_ar' => $data['description_ar'] ?? $service->description_ar,
                     'price' => $data['price'] ?? $service->price,
                     'duration_minutes' => $data['duration_minutes'] ?? $service->duration_minutes,
                     'is_active' => $data['is_active'] ?? $service->is_active,
