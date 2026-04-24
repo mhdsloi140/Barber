@@ -2,13 +2,16 @@
 
 use App\Http\Controllers\API\AuthController;
 
+use App\Http\Controllers\API\Barber\AppointmentController;
 use App\Http\Controllers\API\Barber\WorkingHourController;
 use App\Http\Controllers\API\Barbers\ServicesController;
 use App\Http\Controllers\API\Customer\BookingController;
 use App\Http\Controllers\API\Customer\SalonDetailsController;
 use App\Http\Controllers\API\ProfileController;
+use App\Http\Controllers\API\Salon\AppointmentSalonController;
 use App\Http\Controllers\API\Salon\BarberController;
 use App\Http\Controllers\API\Salon\DashboardController;
+use App\Http\Controllers\API\Salon\ProfileSalonController;
 use App\Http\Controllers\API\Salon\SalonServiceController;
 use App\Http\Controllers\API\Customer\SalonController;
 use Illuminate\Http\Request;
@@ -59,10 +62,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/change-password', [ProfileController::class, 'changePassword'])->name('password.change');
 });
-
+/////     الصالونات او مدير الصالون
 Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group(function () {
 
-
+    Route::get('profile', [ProfileSalonController::class, 'show']);
+    Route::put('profile', [ProfileSalonController::class, 'update']);
     Route::apiResource('barbers', BarberController::class);
     // عرض خدمات حلاق معين في الصالون
     Route::get('barbers/{barber_id}/services', [SalonServiceController::class, 'getBarberServices']);
@@ -73,7 +77,12 @@ Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group
         Route::post('/{id}/activate', [BarberController::class, 'activate'])->name('barbers.activate');
         Route::post('/{id}/toggle', [BarberController::class, 'toggleStatus'])->name('barbers.toggle');
     });
+    Route::get('appointments', [AppointmentSalonController::class, 'index']);
+    Route::get('appointments/status/{status}', [AppointmentSalonController::class, 'getByStatus']);
 });
+
+
+//////////الحلاقين
 Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(function () {
 
 
@@ -85,19 +94,36 @@ Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(func
     Route::get('working-hours', [WorkingHourController::class, 'index']);
     Route::put('working-hours', [WorkingHourController::class, 'update']);
     Route::post('working-hours/reset', [WorkingHourController::class, 'reset']);
+    // الحجوزات الموافة و عرض و رفض
+    Route::prefix('appointments')->group(function () {
+        Route::get('show', [AppointmentController::class, 'index']);
+        Route::get('pending', [AppointmentController::class, 'pending']);
+        Route::post('{id}/approve', [AppointmentController::class, 'approve']);
+        Route::post('{id}/reject', [AppointmentController::class, 'reject']);
+    });
 });
 
+
+//// الزبائن
 Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(function () {
 
-    // عرض الصالونات
+
     Route::get('salons', [SalonController::class, 'index']);
     Route::get('salons/{id}', [SalonController::class, 'show']);
-    // Route::get('available-times', [BookingController::class, 'getAvailableTimes']);
-//    Route::get('salons/{id}/details', [SalonDetailsController::class, 'show']);
+
 
     // حفظ الحجز الجديد
     Route::post('booking/store', [BookingController::class, 'store']);
     //عرض الخدمات او التفاصيل
     Route::get('salons/{id}/details', [SalonDetailsController::class, 'show']);
+    //    Route::post('{id}/cancel', [BookingController::class, 'cancel']);
+
+
+    Route::prefix('appointments')->group(function () {
+        Route::get('/', [BookingController::class, 'index']);           // جميع الحجوزات
+        Route::get('active', [BookingController::class, 'active']);     // الحجوزات النشطة
+        Route::get('completed', [BookingController::class, 'completed']); // الحجوزات المنتهية
+        Route::post('{id}/cancel', [BookingController::class, 'cancel']); // إلغاء حجز
+    });
 
 });
