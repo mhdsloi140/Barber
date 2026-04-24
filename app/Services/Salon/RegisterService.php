@@ -58,7 +58,7 @@ class RegisterService
                     $this->createDefaultWorkingHours($salon);
                 }
 
-                // 6.  إذا كان يعمل كحلاق، أضف أوقات عمل خاصة به واربطه بالصالون
+                
                 if (!empty($data['works_as_barber'])) {
                     $this->addBarberToSalon($user, $salon, $data);
                 }

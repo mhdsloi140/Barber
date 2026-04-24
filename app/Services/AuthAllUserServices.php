@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Salon;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Resources\UserResource;
+use App\Services\AuthResult;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -42,14 +43,16 @@ class AuthAllUserServices
 
             // إنشاء توكن
             $token = $this->generateToken($user);
-            $user->token = $token;
+
+            // ✅ تجهيز بيانات المستخدم مع الأدوار
+            $userData = $this->formatUserData($user, $token);
 
             // تسجيل العملية
-            Log::info('User logged in', ['user_id' => $user->id, 'role' => $user->role]);
+            Log::info('User logged in', ['user_id' => $user->id, 'roles' => $user->getRoleNames()]);
 
             return AuthResult::success(
                 'تم تسجيل الدخول بنجاح',
-                UserResource::make($user)
+                $userData
             );
 
         } catch (\Exception $e) {
@@ -76,10 +79,10 @@ class AuthAllUserServices
                 // إنشاء المستخدم
                 $user = $this->createUser($request, $userType);
 
-         
-                // if ($userType === 'salon_owner') {
-                //     $this->createSalonForOwner($request, $user);
-                // }
+                // إذا كان صاحب صالون، أنشئ الصالون
+                if ($userType === 'salon_owner') {
+                    $this->createSalonForOwner($request, $user);
+                }
 
                 // تعيين الدور
                 $this->assignRole($user, $userType);
@@ -87,24 +90,16 @@ class AuthAllUserServices
                 // تحميل العلاقات
                 $this->loadUserRelations($user);
 
-
+                // إنشاء توكن
                 $token = $this->generateToken($user);
-                $user->token = $token;
 
-                // تسجيل العملية
-                // Log::info('User registered', [
-                //     'user_id' => $user->id,
-                //     'role' => $user->role
-                // ]);
+
+                $userData = $this->formatUserData($user, $token);
 
                 // رسالة نجاح حسب الدور
                 $message = $this->getSuccessMessage($user);
 
-                return AuthResult::success(
-                    $message,
-                    UserResource::make($user),
-                    201
-                );
+                return AuthResult::success($message, $userData, 201);
             });
 
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -190,10 +185,10 @@ class AuthAllUserServices
 
             $this->loadUserRelations($user);
 
-            return AuthResult::success(
-                'تم جلب البيانات بنجاح',
-                UserResource::make($user)
-            );
+            $token = $user->currentAccessToken()?->plainTextToken;
+            $userData = $this->formatUserData($user, $token);
+
+            return AuthResult::success('تم جلب البيانات بنجاح', $userData);
 
         } catch (\Exception $e) {
             Log::error('Get current user error: ' . $e->getMessage());
@@ -239,6 +234,64 @@ class AuthAllUserServices
                 500
             );
         }
+    }
+
+    /**
+     * ✅ تنسيق بيانات المستخدم مع مصفوفة الأدوار
+     */
+    private function formatUserData(User $user, ?string $token = null): array
+    {
+        // الحصول على جميع أدوار المستخدم (مصفوفة)
+        $roles = $user->getRoleNames()->toArray();
+
+        // الدور الرئيسي (أول دور في المصفوفة أو من عمود role)
+        $primaryRole = !empty($roles) ? $roles[0] : ($user->role ?? 'customer');
+
+        $data = [
+            'id' => $user->id,
+            'name' => $user->name,
+            'phone' => $user->phone,
+          //  'email' => $user->email,
+            'role' => $primaryRole,
+            'roles' => $roles, 
+            'is_active' => $user->is_active,
+            'avatar' => $user->getAvatarUrlAttribute(),
+            'created_at' => $user->created_at,
+            'updated_at' => $user->updated_at,
+        ];
+
+        // إضافة التوكن إذا وجد
+        if ($token) {
+            $data['token'] = $token;
+            $data['token_type'] = 'Bearer';
+        }
+
+        // إذا كان المستخدم صاحب صالون
+        if (in_array('salon_owner', $roles)) {
+            $salon = $user->ownedSalon;
+            if ($salon) {
+                $data['salon'] = [
+                    'id' => $salon->id,
+                    'name' => $salon->name,
+                    'address' => $salon->address,
+                    'phone' => $salon->phone,
+                    'image' => $salon->getMainImageUrlAttribute(),
+                ];
+            }
+        }
+
+        // إذا كان المستخدم حلاق
+        if (in_array('barber', $roles)) {
+            $data['salons'] = $user->salons->map(function($salon) {
+                return [
+                    'id' => $salon->id,
+                    'name' => $salon->name,
+                    'address' => $salon->address,
+                ];
+            });
+        }
+
+        return $data;
     }
 
     /**
@@ -301,9 +354,13 @@ class AuthAllUserServices
      */
     private function loadUserRelations(User $user): void
     {
-        if ($user->hasRole('salon_owner')) {
+        $roles = $user->getRoleNames()->toArray();
+
+        if (in_array('salon_owner', $roles)) {
             $user->load('ownedSalon');
-        } elseif ($user->hasRole('barber')) {
+        }
+
+        if (in_array('barber', $roles)) {
             $user->load('salons');
         }
     }
@@ -313,11 +370,17 @@ class AuthAllUserServices
      */
     private function getSuccessMessage(User $user): string
     {
-        return match (true) {
-            $user->hasRole('salon_owner') => 'تم تسجيل الصالون بنجاح',
-            $user->hasRole('customer') => 'تم تسجيل العميل بنجاح',
-            default => 'تم إنشاء الحساب بنجاح'
-        };
+        $roles = $user->getRoleNames()->toArray();
+
+        if (in_array('salon_owner', $roles)) {
+            return 'تم تسجيل الصالون بنجاح';
+        }
+
+        if (in_array('customer', $roles)) {
+            return 'تم تسجيل العميل بنجاح';
+        }
+
+        return 'تم إنشاء الحساب بنجاح';
     }
 
     /**
@@ -350,9 +413,6 @@ class AuthAllUserServices
 
             $user->password = Hash::make($newPassword);
             $user->save();
-
-            // اختيارياً: تسجيل الخروج من جميع الأجهزة
-            // $user->tokens()->delete();
 
             Log::info('Password changed', ['user_id' => $user->id]);
 
