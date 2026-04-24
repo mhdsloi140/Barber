@@ -6,7 +6,6 @@ namespace App\Services;
 use App\Models\User;
 use App\Models\Salon;
 use App\Http\Requests\RegisterRequest;
-use App\Http\Resources\UserResource;
 use App\Services\AuthResult;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
@@ -44,16 +43,12 @@ class AuthAllUserServices
             // إنشاء توكن
             $token = $this->generateToken($user);
 
-            // ✅ تجهيز بيانات المستخدم مع الأدوار
+            // تجهيز بيانات المستخدم
             $userData = $this->formatUserData($user, $token);
 
-            // تسجيل العملية
-            Log::info('User logged in', ['user_id' => $user->id, 'roles' => $user->getRoleNames()]);
+            Log::info('User logged in', ['user_id' => $user->id]);
 
-            return AuthResult::success(
-                'تم تسجيل الدخول بنجاح',
-                $userData
-            );
+            return AuthResult::success('تم تسجيل الدخول بنجاح', $userData);
 
         } catch (\Exception $e) {
             Log::error('Login error: ' . $e->getMessage());
@@ -93,7 +88,7 @@ class AuthAllUserServices
                 // إنشاء توكن
                 $token = $this->generateToken($user);
 
-
+                // تجهيز بيانات المستخدم
                 $userData = $this->formatUserData($user, $token);
 
                 // رسالة نجاح حسب الدور
@@ -120,147 +115,25 @@ class AuthAllUserServices
     }
 
     /**
-     * تسجيل الخروج
-     */
-    public function logout(?User $user): AuthResult
-    {
-        try {
-            if (!$user) {
-                return AuthResult::error('المستخدم غير موجود', null, 404);
-            }
-
-            $user->currentAccessToken()->delete();
-
-            Log::info('User logged out', ['user_id' => $user->id]);
-
-            return AuthResult::success('تم تسجيل الخروج بنجاح');
-
-        } catch (\Exception $e) {
-            Log::error('Logout error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء تسجيل الخروج',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
-        }
-    }
-
-    /**
-     * تسجيل الخروج من جميع الأجهزة
-     */
-    public function logoutFromAllDevices(?User $user): AuthResult
-    {
-        try {
-            if (!$user) {
-                return AuthResult::error('المستخدم غير موجود', null, 404);
-            }
-
-            $user->tokens()->delete();
-
-            Log::info('User logged out from all devices', ['user_id' => $user->id]);
-
-            return AuthResult::success('تم تسجيل الخروج من جميع الأجهزة بنجاح');
-
-        } catch (\Exception $e) {
-            Log::error('Logout from all devices error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء تسجيل الخروج',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
-        }
-    }
-
-    /**
-     * الحصول على المستخدم الحالي
-     */
-    public function getCurrentUser(?User $user): AuthResult
-    {
-        try {
-            if (!$user) {
-                return AuthResult::error('المستخدم غير موجود', null, 404);
-            }
-
-            $this->loadUserRelations($user);
-
-            $token = $user->currentAccessToken()?->plainTextToken;
-            $userData = $this->formatUserData($user, $token);
-
-            return AuthResult::success('تم جلب البيانات بنجاح', $userData);
-
-        } catch (\Exception $e) {
-            Log::error('Get current user error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء جلب البيانات',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
-        }
-    }
-
-    /**
-     * تحديث التوكن
-     */
-    public function refreshToken(?User $user): AuthResult
-    {
-        try {
-            if (!$user) {
-                return AuthResult::error('المستخدم غير موجود', null, 404);
-            }
-
-            // حذف التوكن الحالي
-            $user->currentAccessToken()->delete();
-
-            // إنشاء توكن جديد
-            $newToken = $this->generateToken($user);
-
-            return AuthResult::success(
-                'تم تحديث التوكن بنجاح',
-                [
-                    'token' => $newToken,
-                    'token_type' => 'Bearer'
-                ]
-            );
-
-        } catch (\Exception $e) {
-            Log::error('Refresh token error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء تحديث التوكن',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
-        }
-    }
-
-    /**
-     * ✅ تنسيق بيانات المستخدم مع مصفوفة الأدوار
+     * تنسيق بيانات المستخدم
      */
     private function formatUserData(User $user, ?string $token = null): array
     {
-        // الحصول على جميع أدوار المستخدم (مصفوفة)
         $roles = $user->getRoleNames()->toArray();
-
-        // الدور الرئيسي (أول دور في المصفوفة أو من عمود role)
         $primaryRole = !empty($roles) ? $roles[0] : ($user->role ?? 'customer');
 
         $data = [
             'id' => $user->id,
             'name' => $user->name,
             'phone' => $user->phone,
-          //  'email' => $user->email,
             'role' => $primaryRole,
-            'roles' => $roles, 
+            'roles' => $roles,
             'is_active' => $user->is_active,
             'avatar' => $user->getAvatarUrlAttribute(),
             'created_at' => $user->created_at,
             'updated_at' => $user->updated_at,
         ];
 
-        // إضافة التوكن إذا وجد
         if ($token) {
             $data['token'] = $token;
             $data['token_type'] = 'Bearer';
@@ -376,53 +249,58 @@ class AuthAllUserServices
             return 'تم تسجيل الصالون بنجاح';
         }
 
-        if (in_array('customer', $roles)) {
-            return 'تم تسجيل العميل بنجاح';
-        }
-
-        return 'تم إنشاء الحساب بنجاح';
+        return 'تم تسجيل العميل بنجاح';
     }
 
     /**
-     * التحقق من وجود المستخدم
+     * تسجيل الخروج
      */
-    public function userExists(string $phone): AuthResult
+    public function logout(?User $user): AuthResult
     {
         try {
-            $exists = User::where('phone', $phone)->exists();
-
-            return AuthResult::success(
-                $exists ? 'المستخدم موجود' : 'المستخدم غير موجود',
-                ['exists' => $exists]
-            );
-
-        } catch (\Exception $e) {
-            return AuthResult::error('حدث خطأ أثناء التحقق', $e->getMessage(), 500);
-        }
-    }
-
-    /**
-     * تغيير كلمة المرور
-     */
-    public function changePassword(User $user, string $currentPassword, string $newPassword): AuthResult
-    {
-        try {
-            if (!Hash::check($currentPassword, $user->password)) {
-                return AuthResult::error('كلمة المرور الحالية غير صحيحة', null, 400);
+            if (!$user) {
+                return AuthResult::error('المستخدم غير موجود', null, 404);
             }
 
-            $user->password = Hash::make($newPassword);
-            $user->save();
+            $user->currentAccessToken()->delete();
 
-            Log::info('Password changed', ['user_id' => $user->id]);
+            Log::info('User logged out', ['user_id' => $user->id]);
 
-            return AuthResult::success('تم تغيير كلمة المرور بنجاح');
+            return AuthResult::success('تم تسجيل الخروج بنجاح');
 
         } catch (\Exception $e) {
-            Log::error('Change password error: ' . $e->getMessage());
+            Log::error('Logout error: ' . $e->getMessage());
 
             return AuthResult::error(
-                'حدث خطأ أثناء تغيير كلمة المرور',
+                'حدث خطأ أثناء تسجيل الخروج',
+                config('app.debug') ? $e->getMessage() : null,
+                500
+            );
+        }
+    }
+
+    /**
+     * الحصول على المستخدم الحالي
+     */
+    public function getCurrentUser(?User $user): AuthResult
+    {
+        try {
+            if (!$user) {
+                return AuthResult::error('المستخدم غير موجود', null, 404);
+            }
+
+            $this->loadUserRelations($user);
+
+            $token = $user->currentAccessToken()?->plainTextToken;
+            $userData = $this->formatUserData($user, $token);
+
+            return AuthResult::success('تم جلب البيانات بنجاح', $userData);
+
+        } catch (\Exception $e) {
+            Log::error('Get current user error: ' . $e->getMessage());
+
+            return AuthResult::error(
+                'حدث خطأ أثناء جلب البيانات',
                 config('app.debug') ? $e->getMessage() : null,
                 500
             );
