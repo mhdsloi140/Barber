@@ -13,7 +13,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 class User extends Authenticatable implements HasMedia
 {
     use HasApiTokens, Notifiable, HasRoles, SoftDeletes, InteractsWithMedia;
-  protected $guard_name = 'api';
+    protected $guard_name = 'api';
     protected $fillable = [
         'name',
         'phone',
@@ -55,8 +55,8 @@ class User extends Authenticatable implements HasMedia
     public function salons()
     {
         return $this->belongsToMany(Salon::class, 'barber_salon', 'barber_id', 'salon_id')
-                    ->withPivot('is_active')
-                    ->withTimestamps();
+            ->withPivot('is_active')
+            ->withTimestamps();
     }
 
     /**
@@ -94,7 +94,16 @@ class User extends Authenticatable implements HasMedia
     {
         return $this->morphMany(WorkingHour::class, 'workable');
     }
-    
+    public function ratingsGiven()
+    {
+        return $this->hasMany(Rating::class, 'customer_id');
+    }
+
+    public function ratingsReceived()
+    {
+        return $this->hasMany(Rating::class, 'barber_id');
+    }
+
 
     /**
      * العلاقة مع التقييمات (كحلاق)

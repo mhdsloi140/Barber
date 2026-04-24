@@ -5,10 +5,13 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\WorkingHour;
+use App\Models\Rating;
+use App\Models\Appointment;
 use App\Services\AuthResult;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class BarberService
 {
@@ -20,7 +23,6 @@ class BarberService
         try {
             return DB::transaction(function () use ($data, $salonOwner) {
 
-                // التحقق من أن الصالون يتبع صاحب الصالون
                 $salon = $salonOwner->ownedSalon;
                 if (!$salon) {
                     return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
@@ -29,15 +31,13 @@ class BarberService
                 $barber = User::create([
                     'name' => $data['name'],
                     'phone' => $data['phone'],
-                    'password' => Hash::make('password'), // كلمة مرور مؤقتة
+                    'password' => Hash::make('password'),
                     'role' => 'barber',
                     'is_active' => true,
                 ]);
 
-                // تعيين دور الحلاق
                 $barber->assignRole('barber');
 
-                // ربط الحلاق بالصالون
                 $barber->salons()->attach($salon->id, [
                     'is_active' => true,
                     'created_at' => now(),
@@ -50,7 +50,6 @@ class BarberService
                     'phone' => $barber->phone
                 ]);
 
-                // ✅ إرجاع الاسم ورقم الهاتف فقط
                 return AuthResult::success(
                     'تم اضافة الحلاق بنجاح',
                     [
@@ -64,100 +63,130 @@ class BarberService
             });
         } catch (\Exception $e) {
             Log::error('Add barber error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء إضافة الحلاق: ' . $e->getMessage(),
-                null,
-                500
-            );
+            return AuthResult::error('حدث خطأ أثناء إضافة الحلاق: ' . $e->getMessage(), null, 500);
         }
     }
 
     /**
-     * جلب كل الحلاقين التابعين لصاحب الصالون
+     * جلب كل الحلاقين التابعين لصاحب الصالون مع تقييماتهم وإحصائياتهم
      */
-   /**
- * جلب كل الحلاقين التابعين لصاحب الصالون
- */
-public function getBarbers(User $salonOwner): AuthResult
-{
-    try {
-        $salon = $salonOwner->ownedSalon;
+    public function getBarbers(User $salonOwner): AuthResult
+    {
+        try {
+            $salon = $salonOwner->ownedSalon;
 
-        if (!$salon) {
-            return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
-        }
+            if (!$salon) {
+                return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
+            }
 
+            $barbers = $salon->barbers()
+                ->select('users.id', 'users.name', 'users.phone', 'users.is_active')
+                ->get();
 
-        $barbers = $salon->barbers()
-            ->select('users.id', 'users.name', 'users.phone', 'users.is_active')
-            ->get();
+            $barbersData = $barbers->map(function($barber) {
+                // جلب متوسط تقييم الحلاق
+                $averageRating = $this->getBarberAverageRating($barber->id);
 
-        return AuthResult::success(
-            'تم جلب الحلاقين بنجاح',
-            $barbers->map(function($barber) {
+                // جلب عدد الحجوزات في الأسبوع الحالي
+                $weeklyBookings = $this->getBarberWeeklyBookings($barber->id);
+
+                // جلب عدد الحجوزات الإجمالي
+                $totalBookings = $this->getBarberTotalBookings($barber->id);
+
+                // جلب عدد الحجوزات المكتملة
+                $completedBookings = $this->getBarberCompletedBookings($barber->id);
+
                 return [
                     'id' => $barber->id,
                     'name' => $barber->name,
                     'phone' => $barber->phone,
-                     'is_active' => $barber->is_active
+                    'is_active' => $barber->is_active,
+                    'rating' => [
+                        'average' => $averageRating['average'],
+                        'total' => $averageRating['total'],
+                        'distribution' => $averageRating['distribution'],
+                    ],
+                    'statistics' => [
+                        'weekly_bookings' => $weeklyBookings,
+                        'total_bookings' => $totalBookings,
+                        'completed_bookings' => $completedBookings,
+                    ],
                 ];
-            })
-        );
+            });
 
-    } catch (\Exception $e) {
-        Log::error('Get barbers error: ' . $e->getMessage());
+            return AuthResult::success('تم جلب الحلاقين بنجاح', $barbersData);
 
-        return AuthResult::error(
-            'حدث خطأ أثناء جلب الحلاقين: ' . $e->getMessage(),
-            null,
-            500
-        );
+        } catch (\Exception $e) {
+            Log::error('Get barbers error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء جلب الحلاقين: ' . $e->getMessage(), null, 500);
+        }
     }
-}
+
     /**
-     * جلب بيانات حلاق معين
+     * جلب بيانات حلاق معين مع تقييمه وإحصائياته
      */
-  /**
- * جلب بيانات حلاق معين
- */
-public function getBarber(User $salonOwner, int $barberId): AuthResult
-{
-    try {
-        $salon = $salonOwner->ownedSalon;
+    public function getBarber(User $salonOwner, int $barberId): AuthResult
+    {
+        try {
+            $salon = $salonOwner->ownedSalon;
 
-        if (!$salon) {
-            return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
+            if (!$salon) {
+                return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
+            }
+
+            $barber = $salon->barbers()
+                ->select('users.id', 'users.name', 'users.phone', 'users.is_active')
+                ->where('users.id', $barberId)
+                ->first();
+
+            if (!$barber) {
+                return AuthResult::error('الحلاق غير موجود', null, 404);
+            }
+
+            // جلب متوسط تقييم الحلاق
+            $averageRating = $this->getBarberAverageRating($barber->id);
+
+            // جلب عدد الحجوزات في الأسبوع الحالي
+            $weeklyBookings = $this->getBarberWeeklyBookings($barber->id);
+
+            // جلب عدد الحجوزات الإجمالي
+            $totalBookings = $this->getBarberTotalBookings($barber->id);
+
+            // جلب عدد الحجوزات المكتملة
+            $completedBookings = $this->getBarberCompletedBookings($barber->id);
+
+            // جلب آخر 5 تقييمات
+            $recentRatings = $this->getBarberRecentRatings($barber->id);
+
+            return AuthResult::success(
+                'تم جلب بيانات الحلاق بنجاح',
+                [
+                    'id' => $barber->id,
+                    'name' => $barber->name,
+                    'phone' => $barber->phone,
+                    'is_active' => $barber->is_active,
+                    'rating' => [
+                        'average' => $averageRating['average'],
+                        'total' => $averageRating['total'],
+                        'distribution' => $averageRating['distribution'],
+                    ],
+                    'statistics' => [
+                        'weekly_bookings' => $weeklyBookings,
+                        'total_bookings' => $totalBookings,
+                        'completed_bookings' => $completedBookings,
+                    ],
+                    'recent_ratings' => $recentRatings,
+                ]
+            );
+
+        } catch (\Exception $e) {
+            return AuthResult::error(
+                'حدث خطأ أثناء جلب بيانات الحلاق',
+                config('app.debug') ? $e->getMessage() : null,
+                500
+            );
         }
-
-
-        $barber = $salon->barbers()
-            ->select('users.id', 'users.name', 'users.phone')
-            ->where('users.id', $barberId)
-            ->first();
-
-        if (!$barber) {
-            return AuthResult::error('الحلاق غير موجود', null, 404);
-        }
-
-        return AuthResult::success(
-            'تم جلب بيانات الحلاق بنجاح',
-            [
-                'id' => $barber->id,
-                'name' => $barber->name,
-                'phone' => $barber->phone,
-                 'is_active' => $barber->is_active
-            ]
-        );
-
-    } catch (\Exception $e) {
-        return AuthResult::error(
-            'حدث خطأ أثناء جلب بيانات الحلاق',
-            config('app.debug') ? $e->getMessage() : null,
-            500
-        );
     }
-}
 
     /**
      * تحديث بيانات حلاق
@@ -179,12 +208,10 @@ public function getBarber(User $salonOwner, int $barberId): AuthResult
                     return AuthResult::error('الحلاق غير موجود', null, 404);
                 }
 
-                // تحديث البيانات الأساسية
                 if (isset($data['name'])) {
                     $barber->name = $data['name'];
                 }
                 if (isset($data['phone'])) {
-                    // التحقق من عدم تكرار رقم الهاتف
                     $existingUser = User::where('phone', $data['phone'])
                         ->where('id', '!=', $barberId)
                         ->first();
@@ -199,20 +226,20 @@ public function getBarber(User $salonOwner, int $barberId): AuthResult
                     'barber_id' => $barber->id,
                     'updated_by' => $salonOwner->id
                 ]);
+
                 return AuthResult::success(
                     'تم تحديث بيانات الحلاق بنجاح',
                     [
                         'id' => $barber->id,
                         'name' => $barber->name,
                         'phone' => $barber->phone,
-                         'is_active' => $barber->is_active
+                        'is_active' => $barber->is_active
                     ]
                 );
             });
 
         } catch (\Exception $e) {
             Log::error('Update barber error: ' . $e->getMessage());
-
             return AuthResult::error(
                 'حدث خطأ أثناء تحديث بيانات الحلاق',
                 config('app.debug') ? $e->getMessage() : null,
@@ -251,7 +278,6 @@ public function getBarber(User $salonOwner, int $barberId): AuthResult
                 'deactivated_by' => $salonOwner->id
             ]);
 
-
             return AuthResult::success(
                 'تم إيقاف الحلاق بنجاح',
                 [
@@ -264,12 +290,7 @@ public function getBarber(User $salonOwner, int $barberId): AuthResult
 
         } catch (\Exception $e) {
             Log::error('Deactivate barber error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء إيقاف الحلاق',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
+            return AuthResult::error('حدث خطأ أثناء إيقاف الحلاق', config('app.debug') ? $e->getMessage() : null, 500);
         }
     }
 
@@ -298,7 +319,6 @@ public function getBarber(User $salonOwner, int $barberId): AuthResult
             $barber->is_active = true;
             $barber->save();
 
-
             return AuthResult::success(
                 'تم تفعيل الحلاق بنجاح',
                 [
@@ -311,12 +331,7 @@ public function getBarber(User $salonOwner, int $barberId): AuthResult
 
         } catch (\Exception $e) {
             Log::error('Activate barber error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء تفعيل الحلاق',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
+            return AuthResult::error('حدث خطأ أثناء تفعيل الحلاق', config('app.debug') ? $e->getMessage() : null, 500);
         }
     }
 
@@ -344,7 +359,6 @@ public function getBarber(User $salonOwner, int $barberId): AuthResult
 
             $statusText = $barber->is_active ? 'تفعيل' : 'إيقاف';
 
-
             return AuthResult::success(
                 "تم {$statusText} الحلاق بنجاح",
                 [
@@ -357,12 +371,7 @@ public function getBarber(User $salonOwner, int $barberId): AuthResult
 
         } catch (\Exception $e) {
             Log::error('Toggle barber status error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء تغيير حالة الحلاق',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
+            return AuthResult::error('حدث خطأ أثناء تغيير حالة الحلاق', config('app.debug') ? $e->getMessage() : null, 500);
         }
     }
 
@@ -386,7 +395,6 @@ public function getBarber(User $salonOwner, int $barberId): AuthResult
 
             $barber->delete();
 
-
             return AuthResult::success('تم حذف الحلاق بنجاح', [
                 'id' => $barber->id,
                 'name' => $barber->name,
@@ -395,12 +403,7 @@ public function getBarber(User $salonOwner, int $barberId): AuthResult
 
         } catch (\Exception $e) {
             Log::error('Delete barber error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء حذف الحلاق',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
+            return AuthResult::error('حدث خطأ أثناء حذف الحلاق', config('app.debug') ? $e->getMessage() : null, 500);
         }
     }
 
@@ -447,7 +450,6 @@ public function getBarber(User $salonOwner, int $barberId): AuthResult
                     'barber_id' => $barber->id
                 ]);
 
-
                 return AuthResult::success(
                     'تم تحديث أوقات العمل بنجاح',
                     [
@@ -461,12 +463,7 @@ public function getBarber(User $salonOwner, int $barberId): AuthResult
             });
         } catch (\Exception $e) {
             Log::error('Update working hours error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء تحديث أوقات العمل',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
+            return AuthResult::error('حدث خطأ أثناء تحديث أوقات العمل', config('app.debug') ? $e->getMessage() : null, 500);
         }
     }
 
@@ -484,7 +481,6 @@ public function getBarber(User $salonOwner, int $barberId): AuthResult
                 ->orderByRaw("FIELD(day_of_week, 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday')")
                 ->get();
 
-            // ✅ إرجاع الاسم ورقم الهاتف فقط مع أوقات العمل
             return AuthResult::success(
                 'تم جلب أوقات العمل بنجاح',
                 [
@@ -497,12 +493,90 @@ public function getBarber(User $salonOwner, int $barberId): AuthResult
 
         } catch (\Exception $e) {
             Log::error('Get working hours error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء جلب أوقات العمل',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
+            return AuthResult::error('حدث خطأ أثناء جلب أوقات العمل', config('app.debug') ? $e->getMessage() : null, 500);
         }
+    }
+
+    // ===================== دوال مساعدة =====================
+
+    /**
+     * جلب متوسط تقييم الحلاق
+     */
+    private function getBarberAverageRating(int $barberId): array
+    {
+        $ratings = Rating::where('barber_id', $barberId)
+            ->where('is_approved', true)
+            ->get();
+
+        $total = $ratings->count();
+        $average = $total > 0 ? round($ratings->avg('rating'), 1) : 0;
+
+        $distribution = [
+            5 => $ratings->where('rating', 5)->count(),
+            4 => $ratings->where('rating', 4)->count(),
+            3 => $ratings->where('rating', 3)->count(),
+            2 => $ratings->where('rating', 2)->count(),
+            1 => $ratings->where('rating', 1)->count(),
+        ];
+
+        return [
+            'average' => $average,
+            'total' => $total,
+            'distribution' => $distribution,
+        ];
+    }
+
+    /**
+     * جلب عدد حجوزات الحلاق في الأسبوع الحالي
+     */
+    private function getBarberWeeklyBookings(int $barberId): int
+    {
+        $startOfWeek = Carbon::now()->startOfWeek();
+        $endOfWeek = Carbon::now()->endOfWeek();
+
+        return Appointment::where('barber_id', $barberId)
+            ->whereBetween('appointment_date', [$startOfWeek, $endOfWeek])
+            ->count();
+    }
+
+    /**
+     * جلب عدد حجوزات الحلاق الإجمالي
+     */
+    private function getBarberTotalBookings(int $barberId): int
+    {
+        return Appointment::where('barber_id', $barberId)->count();
+    }
+
+    /**
+     * جلب عدد حجوزات الحلاق المكتملة
+     */
+    private function getBarberCompletedBookings(int $barberId): int
+    {
+        return Appointment::where('barber_id', $barberId)
+            ->where('status', 'completed')
+            ->count();
+    }
+
+    /**
+     * جلب آخر 5 تقييمات للحلاق
+     */
+    private function getBarberRecentRatings(int $barberId): array
+    {
+        $ratings = Rating::where('barber_id', $barberId)
+            ->where('is_approved', true)
+            ->with('customer')
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get();
+
+        return $ratings->map(function ($rating) {
+            return [
+                'id' => $rating->id,
+                'customer_name' => $rating->customer->name,
+                'rating' => $rating->rating,
+                'comment' => $rating->comment,
+                'created_at' => $rating->created_at->diffForHumans(),
+            ];
+        })->toArray();
     }
 }

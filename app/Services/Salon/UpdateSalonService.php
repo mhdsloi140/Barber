@@ -5,6 +5,8 @@ namespace App\Services\Salon;
 
 use App\Models\User;
 use App\Models\Salon;
+use App\Models\Rating;
+use App\Models\Appointment;
 use App\Models\WorkingHour;
 use App\Services\AuthResult;
 use Illuminate\Support\Facades\Hash;
@@ -12,9 +14,56 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\UploadedFile;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
+use Carbon\Carbon;
 
 class UpdateSalonService
 {
+    /**
+     * عرض بيانات الصالون الشخصية مع التقييمات
+     */
+    public function showSalonProfile(): AuthResult
+    {
+        try {
+            $user = auth()->user();
+            $salon = $user->ownedSalon;
+
+            if (!$salon) {
+                return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
+            }
+
+            // جلب تقييمات الصالون
+            $salonRatings = $this->getSalonRatings($salon->id);
+
+            $data = [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'phone' => $user->phone,
+                    'email' => $user->email,
+                    'role' => $user->role,
+                ],
+                'salon' => [
+                    'id' => $salon->id,
+                    'name' => $salon->name,
+                    'address' => $salon->address,
+                    'phone' => $salon->phone,
+                    'latitude' => $salon->latitude,
+                    'longitude' => $salon->longitude,
+                    'images' => $salon->getImagesUrlsAttribute(),
+                    'working_hours' => $this->getWorkingHoursFormatted($salon),
+                    'rating' => $salonRatings['rating'],
+                    'statistics' => $salonRatings['statistics'],
+                ],
+            ];
+
+            return AuthResult::success('تم جلب بيانات الصالون بنجاح', $data);
+
+        } catch (\Exception $e) {
+            Log::error('Show salon profile error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء جلب بيانات الصالون', $e->getMessage(), 500);
+        }
+    }
+
     /**
      * تحديث بيانات الصالون
      */
@@ -53,6 +102,9 @@ class UpdateSalonService
                 $user->refresh();
                 $salon->refresh();
 
+                // جلب تقييمات الصالون بعد التحديث
+                $salonRatings = $this->getSalonRatings($salon->id);
+
                 return AuthResult::success('تم تحديث بيانات الصالون بنجاح', [
                     'user' => [
                         'id' => $user->id,
@@ -70,6 +122,8 @@ class UpdateSalonService
                         'longitude' => $salon->longitude,
                         'images' => $salon->getImagesUrlsAttribute(),
                         'working_hours' => $this->getWorkingHoursFormatted($salon),
+                        'rating' => $salonRatings['rating'],
+                        'statistics' => $salonRatings['statistics'],
                     ],
                 ]);
 
@@ -196,6 +250,77 @@ class UpdateSalonService
 
         // تسجيل الخروج من جميع الأجهزة بعد تغيير كلمة المرور
         $user->tokens()->delete();
+    }
+
+    /**
+     * جلب تقييمات الصالون
+     */
+    private function getSalonRatings(int $salonId): array
+    {
+        // جلب جميع التقييمات للصالون (من خلال الحلاقين)
+        $barberIds = User::role('barber')
+            ->whereHas('salons', function($q) use ($salonId) {
+                $q->where('salon_id', $salonId);
+            })
+            ->pluck('id')
+            ->toArray();
+
+        $ratings = Rating::whereIn('barber_id', $barberIds)
+            ->where('is_approved', true)
+            ->get();
+
+        $totalRatings = $ratings->count();
+        $averageRating = $totalRatings > 0 ? round($ratings->avg('rating'), 1) : 0;
+
+        // توزيع التقييمات
+        $distribution = [
+            5 => $ratings->where('rating', 5)->count(),
+            4 => $ratings->where('rating', 4)->count(),
+            3 => $ratings->where('rating', 3)->count(),
+            2 => $ratings->where('rating', 2)->count(),
+            1 => $ratings->where('rating', 1)->count(),
+        ];
+
+        // آخر 5 تقييمات
+        $recentRatings = Rating::whereIn('barber_id', $barberIds)
+            ->where('is_approved', true)
+            ->with('customer')
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(function ($rating) {
+                return [
+                    'id' => $rating->id,
+                    'customer_name' => $rating->customer->name,
+                    'rating' => $rating->rating,
+                    'comment' => $rating->comment,
+                    'barber_name' => $rating->barber?->name,
+                    'created_at' => $rating->created_at->diffForHumans(),
+                ];
+            });
+
+        // إحصائيات الحجوزات
+        $totalAppointments = Appointment::where('salon_id', $salonId)->count();
+        $completedAppointments = Appointment::where('salon_id', $salonId)
+            ->where('status', 'completed')
+            ->count();
+        $weeklyAppointments = Appointment::where('salon_id', $salonId)
+            ->whereBetween('appointment_date', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()])
+            ->count();
+
+        return [
+            'rating' => [
+                'average' => $averageRating,
+                'total' => $totalRatings,
+                'distribution' => $distribution,
+                'recent' => $recentRatings,
+            ],
+            'statistics' => [
+                'total_appointments' => $totalAppointments,
+                'completed_appointments' => $completedAppointments,
+                'weekly_appointments' => $weeklyAppointments,
+            ],
+        ];
     }
 
     /**

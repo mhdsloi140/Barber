@@ -4,6 +4,7 @@
 namespace App\Services\Customer;
 
 use App\Models\Salon;
+use App\Models\Rating;
 use App\Models\WorkingHour;
 use App\Services\AuthResult;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +14,7 @@ use Carbon\Carbon;
 class SalonService
 {
     /**
-     * عرض جميع الصالونات للزبون مع الصور
+     * عرض جميع الصالونات للزبون مع الصور والتقييمات
      */
     public function getSalons(array $filters): AuthResult
     {
@@ -51,9 +52,9 @@ class SalonService
             $perPage = $filters['per_page'] ?? 10;
             $salons = $query->paginate($perPage);
 
-            // تنسيق البيانات للعرض مع الصور
+            // تنسيق البيانات للعرض مع الصور والتقييمات
             $salons->getCollection()->transform(function ($salon) use ($latitude, $longitude) {
-                return $this->formatSalonDataWithImages($salon, $latitude, $longitude);
+                return $this->formatSalonDataWithImagesAndRatings($salon, $latitude, $longitude);
             });
 
             return AuthResult::success('تم جلب الصالونات بنجاح', [
@@ -69,22 +70,16 @@ class SalonService
 
         } catch (\Exception $e) {
             Log::error('Get salons error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء جلب الصالونات',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
+            return AuthResult::error('حدث خطأ أثناء جلب الصالونات', config('app.debug') ? $e->getMessage() : null, 500);
         }
     }
 
     /**
-     * عرض صالون محدد مع جميع الصور
+     * عرض صالون محدد مع جميع الصور والتقييمات
      */
     public function getSalon($id, ?float $latitude = null, ?float $longitude = null): AuthResult
     {
         try {
-            // تحويل id إلى int
             $salonId = (int) $id;
 
             if ($salonId <= 0) {
@@ -107,31 +102,25 @@ class SalonService
                 return AuthResult::error('الصالون غير موجود', null, 404);
             }
 
-            $data = $this->formatSalonDataWithImages($salon, $latitude, $longitude);
+            $data = $this->formatSalonDataWithImagesAndRatings($salon, $latitude, $longitude);
 
             // إضافة تفاصيل إضافية للصالون
-            $data['barbers'] = $this->getBarbersData($salon);
+            $data['barbers'] = $this->getBarbersDataWithRatings($salon);
             $data['working_hours'] = $this->getWorkingHoursFormatted($salon);
             $data['services'] = $this->getSalonServices($salon);
-            // $data['reviews'] = $this->getSalonReviews($salon);
 
             return AuthResult::success('تم جلب بيانات الصالون بنجاح', $data);
 
         } catch (\Exception $e) {
             Log::error('Get salon error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء جلب بيانات الصالون',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
+            return AuthResult::error('حدث خطأ أثناء جلب بيانات الصالون', config('app.debug') ? $e->getMessage() : null, 500);
         }
     }
 
     /**
-     * تنسيق بيانات الصالون مع جميع الصور
+     * تنسيق بيانات الصالون مع جميع الصور والتقييمات
      */
-    private function formatSalonDataWithImages(Salon $salon, ?float $latitude = null, ?float $longitude = null): array
+    private function formatSalonDataWithImagesAndRatings(Salon $salon, ?float $latitude = null, ?float $longitude = null): array
     {
         // جلب جميع صور الصالون
         $images = $salon->getMedia('salon_images')->map(function ($image) {
@@ -149,6 +138,9 @@ class SalonService
             ];
         });
 
+        // جلب تقييمات الصالون
+        $salonRatings = $this->getSalonRatings($salon->id);
+
         return [
             'id' => $salon->id,
             'name' => $salon->name,
@@ -162,7 +154,145 @@ class SalonService
             'updated_at' => $salon->updated_at,
             'images' => $images,
             'images_count' => $images->count(),
+            'rating' => $salonRatings['rating'],
         ];
+    }
+
+    /**
+     * جلب تقييمات الصالون
+     */
+    private function getSalonRatings(int $salonId): array
+    {
+        // جلب جميع التقييمات للصالون
+        $ratings = Rating::where('salon_id', $salonId)
+            ->where('is_approved', true)
+            ->get();
+
+        $totalRatings = $ratings->count();
+        $averageRating = $totalRatings > 0 ? round($ratings->avg('rating'), 1) : 0;
+
+        $ratingDistribution = [
+            5 => $ratings->where('rating', 5)->count(),
+            4 => $ratings->where('rating', 4)->count(),
+            3 => $ratings->where('rating', 3)->count(),
+            2 => $ratings->where('rating', 2)->count(),
+            1 => $ratings->where('rating', 1)->count(),
+        ];
+
+        // آخر 5 تقييمات للصالون
+        $recentRatings = Rating::where('salon_id', $salonId)
+            ->where('is_approved', true)
+            ->with('customer')
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(function ($rating) {
+                return [
+                    'id' => $rating->id,
+                    'customer_name' => $rating->customer->name,
+                    'rating' => $rating->rating,
+                    'comment' => $rating->comment,
+                    'created_at' => $rating->created_at->diffForHumans(),
+                ];
+            });
+
+        return [
+            'rating' => [
+                'average' => $averageRating,
+                'total' => $totalRatings,
+                'distribution' => $ratingDistribution,
+                'recent' => $recentRatings,
+            ],
+        ];
+    }
+
+    /**
+     * جلب بيانات الحلاقين مع تقييماتهم
+     */
+    private function getBarbersDataWithRatings(Salon $salon): array
+    {
+        $barbers = [];
+        foreach ($salon->barbers as $barber) {
+            // جلب تقييمات الحلاق
+            $barberRatings = $this->getBarberRatings($barber->id);
+
+            $barbers[] = [
+                'id' => $barber->id,
+                'name' => $barber->name,
+                'phone' => $barber->phone,
+                'avatar' => $barber->getAvatarUrlAttribute(),
+                'services_count' => $barber->barberServices()->count(),
+                'min_price' => $barber->barberServices()->min('price') ?? 0,
+                'rating' => $barberRatings['rating'],
+            ];
+        }
+        return $barbers;
+    }
+
+    /**
+     * جلب تقييمات الحلاق
+     */
+    private function getBarberRatings(int $barberId): array
+    {
+        $ratings = Rating::where('barber_id', $barberId)
+            ->where('is_approved', true)
+            ->get();
+
+        $totalRatings = $ratings->count();
+        $averageRating = $totalRatings > 0 ? round($ratings->avg('rating'), 1) : 0;
+
+        $ratingDistribution = [
+            5 => $ratings->where('rating', 5)->count(),
+            4 => $ratings->where('rating', 4)->count(),
+            3 => $ratings->where('rating', 3)->count(),
+            2 => $ratings->where('rating', 2)->count(),
+            1 => $ratings->where('rating', 1)->count(),
+        ];
+
+        // آخر 5 تقييمات للحلاق
+        $recentRatings = Rating::where('barber_id', $barberId)
+            ->where('is_approved', true)
+            ->with('customer')
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(function ($rating) {
+                return [
+                    'id' => $rating->id,
+                    'customer_name' => $rating->customer->name,
+                    'rating' => $rating->rating,
+                    'comment' => $rating->comment,
+                    'created_at' => $rating->created_at->diffForHumans(),
+                ];
+            });
+
+        return [
+            'rating' => [
+                'average' => $averageRating,
+                'total' => $totalRatings,
+                'distribution' => $ratingDistribution,
+                'recent' => $recentRatings,
+            ],
+        ];
+    }
+
+    /**
+     * جلب بيانات الحلاقين في الصالون (بدون تقييمات - للإصدارات السابقة)
+     */
+    private function getBarbersData(Salon $salon): array
+    {
+        $barbers = [];
+        foreach ($salon->barbers as $barber) {
+            $barbers[] = [
+                'id' => $barber->id,
+                'name' => $barber->name,
+                'phone' => $barber->phone,
+                'avatar' => $barber->getAvatarUrlAttribute(),
+                'services_count' => $barber->barberServices()->count(),
+                'min_price' => $barber->barberServices()->min('price') ?? 0,
+            ];
+        }
+        return $barbers;
     }
 
     /**
@@ -198,25 +328,6 @@ class SalonService
             ->min('price');
 
         return $minPrice ?? 0;
-    }
-
-    /**
-     * جلب بيانات الحلاقين في الصالون
-     */
-    private function getBarbersData(Salon $salon): array
-    {
-        $barbers = [];
-        foreach ($salon->barbers as $barber) {
-            $barbers[] = [
-                'id' => $barber->id,
-                'name' => $barber->name,
-                'phone' => $barber->phone,
-                'avatar' => $barber->getAvatarUrlAttribute(),
-                'services_count' => $barber->barberServices()->count(),
-                'min_price' => $barber->barberServices()->min('price') ?? 0,
-            ];
-        }
-        return $barbers;
     }
 
     /**
@@ -292,29 +403,10 @@ class SalonService
         return $services->map(function($service) {
             return [
                 'name' => $service->name,
-                // 'name_ar' => $service->name_ar,
                 'price' => $service->price,
                 'duration' => $service->duration_minutes,
                 'description' => $service->description
             ];
         })->toArray();
     }
-
-    /**
-     * جلب تقييمات الصالون
-     */
-    // private function getSalonReviews(Salon $salon): array
-    // {
-    //     return [
-    //         'average' => 4.9,
-    //         'total' => 120,
-    //         'distribution' => [
-    //             5 => 80,
-    //             4 => 30,
-    //             3 => 8,
-    //             2 => 2,
-    //             1 => 0,
-    //         ]
-    //     ];
-    // }
 }

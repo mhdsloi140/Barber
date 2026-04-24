@@ -98,7 +98,10 @@ class Salon extends Model implements HasMedia
     {
         return $this->barbers()->count();
     }
-
+    public function ratings()
+    {
+        return $this->hasMany(Rating::class);
+    }
     public function getLocationAttribute(): ?array
     {
         if ($this->latitude && $this->longitude) {

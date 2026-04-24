@@ -8,6 +8,7 @@ use App\Http\Controllers\API\Barbers\ServicesController;
 use App\Http\Controllers\API\Customer\BookingController;
 use App\Http\Controllers\API\Customer\SalonDetailsController;
 use App\Http\Controllers\API\ProfileController;
+use App\Http\Controllers\API\RatingController;
 use App\Http\Controllers\API\Salon\AppointmentSalonController;
 use App\Http\Controllers\API\Salon\BarberController;
 use App\Http\Controllers\API\Salon\DashboardController;
@@ -118,7 +119,6 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
     Route::get('salons/{id}/details', [SalonDetailsController::class, 'show']);
     //    Route::post('{id}/cancel', [BookingController::class, 'cancel']);
 
-
     Route::prefix('appointments')->group(function () {
         Route::get('/', [BookingController::class, 'index']);           // جميع الحجوزات
         Route::get('active', [BookingController::class, 'active']);     // الحجوزات النشطة
@@ -126,4 +126,16 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
         Route::post('{id}/cancel', [BookingController::class, 'cancel']); // إلغاء حجز
     });
 
+});
+Route::prefix('ratings')->group(function () {
+
+    // مسارات عامة (عرض التقييمات)
+    Route::get('barber/{barberId}', [RatingController::class, 'barberRatings']);
+    Route::get('salon/{salonId}', [RatingController::class, 'salonRatings']);
+
+    // مسارات محمية (تحتاج توثيق)
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/', [RatingController::class, 'store']);
+        Route::get('my-ratings', [RatingController::class, 'myRatings']);
+    });
 });
