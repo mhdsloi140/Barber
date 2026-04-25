@@ -4,6 +4,8 @@
 namespace App\Http\Controllers\API\Customer;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Customer\BookingRequest;
+use App\Http\Requests\Customer\StoreBookingRequest;
 use App\Services\Customer\BookingService;
 use Illuminate\Http\Request;
 
@@ -51,6 +53,16 @@ class BookingController extends Controller
     public function completed()
     {
         $result = $this->bookingService->getCompletedAppointments(auth()->user());
+
+        return response()->json([
+            'success' => $result->success,
+            'message' => $result->message,
+            'data' => $result->data,
+        ], $result->statusCode);
+    }
+    public function store(BookingRequest $request)
+    {
+        $result = $this->bookingService->storeBooking($request->validated());
 
         return response()->json([
             'success' => $result->success,

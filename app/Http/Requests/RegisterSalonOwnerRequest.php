@@ -9,6 +9,7 @@ class RegisterSalonOwnerRequest extends FormRequest
 {
     public function authorize(): bool
     {
+        // dd($this->all());
         return true;
     }
 
@@ -18,7 +19,7 @@ class RegisterSalonOwnerRequest extends FormRequest
             // بيانات المستخدم
             'name' => ['required', 'string', 'max:255'],
             'phone' => ['required', 'string', 'unique:users,phone', 'regex:/^[0-9]+$/', 'min:10', 'max:15'],
-          
+
             'password' => ['required', 'string', 'min:6'],
 
             // بيانات الصالون
@@ -50,7 +51,7 @@ class RegisterSalonOwnerRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        // تحويل working_hours
+        
         if ($this->has('working_hours')) {
             $workingHours = $this->input('working_hours');
 
