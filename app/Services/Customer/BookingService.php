@@ -67,35 +67,29 @@ class BookingService
     }
 
     /**
-     *  التحقق من أن الصالون مفتوح في التاريخ المحدد
+     * التحقق من أن الصالون مفتوح في التاريخ المحدد
      */
     private function isSalonOpenOnDate(Salon $salon, string $date): bool
     {
         $dateObj = Carbon::parse($date);
         $dayOfWeek = strtolower($dateObj->format('l'));
 
-        // جلب أوقات عمل الصالون في هذا اليوم
         $workingHour = $salon->workingHours()
             ->where('day_of_week', $dayOfWeek)
             ->where('is_open', true)
             ->first();
 
-        if (!$workingHour) {
-            return false;
-        }
-
-        return true;
+        return $workingHour !== null;
     }
 
     /**
-     *  التحقق من أن الوقت ضمن ساعات عمل الصالون
+     * التحقق من أن الوقت ضمن ساعات عمل الصالون
      */
     private function isTimeWithinSalonHours(Salon $salon, string $date, string $startTime, int $duration): bool
     {
         $dateObj = Carbon::parse($date);
         $dayOfWeek = strtolower($dateObj->format('l'));
 
-        //  إضافة الثواني إلى وقت البداية
         $startTimeFormatted = Carbon::parse($startTime)->format('H:i:s');
         $endTime = Carbon::parse($startTime)->addMinutes($duration)->format('H:i:s');
 
@@ -108,14 +102,12 @@ class BookingService
             return false;
         }
 
-        //  التحقق من الوردية الأولى
         if ($workingHour->shift1_start && $workingHour->shift1_end) {
             if ($startTimeFormatted >= $workingHour->shift1_start && $endTime <= $workingHour->shift1_end) {
                 return true;
             }
         }
 
-        //  التحقق من الوردية الثانية
         if ($workingHour->shift2_start && $workingHour->shift2_end) {
             if ($startTimeFormatted >= $workingHour->shift2_start && $endTime <= $workingHour->shift2_end) {
                 return true;
@@ -123,6 +115,60 @@ class BookingService
         }
 
         return false;
+    }
+
+    /**
+     * جلب الأوقات المتاحة فقط (بدون الأوقات المحجوزة)
+     */
+    private function getAvailableTimesForBarber(int $barberId, string $date, int $duration, $workingHour): array
+    {
+        $availableSlots = [];
+
+        $startTime = $workingHour->shift1_start;
+        $endTime = $workingHour->shift1_end;
+
+        if ($workingHour->shift2_start && $workingHour->shift2_end) {
+            $startTime = min($workingHour->shift1_start, $workingHour->shift2_start);
+            $endTime = max($workingHour->shift1_end, $workingHour->shift2_end);
+        }
+
+        $current = Carbon::parse($startTime);
+        $end = Carbon::parse($endTime);
+
+        // جلب جميع المواعيد المحجوزة
+        $bookedAppointments = Appointment::where('barber_id', $barberId)
+            ->whereDate('appointment_date', $date)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->get(['appointment_time', 'end_time']);
+
+        while ($current->copy()->addMinutes($duration) <= $end) {
+            $slotStart = $current->format('H:i');
+            $slotEnd = $current->copy()->addMinutes($duration)->format('H:i');
+
+            $isAvailable = true;
+
+            foreach ($bookedAppointments as $booked) {
+                $bookedStart = $booked->appointment_time;
+                $bookedEnd = $booked->end_time;
+
+                // التحقق من التداخل: إذا كان الوقت المطلوب يتداخل مع أي حجز موجود
+                if ($slotStart < $bookedEnd && $slotEnd > $bookedStart) {
+                    $isAvailable = false;
+                    break;
+                }
+            }
+
+            if ($isAvailable) {
+                $availableSlots[] = [
+                    'time' => $slotStart,
+                    'display' => $current->format('g:i A'),
+                ];
+            }
+
+            $current->addMinutes($duration);
+        }
+
+        return $availableSlots;
     }
 
     /**
@@ -151,14 +197,10 @@ class BookingService
                 }
 
                 // 2. تحديد تاريخ الموعد
-                $appointmentDate = isset($data['appointment_date'])
-                    ? $data['appointment_date']
-                    : $this->getNextDateFromDay($data['day']);
+                $appointmentDate = $data['appointment_date'] ?? $this->getNextDateFromDay($data['day']);
 
                 // 3. التحقق من أن الصالون مفتوح في هذا التاريخ
-                $isSalonOpen = $this->isSalonOpenOnDate($salon, $appointmentDate);
-
-                if (!$isSalonOpen) {
+                if (!$this->isSalonOpenOnDate($salon, $appointmentDate)) {
                     $dayName = Carbon::parse($appointmentDate)->format('l');
                     return AuthResult::error("الصالون مغلق في يوم " . $this->getArabicDayName($dayName), null, 400);
                 }
@@ -166,9 +208,7 @@ class BookingService
                 // 4. التحقق من الحلاق
                 $barber = User::where('is_active', true)
                     ->where('id', $data['barber_id'])
-                    ->whereHas('salons', function ($q) use ($data) {
-                        $q->where('salon_id', $data['salon_id']);
-                    })
+                    ->whereHas('salons', fn($q) => $q->where('salon_id', $data['salon_id']))
                     ->first();
 
                 if (!$barber) {
@@ -194,15 +234,13 @@ class BookingService
                 $totalDuration = $totals['total_duration'];
                 $totalPrice = $totals['total_price'];
 
-                //  تنسيق الوقت مع الثواني لتوحيد المقارنة
+                // تنسيق الوقت
                 $appointmentTime = $data['time'];
                 $appointmentTimeFormatted = Carbon::parse($appointmentTime)->format('H:i:s');
                 $endTime = Carbon::parse($appointmentTime)->addMinutes($totalDuration)->format('H:i:s');
 
                 // 6. التحقق من أن الوقت ضمن ساعات عمل الصالون
-                $isTimeWithinSalon = $this->isTimeWithinSalonHours($salon, $appointmentDate, $appointmentTimeFormatted, $totalDuration);
-
-                if (!$isTimeWithinSalon) {
+                if (!$this->isTimeWithinSalonHours($salon, $appointmentDate, $appointmentTimeFormatted, $totalDuration)) {
                     return AuthResult::error('الوقت المحدد خارج ساعات عمل الصالون', null, 400);
                 }
 
@@ -219,7 +257,6 @@ class BookingService
 
                 $isValidTime = false;
 
-                // ✅ استخدام الوقت المنسق مع الثواني للمقارنة
                 if ($workingHour->shift1_start && $workingHour->shift1_end) {
                     if ($appointmentTimeFormatted >= $workingHour->shift1_start && $endTime <= $workingHour->shift1_end) {
                         $isValidTime = true;
@@ -236,25 +273,36 @@ class BookingService
                     return AuthResult::error('الوقت المحدد خارج ساعات عمل الحلاق', null, 400);
                 }
 
-                // 8. التحقق من عدم وجود حجز مسبق
+                // 8. التحقق من عدم وجود حجز مسبق (يتحقق من التداخل الكامل)
                 $conflictingBooking = Appointment::where('barber_id', $data['barber_id'])
                     ->whereDate('appointment_date', $appointmentDate)
                     ->whereIn('status', ['pending', 'confirmed'])
                     ->where(function ($query) use ($appointmentTimeFormatted, $endTime) {
                         $query->where(function ($q) use ($appointmentTimeFormatted, $endTime) {
+                            // الحجز الجديد يتداخل مع حجز موجود
                             $q->where('appointment_time', '<', $endTime)
-                                ->where('end_time', '>', $appointmentTimeFormatted);
+                              ->where('end_time', '>', $appointmentTimeFormatted);
                         });
                     })
                     ->exists();
 
                 if ($conflictingBooking) {
+                    // جلب الأوقات المتاحة
                     $availableTimes = $this->getAvailableTimesForBarber(
                         $barber->id,
                         $appointmentDate,
                         $totalDuration,
                         $workingHour
                     );
+
+                    // إذا لم توجد أوقات متاحة في هذا اليوم
+                    if (empty($availableTimes)) {
+                        return AuthResult::error(
+                            'لا توجد أوقات متاحة في هذا اليوم، يرجى اختيار يوم آخر',
+                            null,
+                            400
+                        );
+                    }
 
                     return AuthResult::errorWithData(
                         'هذا الوقت غير متاح، يرجى اختيار وقت آخر',
@@ -298,14 +346,12 @@ class BookingService
                             'id' => $appointment->salon->id,
                             'name' => $appointment->salon->name,
                         ],
-                        'services' => $services->map(function ($service) {
-                            return [
-                                'id' => $service->id,
-                                'name' => $service->name,
-                                'price' => $service->price,
-                                'duration_minutes' => $service->duration_minutes,
-                            ];
-                        }),
+                        'services' => $services->map(fn($service) => [
+                            'id' => $service->id,
+                            'name' => $service->name,
+                            'price' => $service->price,
+                            'duration_minutes' => $service->duration_minutes,
+                        ]),
                         'services_summary' => $totals['services_names'],
                         'total_duration' => $totalDuration,
                         'total_price' => $totalPrice,
@@ -326,7 +372,52 @@ class BookingService
     }
 
     /**
-     *  الحصول على اسم اليوم بالعربية
+     * جلب الأوقات المتاحة للحلاق في يوم معين (للاستعلام المباشر)
+     */
+    public function getAvailableTimes(int $barberId, string $date, int $serviceId): AuthResult
+    {
+        try {
+            $barber = User::find($barberId);
+            $service = BarberService::find($serviceId);
+
+            if (!$barber || !$service) {
+                return AuthResult::error('البيانات غير صحيحة', null, 404);
+            }
+
+            $dayOfWeek = strtolower(Carbon::parse($date)->format('l'));
+            $workingHour = $barber->workingHours()
+                ->where('day_of_week', $dayOfWeek)
+                ->where('is_open', true)
+                ->first();
+
+            if (!$workingHour) {
+                return AuthResult::error('الحلاق لا يعمل في هذا اليوم', null, 400);
+            }
+
+            $availableTimes = $this->getAvailableTimesForBarber(
+                $barberId,
+                $date,
+                $service->duration_minutes,
+                $workingHour
+            );
+
+            if (empty($availableTimes)) {
+                return AuthResult::error(
+                    'لا توجد أوقات متاحة في هذا اليوم، يرجى اختيار يوم آخر',
+                    null,
+                    400
+                );
+            }
+
+            return AuthResult::success('تم جلب الأوقات المتاحة بنجاح', $availableTimes);
+
+        } catch (\Exception $e) {
+            return AuthResult::error('حدث خطأ أثناء جلب الأوقات المتاحة', $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * الحصول على اسم اليوم بالعربية
      */
     private function getArabicDayName(string $day): string
     {
@@ -344,58 +435,6 @@ class BookingService
     }
 
     /**
-     * جلب الأوقات المتاحة للحلاق في يوم معين
-     */
-    private function getAvailableTimesForBarber(int $barberId, string $date, int $duration, $workingHour): array
-    {
-        $availableSlots = [];
-
-        $startTime = $workingHour->shift1_start;
-        $endTime = $workingHour->shift1_end;
-
-        if ($workingHour->shift2_start && $workingHour->shift2_end) {
-            $startTime = min($workingHour->shift1_start, $workingHour->shift2_start);
-            $endTime = max($workingHour->shift1_end, $workingHour->shift2_end);
-        }
-
-        $current = Carbon::parse($startTime);
-        $end = Carbon::parse($endTime);
-
-        $bookedAppointments = Appointment::where('barber_id', $barberId)
-            ->whereDate('appointment_date', $date)
-            ->whereIn('status', ['pending', 'confirmed'])
-            ->get(['appointment_time', 'end_time']);
-
-        while ($current->copy()->addMinutes($duration) <= $end) {
-            $slotStart = $current->format('H:i');
-            $slotEnd = $current->copy()->addMinutes($duration)->format('H:i');
-
-            $isAvailable = true;
-
-            foreach ($bookedAppointments as $booked) {
-                $bookedStart = $booked->appointment_time;
-                $bookedEnd = $booked->end_time;
-
-                if ($slotStart < $bookedEnd && $slotEnd > $bookedStart) {
-                    $isAvailable = false;
-                    break;
-                }
-            }
-
-            if ($isAvailable) {
-                $availableSlots[] = [
-                    'time' => $slotStart,
-                    'display' => $current->format('g:i A'),
-                ];
-            }
-
-            $current->addMinutes($duration);
-        }
-
-        return $availableSlots;
-    }
-
-    /**
      * جلب جميع الخدمات المرتبطة بالحجز
      */
     private function getAppointmentServices(Appointment $appointment): array
@@ -408,26 +447,22 @@ class BookingService
             $serviceIds = json_decode($appointment->services, true);
             if (is_array($serviceIds) && !empty($serviceIds)) {
                 $services = BarberService::whereIn('id', $serviceIds)->get();
-                return $services->map(function ($service) {
-                    return [
-                        'id' => $service->id,
-                        'name' => $service->name,
-                        'price' => $service->price,
-                        'duration_minutes' => $service->duration_minutes,
-                    ];
-                })->toArray();
+                return $services->map(fn($service) => [
+                    'id' => $service->id,
+                    'name' => $service->name,
+                    'price' => $service->price,
+                    'duration_minutes' => $service->duration_minutes,
+                ])->toArray();
             }
         }
 
         if ($appointment->service) {
-            return [
-                [
-                    'id' => $appointment->service->id,
-                    'name' => $appointment->service->name,
-                    'price' => $appointment->service->price,
-                    'duration_minutes' => $appointment->service->duration_minutes,
-                ]
-            ];
+            return [[
+                'id' => $appointment->service->id,
+                'name' => $appointment->service->name,
+                'price' => $appointment->service->price,
+                'duration_minutes' => $appointment->service->duration_minutes,
+            ]];
         }
 
         return [];
@@ -457,11 +492,7 @@ class BookingService
         }
 
         $appointmentDateTime = Carbon::parse($appointment->appointment_date . ' ' . $appointment->appointment_time);
-        if ($appointmentDateTime->isPast()) {
-            return false;
-        }
-
-        return true;
+        return !$appointmentDateTime->isPast();
     }
 
     /**
@@ -485,26 +516,24 @@ class BookingService
                 ->orderBy('appointment_time', 'desc')
                 ->get();
 
-            $formattedAppointments = $appointments->map(function ($appointment) {
-                return [
-                    'id' => $appointment->id,
-                    'barber_name' => $appointment->barber->name,
-                    'barber_phone' => $appointment->barber->phone,
-                    'salon_name' => $appointment->salon->name,
-                    'salon_address' => $appointment->salon->address,
-                    'services' => $this->getAppointmentServices($appointment),
-                    'total_price' => $appointment->total_price,
-                    'duration_minutes' => $appointment->duration_minutes,
-                    'date' => $appointment->appointment_date,
-                    'time' => $appointment->appointment_time,
-                    'end_time' => $appointment->end_time,
-                    'status' => $appointment->status,
-                    'status_text' => $this->getStatusText($appointment->status),
-                    'notes' => $appointment->notes,
-                    'created_at' => $appointment->created_at,
-                    'can_cancel' => $this->canCancelAppointment($appointment),
-                ];
-            });
+            $formattedAppointments = $appointments->map(fn($appointment) => [
+                'id' => $appointment->id,
+                'barber_name' => $appointment->barber->name,
+                'barber_phone' => $appointment->barber->phone,
+                'salon_name' => $appointment->salon->name,
+                'salon_address' => $appointment->salon->address,
+                'services' => $this->getAppointmentServices($appointment),
+                'total_price' => $appointment->total_price,
+                'duration_minutes' => $appointment->duration_minutes,
+                'date' => $appointment->appointment_date,
+                'time' => $appointment->appointment_time,
+                'end_time' => $appointment->end_time,
+                'status' => $appointment->status,
+                'status_text' => $this->getStatusText($appointment->status),
+                'notes' => $appointment->notes,
+                'created_at' => $appointment->created_at,
+                'can_cancel' => $this->canCancelAppointment($appointment),
+            ]);
 
             $stats = [
                 'total' => $appointments->count(),
@@ -543,21 +572,19 @@ class BookingService
                 ->orderBy('appointment_time', 'asc')
                 ->get();
 
-            $formattedAppointments = $appointments->map(function ($appointment) {
-                return [
-                    'id' => $appointment->id,
-                    'barber_name' => $appointment->barber->name,
-                    'salon_name' => $appointment->salon->name,
-                    'services' => $this->getAppointmentServices($appointment),
-                    'total_price' => $appointment->total_price,
-                    'date' => $appointment->appointment_date,
-                    'time' => $appointment->appointment_time,
-                    'end_time' => $appointment->end_time,
-                    'status' => $appointment->status,
-                    'status_text' => $this->getStatusText($appointment->status),
-                    'can_cancel' => $this->canCancelAppointment($appointment),
-                ];
-            });
+            $formattedAppointments = $appointments->map(fn($appointment) => [
+                'id' => $appointment->id,
+                'barber_name' => $appointment->barber->name,
+                'salon_name' => $appointment->salon->name,
+                'services' => $this->getAppointmentServices($appointment),
+                'total_price' => $appointment->total_price,
+                'date' => $appointment->appointment_date,
+                'time' => $appointment->appointment_time,
+                'end_time' => $appointment->end_time,
+                'status' => $appointment->status,
+                'status_text' => $this->getStatusText($appointment->status),
+                'can_cancel' => $this->canCancelAppointment($appointment),
+            ]);
 
             return AuthResult::success('تم جلب الحجوزات النشطة بنجاح', $formattedAppointments);
 
@@ -584,19 +611,17 @@ class BookingService
                 ->orderBy('appointment_time', 'desc')
                 ->get();
 
-            $formattedAppointments = $appointments->map(function ($appointment) {
-                return [
-                    'id' => $appointment->id,
-                    'barber_name' => $appointment->barber->name,
-                    'salon_name' => $appointment->salon->name,
-                    'services' => $this->getAppointmentServices($appointment),
-                    'total_price' => $appointment->total_price,
-                    'date' => $appointment->appointment_date,
-                    'time' => $appointment->appointment_time,
-                    'status' => $appointment->status,
-                    'status_text' => $this->getStatusText($appointment->status),
-                ];
-            });
+            $formattedAppointments = $appointments->map(fn($appointment) => [
+                'id' => $appointment->id,
+                'barber_name' => $appointment->barber->name,
+                'salon_name' => $appointment->salon->name,
+                'services' => $this->getAppointmentServices($appointment),
+                'total_price' => $appointment->total_price,
+                'date' => $appointment->appointment_date,
+                'time' => $appointment->appointment_time,
+                'status' => $appointment->status,
+                'status_text' => $this->getStatusText($appointment->status),
+            ]);
 
             return AuthResult::success('تم جلب الحجوزات المنتهية بنجاح', $formattedAppointments);
 
