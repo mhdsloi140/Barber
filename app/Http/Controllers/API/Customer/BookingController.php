@@ -1,10 +1,9 @@
 <?php
-// app/Http/Controllers/API/Customer/AppointmentController.php
+// app/Http/Controllers/API/Customer/BookingController.php
 
 namespace App\Http\Controllers\API\Customer;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Customer\BookingRequest;
 use App\Http\Requests\Customer\StoreBookingRequest;
 use App\Services\Customer\BookingService;
 use Illuminate\Http\Request;
@@ -60,7 +59,12 @@ class BookingController extends Controller
             'data' => $result->data,
         ], $result->statusCode);
     }
-    public function store(BookingRequest $request)
+
+    /**
+     * إنشاء حجز جديد (يدعم خدمات متعددة)
+     * POST /api/customer/booking/store
+     */
+    public function store(StoreBookingRequest $request)
     {
         $result = $this->bookingService->storeBooking($request->validated());
 
@@ -77,7 +81,6 @@ class BookingController extends Controller
      */
     public function cancel(Request $request, $id)
     {
-        // dd($id);
         $request->validate([
             'reason' => ['nullable', 'string', 'max:255'],
         ]);

@@ -10,6 +10,7 @@ use App\Services\AuthResult;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Http\UploadedFile;
 
 class AuthAllUserServices
 {
@@ -37,13 +38,8 @@ class AuthAllUserServices
                 );
             }
 
-            // تحميل العلاقات حسب الدور
             $this->loadUserRelations($user);
-
-            // إنشاء توكن
             $token = $this->generateToken($user);
-
-            // تجهيز بيانات المستخدم
             $userData = $this->formatUserData($user, $token);
 
             Log::info('User logged in', ['user_id' => $user->id]);
@@ -52,17 +48,12 @@ class AuthAllUserServices
 
         } catch (\Exception $e) {
             Log::error('Login error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء تسجيل الدخول',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
+            return AuthResult::error('حدث خطأ أثناء تسجيل الدخول', config('app.debug') ? $e->getMessage() : null, 500);
         }
     }
 
     /**
-     * تسجيل مستخدم جديد
+     * تسجيل مستخدم جديد (مع دعم الصورة الشخصية)
      */
     public function register(RegisterRequest $request): AuthResult
     {
@@ -73,6 +64,11 @@ class AuthAllUserServices
 
                 // إنشاء المستخدم
                 $user = $this->createUser($request, $userType);
+
+                // ✅ رفع الصورة الشخصية إذا وجدت
+                if ($request->hasFile('avatar')) {
+                    $this->uploadAvatar($user, $request->file('avatar'));
+                }
 
                 // إذا كان صاحب صالون، أنشئ الصالون
                 if ($userType === 'salon_owner') {
@@ -98,20 +94,35 @@ class AuthAllUserServices
             });
 
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return AuthResult::error(
-                'خطأ في البيانات المدخلة',
-                $e->errors(),
-                422
-            );
+            return AuthResult::error('خطأ في البيانات المدخلة', $e->errors(), 422);
         } catch (\Exception $e) {
             Log::error('Registration error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء التسجيل',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
+            return AuthResult::error('حدث خطأ أثناء التسجيل', config('app.debug') ? $e->getMessage() : null, 500);
         }
+    }
+
+    /**
+     * ✅ رفع الصورة الشخصية
+     */
+    private function uploadAvatar(User $user, UploadedFile $avatar): void
+    {
+        try {
+            $user->addMedia($avatar)
+                ->usingFileName($this->generateAvatarFileName($avatar))
+                ->toMediaCollection('avatar');
+
+            Log::info('Avatar uploaded for user', ['user_id' => $user->id]);
+        } catch (\Exception $e) {
+            Log::error('Avatar upload failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * ✅ توليد اسم فريد للصورة الشخصية
+     */
+    private function generateAvatarFileName(UploadedFile $file): string
+    {
+        return 'avatar_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
     }
 
     /**
@@ -126,7 +137,7 @@ class AuthAllUserServices
             'id' => $user->id,
             'name' => $user->name,
             'phone' => $user->phone,
-            'role' => $primaryRole,
+            //'role' => $primaryRole,
             'roles' => $roles,
             'is_active' => $user->is_active,
             'avatar' => $user->getAvatarUrlAttribute(),
@@ -172,9 +183,12 @@ class AuthAllUserServices
      */
     private function createUser(RegisterRequest $request, string $userType): User
     {
+        $name = $userType === 'salon_owner' ? $request->owner_name : $request->name;
+
         return User::create([
-            'name' => $userType === 'salon_owner' ? $request->owner_name : $request->name,
+            'name' => $name,
             'phone' => $request->phone,
+
             'password' => Hash::make($request->password),
             'role' => $userType,
             'is_active' => true,
@@ -270,12 +284,7 @@ class AuthAllUserServices
 
         } catch (\Exception $e) {
             Log::error('Logout error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء تسجيل الخروج',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
+            return AuthResult::error('حدث خطأ أثناء تسجيل الخروج', config('app.debug') ? $e->getMessage() : null, 500);
         }
     }
 
@@ -298,12 +307,7 @@ class AuthAllUserServices
 
         } catch (\Exception $e) {
             Log::error('Get current user error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء جلب البيانات',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
+            return AuthResult::error('حدث خطأ أثناء جلب البيانات', config('app.debug') ? $e->getMessage() : null, 500);
         }
     }
 }

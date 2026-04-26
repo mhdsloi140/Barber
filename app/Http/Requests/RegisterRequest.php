@@ -20,6 +20,7 @@ class RegisterRequest extends FormRequest
                 'name' => ['required', 'string', 'max:255'],
                 'phone' => ['required', 'unique:users,phone', 'regex:/^[0-9]+$/', 'min:10', 'max:15'],
                 'password' => ['required', 'string', 'min:8'],
+                'avatar' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
             ];
 
 

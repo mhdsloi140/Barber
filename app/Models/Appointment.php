@@ -17,6 +17,8 @@ class Appointment extends Model
         'barber_id',
         'salon_id',
         'service_id',
+        'services',
+        'services_details',
         'appointment_date',
         'appointment_time',
         'end_time',
@@ -36,6 +38,19 @@ class Appointment extends Model
         'is_walk_in',
     ];
 
+    protected $casts = [
+        'services' => 'array',
+        'services_details' => 'array',
+        'appointment_date' => 'date',
+        'appointment_time' => 'datetime:H:i',
+        'end_time' => 'datetime:H:i',
+        'cancelled_at' => 'datetime',
+        'review_date' => 'datetime',
+    ];
+
+    /**
+     * العلاقات
+     */
     public function customer()
     {
         return $this->belongsTo(User::class, 'customer_id');
@@ -51,13 +66,71 @@ class Appointment extends Model
         return $this->belongsTo(Salon::class);
     }
 
+    /**
+     *  الخدمة (من barber_services)
+     */
     public function service()
     {
-        return $this->belongsTo(Service::class);
+        return $this->belongsTo(BarberService::class, 'service_id');
     }
 
     public function cancelledBy()
     {
         return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    /**
+     *  الحصول على جميع الخدمات (للدعم متعدد الخدمات)
+     */
+    public function getAllServices()
+    {
+        if ($this->services_details) {
+            return json_decode($this->services_details, true);
+        }
+
+        if ($this->services) {
+            $serviceIds = json_decode($this->services, true);
+            if (is_array($serviceIds) && !empty($serviceIds)) {
+                return BarberService::whereIn('id', $serviceIds)->get();
+            }
+        }
+
+        if ($this->service) {
+            return collect([$this->service]);
+        }
+
+        return collect();
+    }
+
+    /**
+     *  الحصول على نص الحالة بالعربية
+     */
+    public function getStatusTextAttribute()
+    {
+        return match ($this->status) {
+            'pending' => 'قيد الانتظار',
+            'confirmed' => 'مؤكد',
+            'completed' => 'مكتمل',
+            'cancelled' => 'ملغي',
+            default => $this->status,
+        };
+    }
+
+    /**
+     *  التحقق من إمكانية الإلغاء
+     */
+    public function canBeCancelled(): bool
+    {
+        return in_array($this->status, ['pending', 'confirmed']) &&
+               !$this->isPast();
+    }
+
+    /**
+     *  التحقق من أن الموعد في الماضي
+     */
+    public function isPast(): bool
+    {
+        $dateTime = $this->appointment_date . ' ' . $this->appointment_time;
+        return now()->parse($dateTime)->isPast();
     }
 }

@@ -10,7 +10,6 @@ class StoreBookingRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // dd($this->all());
         return true;
     }
 
@@ -19,7 +18,9 @@ class StoreBookingRequest extends FormRequest
         return [
             'salon_id' => ['required', 'exists:salons,id'],
             'barber_id' => ['required', 'exists:users,id'],
-            'service_id' => ['required', 'exists:barber_services,id'],
+            'service_ids' => ['required', 'array', 'min:1'],
+            'service_ids.*' => ['exists:barber_services,id'],
+            'appointment_date' => ['required', 'date', 'after_or_equal:today'],
             'day' => ['required', Rule::in(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'])],
             'time' => ['required', 'date_format:H:i'],
             'notes' => ['nullable', 'string', 'max:500'],
@@ -31,7 +32,10 @@ class StoreBookingRequest extends FormRequest
         return [
             'salon_id.required' => 'يجب اختيار الصالون',
             'barber_id.required' => 'يجب اختيار الحلاق',
-            'service_id.required' => 'يجب اختيار الخدمة',
+            'service_ids.required' => 'يجب اختيار خدمة واحدة على الأقل',
+            'service_ids.array' => 'الخدمات يجب أن تكون مصفوفة',
+            'service_ids.min' => 'يجب اختيار خدمة واحدة على الأقل',
+            'service_ids.*.exists' => 'إحدى الخدمات المختارة غير موجودة',
             'day.required' => 'يجب اختيار اليوم',
             'day.in' => 'اليوم غير صالح',
             'time.required' => 'يجب اختيار الوقت',

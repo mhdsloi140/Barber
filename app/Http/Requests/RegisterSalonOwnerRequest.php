@@ -28,6 +28,7 @@ class RegisterSalonOwnerRequest extends FormRequest
             'salon_phone' => ['nullable', 'string', 'max:15'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'avatar' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
 
             //  هل يعمل كحلاق في الصالون؟
             'works_as_barber' => ['nullable', 'boolean'],
@@ -51,7 +52,7 @@ class RegisterSalonOwnerRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        
+
         if ($this->has('working_hours')) {
             $workingHours = $this->input('working_hours');
 
@@ -95,6 +96,9 @@ class RegisterSalonOwnerRequest extends FormRequest
             'images.*.image' => 'الملف يجب أن يكون صورة',
             'images.*.mimes' => 'الصورة يجب أن تكون من نوع: jpeg, png, jpg, webp',
             'working_hours.*.day.required_with' => 'اليوم مطلوب',
+            'avatar.image' => 'الملف يجب أن يكون صورة',
+            'avatar.mimes' => 'الصورة يجب أن تكون من نوع: jpeg, png, jpg, webp',
+            'avatar.max' => 'حجم الصورة لا يجب أن يتجاوز 5 ميجابايت',
         ];
     }
 }

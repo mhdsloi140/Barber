@@ -35,13 +35,7 @@ class UpdateSalonService
             $salonRatings = $this->getSalonRatings($salon->id);
 
             $data = [
-                'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'phone' => $user->phone,
-                    'email' => $user->email,
-                    'role' => $user->role,
-                ],
+                'user' => $this->formatUserData($user),
                 'salon' => [
                     'id' => $salon->id,
                     'name' => $salon->name,
@@ -81,6 +75,9 @@ class UpdateSalonService
 
                 // 1. تحديث بيانات المستخدم
                 $this->updateUser($user, $data);
+                 if (isset($data['avatar']) && $data['avatar'] instanceof UploadedFile) {
+                    $this->updateAvatar($user, $data['avatar']);
+                }
 
                 // 2. تحديث بيانات الصالون
                 $this->updateSalonInfo($salon, $data);
@@ -106,13 +103,7 @@ class UpdateSalonService
                 $salonRatings = $this->getSalonRatings($salon->id);
 
                 return AuthResult::success('تم تحديث بيانات الصالون بنجاح', [
-                    'user' => [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'phone' => $user->phone,
-                        'email' => $user->email,
-                        'role' => $user->role,
-                    ],
+                    'user' => $this->formatUserData($user),
                     'salon' => [
                         'id' => $salon->id,
                         'name' => $salon->name,
@@ -135,6 +126,58 @@ class UpdateSalonService
     }
 
     /**
+     * ✅ تنسيق بيانات المستخدم مع مصفوفة الأدوار
+     */
+    private function formatUserData(User $user): array
+    {
+        // الحصول على جميع أدوار المستخدم (مصفوفة)
+        $roles = $user->getRoleNames()->toArray();
+
+        // الدور الرئيسي (أول دور في المصفوفة أو من عمود role)
+        $primaryRole = !empty($roles) ? $roles[0] : ($user->role ?? 'customer');
+
+        $data = [
+            'id' => $user->id,
+            'name' => $user->name,
+            'phone' => $user->phone,
+            // 'email' => $user->email,
+            'role' => $primaryRole,
+            'roles' => $roles,
+            'is_active' => $user->is_active,
+            'avatar' => $user->getAvatarUrlAttribute(),
+            'created_at' => $user->created_at,
+            'updated_at' => $user->updated_at,
+        ];
+
+        // إذا كان المستخدم صاحب صالون
+        // if (in_array('salon_owner', $roles)) {
+        //     $salon = $user->ownedSalon;
+        //     if ($salon) {
+        //         $data['salon'] = [
+        //             'id' => $salon->id,
+        //             'name' => $salon->name,
+        //             'address' => $salon->address,
+        //             'phone' => $salon->phone,
+        //             'image' => $salon->getMainImageUrlAttribute(),
+        //         ];
+        //     }
+        // }
+
+        // إذا كان المستخدم حلاق
+        // if (in_array('barber', $roles)) {
+        //     $data['salons'] = $user->salons->map(function($salon) {
+        //         return [
+        //             'id' => $salon->id,
+        //             'name' => $salon->name,
+        //             'address' => $salon->address,
+        //         ];
+        //     });
+        // }
+
+        return $data;
+    }
+
+    /**
      * تحديث بيانات المستخدم
      */
     private function updateUser(User $user, array $data): void
@@ -145,10 +188,20 @@ class UpdateSalonService
             $userData['name'] = $data['name'];
         }
         if (isset($data['phone'])) {
-            $userData['phone'] = $data['phone'];
+            // التحقق من عدم تكرار رقم الهاتف
+            if (User::where('phone', $data['phone'])->where('id', '!=', $user->id)->exists()) {
+                // يمكن تسجيل خطأ أو تخطي
+                Log::warning('Phone number already exists', ['phone' => $data['phone']]);
+            } else {
+                $userData['phone'] = $data['phone'];
+            }
         }
         if (isset($data['email'])) {
-            $userData['email'] = $data['email'];
+            if (User::where('email', $data['email'])->where('id', '!=', $user->id)->exists()) {
+                Log::warning('Email already exists', ['email' => $data['email']]);
+            } else {
+                $userData['email'] = $data['email'];
+            }
         }
 
         if (!empty($userData)) {

@@ -20,9 +20,12 @@ class UpdateSalonRequest extends FormRequest
             // بيانات المستخدم
             'name' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'unique:users,phone,' . $userId, 'regex:/^[0-9]+$/', 'min:10', 'max:15'],
-            
+
             'password' => ['nullable', 'string', 'min:6', 'confirmed'],
             'password_confirmation' => ['required_with:password'],
+
+            //  الصورة الشخصية
+            'avatar' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
 
             // بيانات الصالون
             'salon_name' => ['nullable', 'string', 'max:255'],
@@ -56,9 +59,15 @@ class UpdateSalonRequest extends FormRequest
     {
         return [
             'phone.unique' => 'رقم الهاتف مستخدم بالفعل',
-            'email.unique' => 'البريد الإلكتروني مستخدم بالفعل',
             'password.min' => 'كلمة المرور يجب أن تكون 6 أحرف على الأقل',
             'password.confirmed' => 'تأكيد كلمة المرور غير متطابق',
+
+            //  رسائل الصورة الشخصية
+            'avatar.image' => 'الملف يجب أن يكون صورة',
+            'avatar.mimes' => 'الصورة الشخصية يجب أن تكون من نوع: jpeg, png, jpg, webp',
+            'avatar.max' => 'حجم الصورة الشخصية لا يجب أن يتجاوز 5 ميجابايت',
+
+            // رسائل صور الصالون
             'new_images.*.image' => 'الملف يجب أن يكون صورة',
             'new_images.*.mimes' => 'الصورة يجب أن تكون من نوع: jpeg, png, jpg, webp',
             'new_images.*.max' => 'حجم الصورة لا يجب أن يتجاوز 5 ميجابايت',
