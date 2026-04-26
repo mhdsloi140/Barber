@@ -141,7 +141,7 @@ class UpdateSalonService
             'name' => $user->name,
             'phone' => $user->phone,
             // 'email' => $user->email,
-            'role' => $primaryRole,
+            // 'role' => $primaryRole,
             'roles' => $roles,
             'is_active' => $user->is_active,
             'avatar' => $user->getAvatarUrlAttribute(),
