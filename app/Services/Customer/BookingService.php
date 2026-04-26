@@ -118,6 +118,74 @@ class BookingService
     }
 
     /**
+     *  حساب الوقت المتبقي بالدقائق بين وقتين
+     */
+    private function getRemainingMinutes(string $startTime, string $endTime): int
+    {
+        $start = Carbon::parse($startTime);
+        $end = Carbon::parse($endTime);
+        return $end->diffInMinutes($start);
+    }
+
+    /**
+     *  التحقق من أن الوقت المتبقي للحلاق كافٍ لإكمال الخدمة
+     */
+    private function isBarberTimeSufficient(User $barber, string $date, string $startTime, int $duration): array
+    {
+        $dateObj = Carbon::parse($date);
+        $dayOfWeek = strtolower($dateObj->format('l'));
+        $startTimeFormatted = Carbon::parse($startTime)->format('H:i:s');
+        $endTime = Carbon::parse($startTime)->addMinutes($duration)->format('H:i:s');
+
+        $workingHour = $barber->workingHours()
+            ->where('day_of_week', $dayOfWeek)
+            ->where('is_open', true)
+            ->first();
+
+        if (!$workingHour) {
+            return ['valid' => false, 'message' => 'الحلاق لا يعمل في هذا اليوم'];
+        }
+
+        // التحقق من الوردية الأولى
+        if ($workingHour->shift1_start && $workingHour->shift1_end) {
+            // إذا كان الوقت كاملاً ضمن الوردية
+            if ($startTimeFormatted >= $workingHour->shift1_start && $endTime <= $workingHour->shift1_end) {
+                return ['valid' => true, 'message' => ''];
+            }
+
+            // إذا بدأ الوقت ضمن الوردية ولكن المدة غير كافية
+            if ($startTimeFormatted >= $workingHour->shift1_start && $startTimeFormatted < $workingHour->shift1_end) {
+                $remaining = $this->getRemainingMinutes($startTimeFormatted, $workingHour->shift1_end);
+                if ($remaining < $duration) {
+                    return [
+                        'valid' => false,
+                        'message' => " الوقت المتبقي للحلاق  غير كافٍ (يتبقى {$remaining} دقيقة فقط، وتحتاج {$duration} دقيقة)"
+                    ];
+                }
+            }
+        }
+
+        // التحقق من الوردية الثانية
+        if ($workingHour->shift2_start && $workingHour->shift2_end) {
+            if ($startTimeFormatted >= $workingHour->shift2_start && $endTime <= $workingHour->shift2_end) {
+                return ['valid' => true, 'message' => ''];
+            }
+
+            if ($startTimeFormatted >= $workingHour->shift2_start && $startTimeFormatted < $workingHour->shift2_end) {
+                $remaining = $this->getRemainingMinutes($startTimeFormatted, $workingHour->shift2_end);
+                if ($remaining < $duration) {
+                    return [
+                        'valid' => false,
+                        'message' => " الوقت المتبقي للحلاق  غير كافٍ (يتبقى {$remaining} دقيقة فقط، وتحتاج {$duration} دقيقة)"
+                    ];
+                }
+            }
+        }
+
+        return ['valid' => false, 'message' => ' الوقت المحدد خارج ساعات عمل الحلاق'];
+    }
+
+    /**
      * جلب الأوقات المتاحة فقط (بدون الأوقات المحجوزة)
      */
     private function getAvailableTimesForBarber(int $barberId, string $date, int $duration, $workingHour): array
@@ -135,11 +203,10 @@ class BookingService
         $current = Carbon::parse($startTime);
         $end = Carbon::parse($endTime);
 
-        // جلب جميع المواعيد المحجوزة
         $bookedAppointments = Appointment::where('barber_id', $barberId)
             ->whereDate('appointment_date', $date)
             ->whereIn('status', ['pending', 'confirmed'])
-            ->get(['appointment_time', 'end_time']);
+            ->get();
 
         while ($current->copy()->addMinutes($duration) <= $end) {
             $slotStart = $current->format('H:i');
@@ -148,10 +215,14 @@ class BookingService
             $isAvailable = true;
 
             foreach ($bookedAppointments as $booked) {
-                $bookedStart = $booked->appointment_time;
-                $bookedEnd = $booked->end_time;
+                $bookedStart = $booked->appointment_time instanceof Carbon
+                    ? $booked->appointment_time->format('H:i')
+                    : substr($booked->appointment_time, 0, 5);
 
-                // التحقق من التداخل: إذا كان الوقت المطلوب يتداخل مع أي حجز موجود
+                $bookedEnd = $booked->end_time instanceof Carbon
+                    ? $booked->end_time->format('H:i')
+                    : substr($booked->end_time, 0, 5);
+
                 if ($slotStart < $bookedEnd && $slotEnd > $bookedStart) {
                     $isAvailable = false;
                     break;
@@ -273,13 +344,18 @@ class BookingService
                     return AuthResult::error('الوقت المحدد خارج ساعات عمل الحلاق', null, 400);
                 }
 
-                // 8. التحقق من عدم وجود حجز مسبق (يتحقق من التداخل الكامل)
+                //  8. التحقق من أن الوقت المتبقي كافٍ لإكمال الخدمة
+                $timeCheck = $this->isBarberTimeSufficient($barber, $appointmentDate, $appointmentTime, $totalDuration);
+                if (!$timeCheck['valid']) {
+                    return AuthResult::error($timeCheck['message'], null, 400);
+                }
+
+                // 9. التحقق من عدم وجود حجز مسبق
                 $conflictingBooking = Appointment::where('barber_id', $data['barber_id'])
                     ->whereDate('appointment_date', $appointmentDate)
                     ->whereIn('status', ['pending', 'confirmed'])
                     ->where(function ($query) use ($appointmentTimeFormatted, $endTime) {
                         $query->where(function ($q) use ($appointmentTimeFormatted, $endTime) {
-                            // الحجز الجديد يتداخل مع حجز موجود
                             $q->where('appointment_time', '<', $endTime)
                               ->where('end_time', '>', $appointmentTimeFormatted);
                         });
@@ -287,7 +363,6 @@ class BookingService
                     ->exists();
 
                 if ($conflictingBooking) {
-                    // جلب الأوقات المتاحة
                     $availableTimes = $this->getAvailableTimesForBarber(
                         $barber->id,
                         $appointmentDate,
@@ -295,7 +370,6 @@ class BookingService
                         $workingHour
                     );
 
-                    // إذا لم توجد أوقات متاحة في هذا اليوم
                     if (empty($availableTimes)) {
                         return AuthResult::error(
                             'لا توجد أوقات متاحة في هذا اليوم، يرجى اختيار يوم آخر',
@@ -311,7 +385,7 @@ class BookingService
                     );
                 }
 
-                // 9. إنشاء الحجز
+                // 10. إنشاء الحجز
                 $appointment = Appointment::create([
                     'customer_id' => $customer->id,
                     'barber_id' => $data['barber_id'],
