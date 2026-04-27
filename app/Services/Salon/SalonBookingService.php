@@ -150,7 +150,7 @@ class SalonBookingService
             ];
 
             $response = [
-                // 'statistics' => $stats,
+                'statistics' => $stats,
                 'appointments' => $formattedAppointments,
             ];
 
