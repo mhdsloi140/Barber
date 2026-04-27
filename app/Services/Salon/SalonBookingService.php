@@ -13,12 +13,9 @@ use Carbon\Carbon;
 
 class SalonBookingService
 {
-    /**
-     * جلب جميع الخدمات المرتبطة بالحجز
-     */
+    
     private function getAppointmentServices(Appointment $appointment): array
     {
-
         if ($appointment->services_details) {
             if (is_array($appointment->services_details)) {
                 $services = $appointment->services_details;
@@ -38,9 +35,7 @@ class SalonBookingService
             }
         }
 
-
         if ($appointment->services) {
-
             if (is_array($appointment->services)) {
                 $serviceIds = $appointment->services;
             } else {
@@ -60,7 +55,6 @@ class SalonBookingService
             }
         }
 
-        // خدمة واحدة فقط (للتوافق مع الإصدارات السابقة)
         if ($appointment->service) {
             return [[
                 'id' => $appointment->service->id,
@@ -73,19 +67,52 @@ class SalonBookingService
         return [];
     }
 
-    /**
-     * جلب جميع حجوزات الصالون (لصاحب الصالون)
-     * مع إمكانية البحث عن حلاق بالاسم (اختياري)
-     */
+
+    private function formatDate($date): ?string
+    {
+        if (!$date) return null;
+        if ($date instanceof Carbon) {
+            return $date->format('Y-m-d');
+        }
+        return Carbon::parse($date)->format('Y-m-d');
+    }
+
+
+    private function formatTime($time): ?string
+    {
+        if (!$time) return null;
+        if ($time instanceof Carbon) {
+            return $time->format('H:i');
+        }
+        return Carbon::parse($time)->format('H:i');
+    }
+
+
+    private function calculateTotalPrice($appointment, $services): float
+    {
+        if ($appointment->total_price) {
+            return (float) $appointment->total_price;
+        }
+        return (float) collect($services)->sum('price');
+    }
+
+
+    private function calculateTotalDuration($appointment, $services): int
+    {
+        if ($appointment->duration_minutes) {
+            return (int) $appointment->duration_minutes;
+        }
+        return (int) collect($services)->sum('duration_minutes');
+    }
+
+
     public function getSalonAppointments(User $salonOwner, ?string $search = null): AuthResult
     {
         try {
-            // التحقق من أن المستخدم صاحب صالون
             if (!$salonOwner->hasRole('salon_owner')) {
                 return AuthResult::error('هذه الخدمة متاحة لأصحاب الصالونات فقط', null, 403);
             }
 
-            // جلب الصالون الخاص به
             $salon = $salonOwner->ownedSalon;
 
             if (!$salon) {
@@ -105,16 +132,11 @@ class SalonBookingService
                 ->orderBy('appointment_time', 'desc')
                 ->get();
 
-            // تنسيق البيانات مع دعم خدمات متعددة
+
             $formattedAppointments = $appointments->map(function ($appointment) {
-                // جلب جميع الخدمات
                 $services = $this->getAppointmentServices($appointment);
-
-                // حساب إجمالي السعر والمدة
-                $totalPrice = $appointment->total_price ?? collect($services)->sum('price');
-                $totalDuration = $appointment->duration_minutes ?? collect($services)->sum('duration_minutes');
-
-                // أسماء الخدمات (للعرض السريع)
+                $totalPrice = $this->calculateTotalPrice($appointment, $services);
+                $totalDuration = $this->calculateTotalDuration($appointment, $services);
                 $serviceNames = collect($services)->pluck('name')->implode(' + ');
 
                 return [
@@ -124,22 +146,27 @@ class SalonBookingService
                     'barber_name' => $appointment->barber->name,
                     'barber_id' => $appointment->barber->id,
 
+
                     'services' => $services,
                     'services_summary' => $serviceNames,
                     'total_price' => $totalPrice,
                     'total_duration' => $totalDuration,
 
+
                     'service_name' => $services[0]['name'] ?? null,
                     'service_price' => $services[0]['price'] ?? null,
-                    'date' => $appointment->appointment_date,
-                    'time' => $appointment->appointment_time,
-                    'end_time' => $appointment->end_time,
+
+
+                    'date' => $this->formatDate($appointment->appointment_date),
+                    'time' => $this->formatTime($appointment->appointment_time),
+                    'end_time' => $this->formatTime($appointment->end_time),
+                    'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
+
                     'status' => $appointment->status,
-                    'created_at' => $appointment->created_at,
+                    'created_at' => $this->formatDateTime($appointment->created_at),
                 ];
             });
 
-            // إحصائيات الحجوزات
             $stats = [
                 'total' => $appointments->count(),
                 'pending' => $appointments->where('status', 'pending')->count(),
@@ -177,5 +204,15 @@ class SalonBookingService
             Log::error('Get salon appointments error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
         }
+    }
+
+
+    private function formatDateTime($datetime): ?string
+    {
+        if (!$datetime) return null;
+        if ($datetime instanceof Carbon) {
+            return $datetime->format('Y-m-d H:i:s');
+        }
+        return Carbon::parse($datetime)->format('Y-m-d H:i:s');
     }
 }
