@@ -42,6 +42,10 @@ class Salon extends Model implements HasMedia
             ->withPivot('is_active')
             ->withTimestamps();
     }
+    public function appointments()
+    {
+        return $this->hasMany(Appointment::class, 'salon_id');
+    }
 
     public function workingHours()
     {

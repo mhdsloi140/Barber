@@ -48,7 +48,7 @@ class ClientSeeder extends Seeder
                 // تعيين الدور باستخدام Spatie
                 $user->assignRole('customer');
 
-               
+
             }
         });
     }
