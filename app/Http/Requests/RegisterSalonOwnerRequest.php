@@ -9,7 +9,6 @@ class RegisterSalonOwnerRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // dd($this->all());
         return true;
     }
 
@@ -19,7 +18,6 @@ class RegisterSalonOwnerRequest extends FormRequest
             // بيانات المستخدم
             'name' => ['required', 'string', 'max:255'],
             'phone' => ['required', 'string', 'unique:users,phone', 'regex:/^[0-9]+$/', 'min:10', 'max:15'],
-
             'password' => ['required', 'string', 'min:6'],
 
             // بيانات الصالون
@@ -28,58 +26,57 @@ class RegisterSalonOwnerRequest extends FormRequest
             'salon_phone' => ['nullable', 'string', 'max:15'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+
+            // الصورة الشخصية
             'avatar' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
 
-            //  هل يعمل كحلاق في الصالون؟
+            // هل يعمل كحلاق في الصالون؟
             'works_as_barber' => ['nullable', 'boolean'],
 
-            // صور الصالون
+            // الصور الجديدة
             'images' => ['nullable', 'array'],
             'images.*' => ['image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
 
-            // أوقات العمل
+            // أوقات العمل - باستخدام shift1_start و shift1_end
             'working_hours' => ['nullable', 'array'],
             'working_hours.*.day' => ['required_with:working_hours', 'in:sunday,monday,tuesday,wednesday,thursday,friday,saturday'],
             'working_hours.*.is_open' => ['required_with:working_hours', 'boolean'],
-            'working_hours.*.shift1_start' => ['nullable', 'date_format:H:i'],
-            'working_hours.*.shift1_end' => ['nullable', 'date_format:H:i'],
-            'working_hours.*.shift2_start' => ['nullable', 'date_format:H:i'],
-            'working_hours.*.shift2_end' => ['nullable', 'date_format:H:i'],
-            'working_hours.*.break_start' => ['nullable', 'date_format:H:i'],
-            'working_hours.*.break_end' => ['nullable', 'date_format:H:i'],
+
+            // 🔴 التعديل هنا: استخدم shift1_start و shift1_end بدلاً من start و end
+            'working_hours.*.shift1_start' => ['required_if:working_hours.*.is_open,true', 'nullable', 'date_format:H:i'],
+            'working_hours.*.shift1_end' => ['required_if:working_hours.*.is_open,true', 'nullable', 'date_format:H:i', 'after:working_hours.*.shift1_start'],
         ];
     }
 
     protected function prepareForValidation(): void
     {
-
-        if ($this->has('working_hours')) {
-            $workingHours = $this->input('working_hours');
-
-            if (is_array($workingHours)) {
-                $converted = [];
-                foreach ($workingHours as $index => $hours) {
-                    if (is_array($hours)) {
-                        $converted[$index] = [
-                            'day' => $hours['day'] ?? null,
-                            'is_open' => filter_var($hours['is_open'] ?? false, FILTER_VALIDATE_BOOLEAN),
-                            'shift1_start' => $hours['shift1_start'] ?? null,
-                            'shift1_end' => $hours['shift1_end'] ?? null,
-                            'shift2_start' => $hours['shift2_start'] ?? null,
-                            'shift2_end' => $hours['shift2_end'] ?? null,
-                            'break_start' => $hours['break_start'] ?? null,
-                            'break_end' => $hours['break_end'] ?? null,
-                        ];
-                    }
+        // تحويل working_hours
+        if ($this->has('working_hours') && is_array($this->working_hours)) {
+            $converted = [];
+            foreach ($this->working_hours as $index => $hours) {
+                if (is_array($hours)) {
+                    $converted[$index] = [
+                        'day' => $hours['day'] ?? null,
+                        'is_open' => filter_var($hours['is_open'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                        'shift1_start' => $hours['shift1_start'] ?? null,  // 🔴 استخدم shift1_start
+                        'shift1_end' => $hours['shift1_end'] ?? null,      // 🔴 استخدم shift1_end
+                    ];
                 }
-                $this->merge(['working_hours' => $converted]);
             }
+            $this->merge(['working_hours' => $converted]);
         }
 
-        //  تحويل works_as_barber إلى boolean
+        // تحويل works_as_barber إلى boolean
         if ($this->has('works_as_barber')) {
             $this->merge([
                 'works_as_barber' => filter_var($this->works_as_barber, FILTER_VALIDATE_BOOLEAN)
+            ]);
+        }
+
+        // تنظيف رقم الهاتف
+        if ($this->has('phone')) {
+            $this->merge([
+                'phone' => preg_replace('/\s+/', '', $this->phone)
             ]);
         }
     }
@@ -87,18 +84,24 @@ class RegisterSalonOwnerRequest extends FormRequest
     public function messages(): array
     {
         return [
+            // رسائل المستخدم
             'name.required' => 'اسم المستخدم مطلوب',
             'phone.required' => 'رقم الهاتف مطلوب',
             'phone.unique' => 'رقم الهاتف مستخدم بالفعل',
             'password.required' => 'كلمة المرور مطلوبة',
+
+            // رسائل الصالون
             'salon_name.required' => 'اسم الصالون مطلوب',
             'salon_address.required' => 'عنوان الصالون مطلوب',
-            'images.*.image' => 'الملف يجب أن يكون صورة',
-            'images.*.mimes' => 'الصورة يجب أن تكون من نوع: jpeg, png, jpg, webp',
+
+            // رسائل أوقات العمل
             'working_hours.*.day.required_with' => 'اليوم مطلوب',
-            'avatar.image' => 'الملف يجب أن يكون صورة',
-            'avatar.mimes' => 'الصورة يجب أن تكون من نوع: jpeg, png, jpg, webp',
-            'avatar.max' => 'حجم الصورة لا يجب أن يتجاوز 5 ميجابايت',
+            'working_hours.*.is_open.required_with' => 'حالة اليوم مطلوبة',
+            'working_hours.*.shift1_start.required_if' => 'وقت البدء مطلوب عندما يكون اليوم مفتوحاً',
+            'working_hours.*.shift1_end.required_if' => 'وقت النهاية مطلوب عندما يكون اليوم مفتوحاً',
+            'working_hours.*.shift1_start.date_format' => 'صيغة وقت البدء غير صحيحة (مطلوب H:i)',
+            'working_hours.*.shift1_end.date_format' => 'صيغة وقت النهاية غير صحيحة (مطلوب H:i)',
+            'working_hours.*.shift1_end.after' => 'وقت النهاية يجب أن يكون بعد وقت البدء',
         ];
     }
 }

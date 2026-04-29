@@ -44,4 +44,27 @@ class AppointmentSalonController extends Controller
             'data' => $result->data,
         ], $result->statusCode);
     }
+
+    /**
+     * إلغاء حجز معين (حجز واحد فقط)
+     * POST /api/salon/appointments/{id}/cancel
+     */
+    public function cancel(Request $request, $id)
+    {
+        $request->validate([
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $result = $this->bookingService->cancelAppointment(
+            auth()->user(),
+            (int) $id,
+            $request->reason
+        );
+
+        return response()->json([
+            'success' => $result->success,
+            'message' => $result->message,
+            'data' => $result->data,
+        ], $result->statusCode);
+    }
 }

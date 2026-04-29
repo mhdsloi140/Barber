@@ -26,7 +26,7 @@ class SalonDetailsService
                 return AuthResult::error('الصالون غير موجود', null, 404);
             }
 
-            //  معلومات الصالون الأساسية
+            // معلومات الصالون الأساسية
             $salonData = [
                 'id' => $salon->id,
                 'name' => $salon->name,
@@ -39,7 +39,7 @@ class SalonDetailsService
                 'reviews_count' => 120,
             ];
 
-            //  الحلاقين مع خدماتهم
+            // الحلاقين مع خدماتهم
             $barbers = [];
             foreach ($salon->barbers as $barber) {
                 // جلب خدمات الحلاق
@@ -50,14 +50,13 @@ class SalonDetailsService
                         return [
                             'id' => $service->id,
                             'name' => $service->name,
-                            'name_ar' => $service->name_ar,
                             'description' => $service->description,
                             'price' => $service->price,
                             'duration_minutes' => $service->duration_minutes,
                         ];
                     });
 
-                // جلب أوقات عمل الحلاق
+                // جلب أوقات عمل الحلاق (فترة واحدة)
                 $workingHours = $this->getWorkingHoursFormatted($barber);
 
                 $barbers[] = [
@@ -72,7 +71,7 @@ class SalonDetailsService
                 ];
             }
 
-            //  أوقات عمل الصالون
+            // أوقات عمل الصالون (فترة واحدة)
             $salonWorkingHours = $this->getWorkingHoursFormatted($salon);
 
             return AuthResult::success('تم جلب بيانات الصالون بنجاح', [
@@ -89,7 +88,7 @@ class SalonDetailsService
     }
 
     /**
-     * تنسيق أوقات العمل للعرض
+     *  تنسيق أوقات العمل (فترة واحدة فقط من - إلى)
      */
     private function getWorkingHoursFormatted($workable): array
     {
@@ -103,7 +102,9 @@ class SalonDetailsService
             'saturday' => 'السبت',
         ];
 
+        //  جلب الأيام المفتوحة فقط وترتيبها
         $workingHours = $workable->workingHours()
+            ->where('is_open', true)
             ->orderByRaw("FIELD(day_of_week, 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday')")
             ->get();
 
@@ -112,21 +113,19 @@ class SalonDetailsService
             $result[] = [
                 'day' => $hour->day_of_week,
                 'day_ar' => $daysInArabic[$hour->day_of_week],
-                'is_open' => (bool) $hour->is_open,
-                'hours' => $this->getHoursText($hour),
-                'morning' => $hour->shift1_start && $hour->shift1_end
-                    ? $hour->shift1_start . ' - ' . $hour->shift1_end
-                    : null,
-                'evening' => $hour->shift2_start && $hour->shift2_end
-                    ? $hour->shift2_start . ' - ' . $hour->shift2_end
-                    : null,
+                'is_open' => true,
+                //  فترة واحدة فقط (من - إلى)
+                'start' => $hour->shift1_start,
+                'end' => $hour->shift1_end,
+                'hours_text' => $this->getHoursText($hour),
             ];
         }
+
         return $result;
     }
 
     /**
-     * الحصول على نص ساعات العمل
+     *  الحصول على نص ساعات العمل (فترة واحدة)
      */
     private function getHoursText($hour): string
     {
@@ -134,18 +133,16 @@ class SalonDetailsService
             return 'مغلق';
         }
 
-        $hours = [];
+        //  فترة واحدة فقط (تجاهل shift2)
         if ($hour->shift1_start && $hour->shift1_end) {
-            $hours[] = $hour->shift1_start . ' - ' . $hour->shift1_end;
+            return $hour->shift1_start . ' - ' . $hour->shift1_end;
         }
-        if ($hour->shift2_start && $hour->shift2_end) {
-            $hours[] = $hour->shift2_start . ' - ' . $hour->shift2_end;
-        }
-        return implode(' و ', $hours);
+
+        return 'مغلق';
     }
 
     /**
-     * التحقق من توفر الحلاق اليوم
+     *  التحقق من توفر الحلاق اليوم (بناءً على فترة واحدة)
      */
     private function isAvailableToday($barber): bool
     {
@@ -161,14 +158,9 @@ class SalonDetailsService
             return false;
         }
 
+        //  التحقق من الفترة الواحدة فقط
         if ($workingHour->shift1_start && $workingHour->shift1_end) {
             if ($currentTime >= $workingHour->shift1_start && $currentTime <= $workingHour->shift1_end) {
-                return true;
-            }
-        }
-
-        if ($workingHour->shift2_start && $workingHour->shift2_end) {
-            if ($currentTime >= $workingHour->shift2_start && $currentTime <= $workingHour->shift2_end) {
                 return true;
             }
         }

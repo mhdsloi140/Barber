@@ -11,12 +11,11 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Schema;
 
 class RegisterService
 {
     /**
-     * تسجيل صاحب صالون جديد مع صور متعددة وأوقات عمل وصورة شخصية
+     * تسجيل صاحب صالون جديد مع صور متعددة وصورة شخصية
      */
     public function registerSalonOwner(array $data, ?array $images = null, ?UploadedFile $avatar = null): AuthResult
     {
@@ -32,12 +31,12 @@ class RegisterService
                     'is_active' => true,
                 ]);
 
-                //  رفع الصورة الشخصية إذا وجدت
+                // رفع الصورة الشخصية إذا وجدت
                 if ($avatar) {
                     $this->uploadAvatar($user, $avatar);
                 }
 
-                // 2. تعيين الأدوار (salon_owner + barber إذا كان يعمل كحلاق)
+                // 2. تعيين الأدوار
                 $this->assignRoles($user, $data);
 
                 // 3. إنشاء الصالون
@@ -56,14 +55,12 @@ class RegisterService
                     $this->uploadMultipleImages($salon, $images);
                 }
 
-                // 5. إضافة أوقات العمل للصالون
+                // 5. إضافة أوقات العمل للصالون (فترة واحدة فقط)
                 if (isset($data['working_hours']) && !empty($data['working_hours'])) {
                     $this->saveWorkingHours($salon, $data['working_hours']);
-                } else {
-                    $this->createDefaultWorkingHours($salon);
                 }
 
-                // 6. إذا كان يعمل كحلاق، أضف أوقات عمل خاصة به واربطه بالصالون
+                // 6. إذا كان يعمل كحلاق، أضفه للصالون
                 if (!empty($data['works_as_barber'])) {
                     $this->addBarberToSalon($user, $salon, $data);
                 }
@@ -76,7 +73,7 @@ class RegisterService
                         'role' => $user->role,
                         'roles' => $user->getRoleNames(),
                         'works_as_barber' => !empty($data['works_as_barber']),
-                        'avatar' => $user->getAvatarUrlAttribute(), //  رابط الصورة الشخصية
+                        'avatar' => $user->getAvatarUrlAttribute(),
                     ],
                     'salon' => [
                         'id' => $salon->id,
@@ -105,7 +102,7 @@ class RegisterService
     }
 
     /**
-     *  رفع الصورة الشخصية
+     * رفع الصورة الشخصية
      */
     private function uploadAvatar(User $user, UploadedFile $avatar): void
     {
@@ -121,13 +118,16 @@ class RegisterService
     }
 
     /**
-     *  توليد اسم فريد للصورة الشخصية
+     * توليد اسم فريد للصورة الشخصية
      */
     private function generateAvatarFileName(UploadedFile $file): string
     {
         return 'avatar_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
     }
 
+    /**
+     * تعيين الأدوار للمستخدم
+     */
     private function assignRoles(User $user, array $data): void
     {
         $user->assignRole('salon_owner');
@@ -138,6 +138,9 @@ class RegisterService
         }
     }
 
+    /**
+     * إضافة الحلاق إلى الصالون
+     */
     private function addBarberToSalon(User $user, Salon $salon, array $data): void
     {
         $user->salons()->attach($salon->id, [
@@ -146,14 +149,15 @@ class RegisterService
             'updated_at' => now(),
         ]);
 
-        $this->createBarberWorkingHours($user, $data);
-
-        Log::info('Barber added to salon', [
-            'barber_id' => $user->id,
-            'salon_id' => $salon->id
-        ]);
+        // إضافة أوقات عمل الحلاق إذا تم إرسالها (فترة واحدة فقط)
+        if (isset($data['barber_working_hours']) && !empty($data['barber_working_hours'])) {
+            $this->createBarberWorkingHours($user, $data);
+        }
     }
 
+    /**
+     * إنشاء أوقات عمل للحلاق (فترة واحدة فقط)
+     */
     private function createBarberWorkingHours(User $barber, array $data): void
     {
         if (isset($data['barber_working_hours']) && !empty($data['barber_working_hours'])) {
@@ -163,47 +167,17 @@ class RegisterService
                     'workable_id' => $barber->id,
                     'day_of_week' => $hours['day'],
                     'is_open' => $hours['is_open'],
-                    'shift1_start' => $hours['shift1_start'] ?? null,
-                    'shift1_end' => $hours['shift1_end'] ?? null,
-                    'shift2_start' => $hours['shift2_start'] ?? null,
-                    'shift2_end' => $hours['shift2_end'] ?? null,
-                    'break_start' => $hours['break_start'] ?? null,
-                    'break_end' => $hours['break_end'] ?? null,
+                    'shift1_start' => $hours['start'] ?? null,
+                    'shift1_end' => $hours['end'] ?? null,
+                    // shift2_start, shift2_end, break_start, break_end = null
                 ]);
-            }
-        } else {
-            $days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-            foreach ($days as $day) {
-                if (in_array($day, ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday'])) {
-                    WorkingHour::create([
-                        'workable_type' => User::class,
-                        'workable_id' => $barber->id,
-                        'day_of_week' => $day,
-                        'is_open' => true,
-                        'shift1_start' => '09:00',
-                        'shift1_end' => '22:00',
-                    ]);
-                } elseif ($day === 'friday') {
-                    WorkingHour::create([
-                        'workable_type' => User::class,
-                        'workable_id' => $barber->id,
-                        'day_of_week' => $day,
-                        'is_open' => false,
-                    ]);
-                } else {
-                    WorkingHour::create([
-                        'workable_type' => User::class,
-                        'workable_id' => $barber->id,
-                        'day_of_week' => $day,
-                        'is_open' => true,
-                        'shift1_start' => '10:00',
-                        'shift1_end' => '18:00',
-                    ]);
-                }
             }
         }
     }
 
+    /**
+     * رفع صور متعددة للصالون
+     */
     private function uploadMultipleImages(Salon $salon, array $images): void
     {
         foreach ($images as $image) {
@@ -219,6 +193,9 @@ class RegisterService
         }
     }
 
+    /**
+     * حفظ أوقات عمل الصالون (فترة واحدة فقط)
+     */
     private function saveWorkingHours(Salon $salon, array $workingHours): void
     {
         foreach ($workingHours as $hours) {
@@ -227,50 +204,16 @@ class RegisterService
                 'workable_id' => $salon->id,
                 'day_of_week' => $hours['day'],
                 'is_open' => $hours['is_open'],
-                'shift1_start' => $hours['shift1_start'] ?? null,
-                'shift1_end' => $hours['shift1_end'] ?? null,
-                'shift2_start' => $hours['shift2_start'] ?? null,
-                'shift2_end' => $hours['shift2_end'] ?? null,
-                'break_start' => $hours['break_start'] ?? null,
-                'break_end' => $hours['break_end'] ?? null,
+                'shift1_start' => $hours['start'] ?? $hours['shift1_start'] ?? null,
+                'shift1_end' => $hours['end'] ?? $hours['shift1_end'] ?? null,
+                // shift2_start, shift2_end, break_start, break_end = null
             ]);
         }
     }
 
-    private function createDefaultWorkingHours(Salon $salon): void
-    {
-        $days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-
-        foreach ($days as $day) {
-            if (in_array($day, ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday'])) {
-                WorkingHour::create([
-                    'workable_type' => Salon::class,
-                    'workable_id' => $salon->id,
-                    'day_of_week' => $day,
-                    'is_open' => true,
-                    'shift1_start' => '09:00',
-                    'shift1_end' => '22:00',
-                ]);
-            } elseif ($day === 'friday') {
-                WorkingHour::create([
-                    'workable_type' => Salon::class,
-                    'workable_id' => $salon->id,
-                    'day_of_week' => $day,
-                    'is_open' => false,
-                ]);
-            } else {
-                WorkingHour::create([
-                    'workable_type' => Salon::class,
-                    'workable_id' => $salon->id,
-                    'day_of_week' => $day,
-                    'is_open' => true,
-                    'shift1_start' => '10:00',
-                    'shift1_end' => '18:00',
-                ]);
-            }
-        }
-    }
-
+    /**
+     * الحصول على أوقات العمل بصيغة منسقة (فترة واحدة فقط)
+     */
     private function getWorkingHoursFormatted(Salon $salon): array
     {
         $daysInArabic = [
@@ -293,14 +236,10 @@ class RegisterService
                 'day' => $hour->day_of_week,
                 'day_ar' => $daysInArabic[$hour->day_of_week],
                 'is_open' => (bool) $hour->is_open,
-                'morning' => $hour->shift1_start && $hour->shift1_end
+                'start' => $hour->shift1_start,
+                'end' => $hour->shift1_end,
+                'time_range' => ($hour->is_open && $hour->shift1_start && $hour->shift1_end)
                     ? $hour->shift1_start . ' - ' . $hour->shift1_end
-                    : null,
-                'evening' => $hour->shift2_start && $hour->shift2_end
-                    ? $hour->shift2_start . ' - ' . $hour->shift2_end
-                    : null,
-                'break' => $hour->break_start && $hour->break_end
-                    ? $hour->break_start . ' - ' . $hour->break_end
                     : null,
             ];
         }

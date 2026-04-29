@@ -4,7 +4,8 @@
 namespace App\Http\Controllers\API\Barber;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\BarberWorkingHoursRequest;
+
+use App\Http\Requests\Barber\BarberWorkingHoursRequest;
 use App\Services\Barber\WorkingHourService;
 use Illuminate\Http\Request;
 
@@ -12,7 +13,8 @@ class WorkingHourController extends Controller
 {
     public function __construct(
         private WorkingHourService $workingHourService
-    ) {}
+    ) {
+    }
 
 
     public function index()
@@ -42,8 +44,17 @@ class WorkingHourController extends Controller
             'data' => $result->data,
         ], $result->statusCode);
     }
+    public function getSalonWorkingDays()
+    {
+        $result = $this->workingHourService->getSalonWorkingDays(auth()->user());
 
-  
+        return response()->json([
+            'success' => $result->success,
+            'message' => $result->message,
+            'data' => $result->data,
+        ], $result->statusCode);
+    }
+
     public function reset()
     {
         $barber = auth()->user();

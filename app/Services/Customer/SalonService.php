@@ -333,7 +333,7 @@ class SalonService
     /**
      * تنسيق أوقات العمل
      */
-    private function getWorkingHoursFormatted(Salon $salon): array
+  private function getWorkingHoursFormatted(Salon $salon): array
     {
         $daysInArabic = [
             'sunday' => 'الأحد',
@@ -345,7 +345,9 @@ class SalonService
             'saturday' => 'السبت',
         ];
 
+        //  جلب الأيام المفتوحة فقط وترتيبها
         $workingHours = $salon->workingHours()
+            ->where('is_open', true)
             ->orderByRaw("FIELD(day_of_week, 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday')")
             ->get();
 
@@ -354,21 +356,19 @@ class SalonService
             $result[] = [
                 'day' => $hour->day_of_week,
                 'day_ar' => $daysInArabic[$hour->day_of_week],
-                'is_open' => (bool) $hour->is_open,
-                'hours' => $this->getHoursText($hour),
-                'morning' => $hour->shift1_start && $hour->shift1_end
-                    ? $hour->shift1_start . ' - ' . $hour->shift1_end
-                    : null,
-                'evening' => $hour->shift2_start && $hour->shift2_end
-                    ? $hour->shift2_start . ' - ' . $hour->shift2_end
-                    : null,
+                'is_open' => true,
+                //  فترة واحدة فقط (من - إلى)
+                'start' => $hour->shift1_start,
+                'end' => $hour->shift1_end,
+                'hours_text' => $this->getHoursText($hour),
             ];
         }
+
         return $result;
     }
 
     /**
-     * الحصول على نص ساعات العمل
+     *  الحصول على نص ساعات العمل (فترة واحدة)
      */
     private function getHoursText($hour): string
     {
@@ -376,15 +376,19 @@ class SalonService
             return 'مغلق';
         }
 
-        $hours = [];
+        //  فترة واحدة فقط (تجاهل shift2)
         if ($hour->shift1_start && $hour->shift1_end) {
-            $hours[] = $hour->shift1_start . ' - ' . $hour->shift1_end;
+            return $hour->shift1_start . ' - ' . $hour->shift1_end;
         }
-        if ($hour->shift2_start && $hour->shift2_end) {
-            $hours[] = $hour->shift2_start . ' - ' . $hour->shift2_end;
-        }
-        return implode(' و ', $hours);
+
+        return 'مغلق';
     }
+
+
+    /**
+     * الحصول على نص ساعات العمل
+     */
+
 
     /**
      * جلب خدمات الصالون

@@ -79,6 +79,7 @@ Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group
         Route::post('/{id}/toggle', [BarberController::class, 'toggleStatus'])->name('barbers.toggle');
     });
     Route::get('appointments', [AppointmentSalonController::class, 'index']);
+       Route::post('appointments/{id}/cancel', [AppointmentSalonController::class, 'cancel']);
     Route::get('appointments/status/{status}', [AppointmentSalonController::class, 'getByStatus']);
 });
 
@@ -95,6 +96,7 @@ Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(func
     Route::get('working-hours', [WorkingHourController::class, 'index']);
     Route::put('working-hours', [WorkingHourController::class, 'update']);
     Route::post('working-hours/reset', [WorkingHourController::class, 'reset']);
+     Route::get('salon-working-days', [WorkingHourController::class, 'getSalonWorkingDays']);
     // الحجوزات الموافة و عرض و رفض
     Route::prefix('appointments')->group(function () {
         Route::get('show', [AppointmentController::class, 'index']);
