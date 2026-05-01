@@ -218,71 +218,60 @@ class SalonBookingService
     /**
      * إلغاء حجز بواسطة صاحب الصالون (حجز واحد فقط)
      */
-    public function cancelAppointment(User $salonOwner, int $appointmentId, ?string $reason = null): AuthResult
-    {
-        try {
-            return DB::transaction(function () use ($salonOwner, $appointmentId, $reason) {
+ public function cancelAppointment(User $salonOwner, int $appointmentId, ?string $reason = null): AuthResult
+{
+    try {
+        return DB::transaction(function () use ($salonOwner, $appointmentId, $reason) {
 
-                // 1. التحقق من أن المستخدم صاحب صالون
-                if (!$salonOwner->hasRole('salon_owner')) {
-                    return AuthResult::error('هذه الخدمة متاحة لأصحاب الصالونات فقط', null, 403);
-                }
+            // 1. التحقق من أن المستخدم صاحب صالون
+            if (!$salonOwner->hasRole('salon_owner')) {
+                return AuthResult::error('هذه الخدمة متاحة لأصحاب الصالونات فقط', null, 403);
+            }
 
-                // 2. جلب الصالون الخاص به
-                $salon = $salonOwner->ownedSalon;
-                if (!$salon) {
-                    return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
-                }
+            // 2. جلب الصالون الخاص به
+            $salon = $salonOwner->ownedSalon;
+            if (!$salon) {
+                return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
+            }
 
-                // 3. جلب الحجز والتأكد من أنه يتبع هذا الصالون
-                $appointment = Appointment::where('id', $appointmentId)
-                    ->where('salon_id', $salon->id)
-                    ->first();
+            // 3. جلب الحجز والتأكد من أنه يتبع هذا الصالون
+            $appointment = Appointment::where('id', $appointmentId)
+                ->where('salon_id', $salon->id)
+                ->first();
 
-                if (!$appointment) {
-                    return AuthResult::error('الحجز غير موجود أو لا يتبع صالونك', null, 404);
-                }
+            if (!$appointment) {
+                return AuthResult::error('الحجز غير موجود أو لا يتبع صالونك', null, 404);
+            }
 
-                // 4. التحقق من أن الحجز ليس ملغى بالفعل
-                if ($appointment->status === 'cancelled') {
-                    return AuthResult::error('هذا الحجز ملغي بالفعل', null, 400);
-                }
+            // 4. التحقق من أن الحجز ليس ملغى بالفعل
+            if ($appointment->status === 'cancelled') {
+                return AuthResult::error('هذا الحجز ملغي بالفعل', null, 400);
+            }
 
-                // 5. التحقق من أن الحجز ليس مكتملاً
-                if ($appointment->status === 'completed') {
-                    return AuthResult::error('لا يمكن إلغاء حجز مكتمل', null, 400);
-                }
+            // 5. التحقق من أن الحجز ليس مكتملاً
+            if ($appointment->status === 'completed') {
+                return AuthResult::error('لا يمكن إلغاء حجز مكتمل', null, 400);
+            }
 
-                // 6. إلغاء الحجز
-                $appointment->status = 'cancelled';
-                $appointment->cancellation_reason = $reason ?? 'تم الإلغاء من قبل إدارة الصالون';
-                $appointment->cancelled_by = $salonOwner->id;
-                $appointment->cancelled_at = now();
-                $appointment->save();
+            // 6. إلغاء الحجز (فقط تغيير الحالة)
+            $appointment->status = 'cancelled';
+            $appointment->save();
 
-                Log::info('Appointment cancelled by salon owner', [
-                    'appointment_id' => $appointmentId,
-                    'salon_id' => $salon->id,
-                    'salon_owner_id' => $salonOwner->id,
-                    'reason' => $reason
-                ]);
+            Log::info('Appointment cancelled', [
+                'appointment_id' => $appointmentId,
+                'salon_id' => $salon->id,
+            ]);
 
-                return AuthResult::success('تم إلغاء الحجز بنجاح', [
-                    'id' => $appointment->id,
-                    'customer_name' => $appointment->customer->name,
-                    'barber_name' => $appointment->barber->name,
-                    'date' => $appointment->appointment_date,
-                    'time' => $appointment->appointment_time,
-                    'status' => $appointment->status,
-                    'cancelled_at' => $appointment->cancelled_at,
-                    'cancellation_reason' => $appointment->cancellation_reason,
-                ]);
+            return AuthResult::success('تم إلغاء الحجز بنجاح', [
+                'id' => $appointment->id,
+                'status' => $appointment->status,
+            ]);
 
-            });
-        } catch (\Exception $e) {
-            Log::error('Cancel appointment by salon owner error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء إلغاء الحجز', $e->getMessage(), 500);
-        }
+        });
+    } catch (\Exception $e) {
+        Log::error('Cancel appointment error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء إلغاء الحجز', null, 500);
     }
+}
 
 }

@@ -138,6 +138,8 @@ class BarberServiceService
                     return AuthResult::error('الخدمة غير موجودة', null, 404);
                 }
 
+                // dd($service);
+
                 $service->update([
                     'name' => $data['name'] ?? $service->name,
                     // 'name_ar' => $data['name_ar'] ?? $service->name_ar,
@@ -148,10 +150,7 @@ class BarberServiceService
                     'is_active' => $data['is_active'] ?? $service->is_active,
                 ]);
 
-                Log::info('Barber service updated', [
-                    'service_id' => $serviceId,
-                    'barber_id' => $barber->id
-                ]);
+
 
                 return AuthResult::success(
                     'تم تحديث الخدمة بنجاح',

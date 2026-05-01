@@ -1,7 +1,7 @@
 <?php
 
 
-namespace App\Http\Requests;
+namespace App\Http\Requests\Barber;
 
 use Illuminate\Foundation\Http\FormRequest;
 

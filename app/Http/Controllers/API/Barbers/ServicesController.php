@@ -4,7 +4,9 @@
 namespace App\Http\Controllers\API\Barbers;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\BarberServiceRequest;
+use App\Http\Requests\Barber\BarberServiceRequest;
+use App\Http\Requests\Barber\BarberUpdateServiceRequest;
+
 use App\Services\Barber\BarberServiceService;
 use Illuminate\Http\Request;
 
@@ -62,8 +64,9 @@ class ServicesController extends Controller
     /**
      * تحديث خدمة
      */
-    public function update(BarberServiceRequest $request, $id)
+    public function update(BarberUpdateServiceRequest $request, $id)
     {
+        // dd($request->all());
         $result = $this->serviceService->updateService(
             auth()->user(),
             $id,
