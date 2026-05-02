@@ -34,7 +34,21 @@ class BookingService
                 return $this->formatAppointment($appointment);
             });
 
-            return AuthResult::success('تم جلب الحجوزات قيد الانتظار بنجاح', $formattedAppointments);
+            $stats = [
+                'total' => $appointments->count(),
+                'pending' => $appointments->where('status', 'pending')->count(),
+                'confirmed' => $appointments->where('status', 'confirmed')->count(),
+                'completed' => $appointments->where('status', 'completed')->count(),
+                'cancelled' => $appointments->where('status', 'cancelled')->count(),
+                'today' => $appointments->where('appointment_date', now()->toDateString())->count(),
+            ];
+
+            $response = [
+                'statistics' => $stats,
+                'appointments' => $formattedAppointments,
+            ];
+
+            return AuthResult::success('تم جلب الحجوزات قيد الانتظار بنجاح', $response);
 
         } catch (\Exception $e) {
             Log::error('Get pending appointments error: ' . $e->getMessage());
@@ -117,77 +131,33 @@ class BookingService
                 return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
             }
 
-            $today = now()->toDateString();
-            $now = now()->format('H:i:s');
+            $salon = $barber->salons()->first();
 
             $appointments = Appointment::where('barber_id', $barber->id)
                 ->with(['customer', 'salon'])
-                ->orderBy('appointment_date', 'asc')
-                ->orderBy('appointment_time', 'asc')
+                ->orderBy('appointment_date', 'desc')
+                ->orderBy('appointment_time', 'desc')
                 ->get();
 
-            $upcomingAppointments = [];
-            $todayAppointments = [];
-            $completedAppointments = [];
-            $cancelledAppointments = [];
-            $nextAppointment = null;
+            $formattedAppointments = $appointments->map(function ($appointment) {
+                return $this->formatAppointment($appointment);
+            });
 
-            foreach ($appointments as $appointment) {
-                $formatted = $this->formatAppointment($appointment);
-
-                if ($appointment->status === 'cancelled') {
-                    $cancelledAppointments[] = $formatted;
-                } elseif ($appointment->status === 'completed') {
-                    $completedAppointments[] = $formatted;
-                } elseif ($appointment->appointment_date > $today) {
-                    $upcomingAppointments[] = $formatted;
-                } elseif ($appointment->appointment_date === $today && $appointment->appointment_time >= $now) {
-                    $todayAppointments[] = $formatted;
-                    if (!$nextAppointment) {
-                        $nextAppointment = $formatted;
-                    }
-                } elseif ($appointment->appointment_date === $today && $appointment->appointment_time < $now) {
-                    $completedAppointments[] = $formatted;
-                } else {
-                    $upcomingAppointments[] = $formatted;
-                }
-            }
-
-            $upcomingAppointments = collect($upcomingAppointments)
-                ->sortBy([['date', 'asc'], ['time', 'asc']])
-                ->values()
-                ->take(10)
-                ->toArray();
-
-            $todayAppointments = collect($todayAppointments)
-                ->sortBy('time')
-                ->values()
-                ->toArray();
-
-            $statistics = [
-                'upcoming_count' => count($upcomingAppointments),
-                'completed_count' => count($completedAppointments),
-                'today_count' => count($todayAppointments),
-                'cancelled_count' => count($cancelledAppointments),
-                'total_today' => $appointments->where('appointment_date', $today)->count(),
+            $stats = [
+                'total' => $appointments->count(),
+                'pending' => $appointments->where('status', 'pending')->count(),
+                'confirmed' => $appointments->where('status', 'confirmed')->count(),
+                'completed' => $appointments->where('status', 'completed')->count(),
+                'cancelled' => $appointments->where('status', 'cancelled')->count(),
+                'today' => $appointments->where('appointment_date', now()->toDateString())->count(),
             ];
 
-            $nextCustomer = $nextAppointment ? [
-                'customer_name' => $nextAppointment['customer_name'],
-                'service_names' => $nextAppointment['services'],
-                'duration_minutes' => $nextAppointment['duration_minutes'],
-                'time' => $nextAppointment['time'],
-                'total_price' => $nextAppointment['total_price'],
-            ] : null;
+            $response = [
+                'statistics' => $stats,
+                'appointments' => $formattedAppointments,
+            ];
 
-            return AuthResult::success('تم جلب الحجوزات بنجاح', [
-                'statistics' => $statistics,
-                'next_customer' => $nextCustomer,
-                'today_appointments' => $todayAppointments,
-                'upcoming_appointments' => $upcomingAppointments,
-                'completed_appointments' => $completedAppointments,
-                'cancelled_appointments' => $cancelledAppointments,
-            ]);
+            return AuthResult::success('تم جلب الحجوزات بنجاح', $response);
 
         } catch (\Exception $e) {
             Log::error('Get barber appointments error: ' . $e->getMessage());
@@ -196,38 +166,87 @@ class BookingService
     }
 
     /**
-     * تنسيق بيانات الحجز
+     * جلب جميع حجوزات الحلاق مع البحث
+     */
+    public function getBarberAppointmentsWithSearch(User $barber, ?string $search = null): AuthResult
+    {
+        try {
+            if (!$barber->hasRole('barber')) {
+                return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
+            }
+
+            $query = Appointment::where('barber_id', $barber->id)
+                ->with(['customer', 'salon']);
+
+            if ($search && !empty(trim($search))) {
+                $query->whereHas('customer', function ($q) use ($search) {
+                    $q->where('name', 'like', '%' . $search . '%')
+                      ->orWhere('phone', 'like', '%' . $search . '%');
+                });
+            }
+
+            $appointments = $query->orderBy('appointment_date', 'desc')
+                ->orderBy('appointment_time', 'desc')
+                ->get();
+
+            $formattedAppointments = $appointments->map(function ($appointment) {
+                return $this->formatAppointment($appointment);
+            });
+
+            $stats = [
+                'total' => $appointments->count(),
+                'pending' => $appointments->where('status', 'pending')->count(),
+                'confirmed' => $appointments->where('status', 'confirmed')->count(),
+                'completed' => $appointments->where('status', 'completed')->count(),
+                'cancelled' => $appointments->where('status', 'cancelled')->count(),
+                'today' => $appointments->where('appointment_date', now()->toDateString())->count(),
+            ];
+
+            $response = [
+                'statistics' => $stats,
+                'appointments' => $formattedAppointments,
+            ];
+
+            return AuthResult::success('تم جلب الحجوزات بنجاح', $response);
+
+        } catch (\Exception $e) {
+            Log::error('Get barber appointments with search error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', null, 500);
+        }
+    }
+
+    /**
+     * تنسيق بيانات الحجز (نفس تنسيق SalonBookingService)
      */
     private function formatAppointment(Appointment $appointment): array
     {
         $services = $this->getAppointmentServices($appointment);
-        $serviceNames = array_column($services, 'name');
+        $totalPrice = $this->calculateTotalPrice($appointment, $services);
+        $totalDuration = $this->calculateTotalDuration($appointment, $services);
+        $serviceNames = collect($services)->pluck('name')->implode(' + ');
 
         return [
             'id' => $appointment->id,
             'customer_name' => $appointment->customer->name ?? 'غير معروف',
             'customer_phone' => $appointment->customer->phone ?? 'غير معروف',
-            'services' => $serviceNames,
-            'services_count' => count($serviceNames),
-            'services_details' => $services,
-            'total_price' => (float) $appointment->total_price,
-            'duration_minutes' => (int) $appointment->duration_minutes,
+            'barber_name' => $appointment->barber->name ?? ($appointment->barber_id ? 'حلاق' : 'غير محدد'),
+            'barber_id' => $appointment->barber_id,
 
-            //  التاريخ والوقت بصيغة نظيفة
-            'date' => $appointment->appointment_date
-                ? Carbon::parse($appointment->appointment_date)->format('Y-m-d')
-                : null,
-            'time' => $appointment->appointment_time
-                ? Carbon::parse($appointment->appointment_time)->format('H:i:s')
-                : null,
+            'services' => $services,
+            'services_summary' => $serviceNames,
+            'total_price' => $totalPrice,
+            'total_duration' => $totalDuration,
 
-            // التاريخ المنسق بالعربية للعرض
-            'date_formatted' => $appointment->appointment_date
-                ? $this->formatDate($appointment->appointment_date)
-                : null,
+            'service_name' => $services[0]['name'] ?? null,
+            'service_price' => $services[0]['price'] ?? null,
+
+            'date' => $this->formatDate($appointment->appointment_date),
+            'time' => $this->formatTime($appointment->appointment_time),
+            'end_time' => $this->formatTime($appointment->end_time),
+            'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
 
             'status' => $appointment->status,
-            'status_text' => $this->getStatusText($appointment->status),
+            'created_at' => $this->formatDateTime($appointment->created_at),
         ];
     }
 
@@ -236,104 +255,112 @@ class BookingService
      */
     private function getAppointmentServices(Appointment $appointment): array
     {
-        // إذا كان هناك علاقة many-to-many مع الخدمات
-        if (method_exists($appointment, 'services') && $appointment->relationLoaded('services')) {
-            return $appointment->services->map(function ($service) {
-                return [
-                    'id' => $service->id,
-                    'name' => $service->name,
-                    'price' => (float) $service->price,
-                    'duration_minutes' => (int) $service->duration_minutes,
-                ];
-            })->toArray();
-        }
-
-        // إذا كان هناك عمود services_details (JSON)
         if ($appointment->services_details) {
-            return json_decode($appointment->services_details, true);
+            if (is_array($appointment->services_details)) {
+                $services = $appointment->services_details;
+            } else {
+                $services = json_decode($appointment->services_details, true);
+            }
+
+            if (is_array($services) && !empty($services)) {
+                return array_map(function($service) {
+                    return [
+                        'id' => $service['id'] ?? null,
+                        'name' => $service['name'] ?? null,
+                        'price' => $service['price'] ?? 0,
+                        'duration_minutes' => $service['duration_minutes'] ?? 0,
+                    ];
+                }, $services);
+            }
         }
 
-        // إذا كان هناك عمود services (JSON array of IDs)
         if ($appointment->services) {
-            $serviceIds = json_decode($appointment->services, true);
+            if (is_array($appointment->services)) {
+                $serviceIds = $appointment->services;
+            } else {
+                $serviceIds = json_decode($appointment->services, true);
+            }
+
             if (is_array($serviceIds) && !empty($serviceIds)) {
                 $services = BarberService::whereIn('id', $serviceIds)->get();
-                return $services->map(function ($service) {
+                return $services->map(function($service) {
                     return [
                         'id' => $service->id,
                         'name' => $service->name,
-                        'price' => (float) $service->price,
-                        'duration_minutes' => (int) $service->duration_minutes,
+                        'price' => $service->price,
+                        'duration_minutes' => $service->duration_minutes,
                     ];
                 })->toArray();
             }
         }
 
-        // إذا كانت خدمة واحدة فقط (للتوافق مع الإصدارات السابقة)
         if ($appointment->service) {
-            return [
-                [
-                    'id' => $appointment->service->id,
-                    'name' => $appointment->service->name,
-                    'price' => (float) $appointment->service->price,
-                    'duration_minutes' => (int) $appointment->service->duration_minutes,
-                ]
-            ];
+            return [[
+                'id' => $appointment->service->id,
+                'name' => $appointment->service->name,
+                'price' => $appointment->service->price,
+                'duration_minutes' => $appointment->service->duration_minutes,
+            ]];
         }
 
         return [];
     }
 
     /**
-     * تنسيق التاريخ باللغة العربية
+     * حساب السعر الإجمالي
      */
-    private function formatDate(string $date): string
+    private function calculateTotalPrice($appointment, $services): float
     {
-        $days = [
-            'Sunday' => 'الأحد',
-            'Monday' => 'الإثنين',
-            'Tuesday' => 'الثلاثاء',
-            'Wednesday' => 'الأربعاء',
-            'Thursday' => 'الخميس',
-            'Friday' => 'الجمعة',
-            'Saturday' => 'السبت',
-        ];
-
-        $months = [
-            'January' => 'يناير',
-            'February' => 'فبراير',
-            'March' => 'مارس',
-            'April' => 'أبريل',
-            'May' => 'مايو',
-            'June' => 'يونيو',
-            'July' => 'يوليو',
-            'August' => 'أغسطس',
-            'September' => 'سبتمبر',
-            'October' => 'أكتوبر',
-            'November' => 'نوفمبر',
-            'December' => 'ديسمبر',
-        ];
-
-        $timestamp = strtotime($date);
-        $day = date('l', $timestamp);
-        $dayNumber = date('d', $timestamp);
-        $month = date('F', $timestamp);
-        $year = date('Y', $timestamp);
-
-        return $days[$day] . '، ' . $dayNumber . ' ' . $months[$month] . ' ' . $year;
+        if ($appointment->total_price) {
+            return (float) $appointment->total_price;
+        }
+        return (float) collect($services)->sum('price');
     }
 
     /**
-     * الحصول على النص العربي للحالة
+     * حساب المدة الإجمالية
      */
-    private function getStatusText(string $status): string
+    private function calculateTotalDuration($appointment, $services): int
     {
-        return match ($status) {
-            'pending' => 'قيد الانتظار',
-            'confirmed' => 'مؤكد',
-            'completed' => 'مكتمل',
-            'cancelled' => 'ملغي',
-            default => $status,
-        };
+        if ($appointment->duration_minutes) {
+            return (int) $appointment->duration_minutes;
+        }
+        return (int) collect($services)->sum('duration_minutes');
+    }
+
+    /**
+     * تنسيق التاريخ
+     */
+    private function formatDate($date): ?string
+    {
+        if (!$date) return null;
+        if ($date instanceof Carbon) {
+            return $date->format('Y-m-d');
+        }
+        return Carbon::parse($date)->format('Y-m-d');
+    }
+
+    /**
+     * تنسيق الوقت
+     */
+    private function formatTime($time): ?string
+    {
+        if (!$time) return null;
+        if ($time instanceof Carbon) {
+            return $time->format('H:i');
+        }
+        return Carbon::parse($time)->format('H:i');
+    }
+
+    /**
+     * تنسيق التاريخ والوقت
+     */
+    private function formatDateTime($datetime): ?string
+    {
+        if (!$datetime) return null;
+        if ($datetime instanceof Carbon) {
+            return $datetime->format('Y-m-d H:i:s');
+        }
+        return Carbon::parse($datetime)->format('Y-m-d H:i:s');
     }
 }
