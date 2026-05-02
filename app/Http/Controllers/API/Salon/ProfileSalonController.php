@@ -35,7 +35,34 @@ class ProfileSalonController extends Controller
      */
     public function update(UpdateSalonRequest $request)
     {
-        $result = $this->updateSalonService->updateSalon($request->validated());
+       
+        $data = $request->validated();
+
+
+        if ($request->hasFile('avatar')) {
+            $data['avatar'] = $request->file('avatar');
+        }
+
+        if ($request->hasFile('new_images')) {
+            $data['new_images'] = $request->file('new_images');
+        }
+
+
+        if ($request->has('delete_image_ids')) {
+            $data['delete_image_ids'] = $request->input('delete_image_ids');
+        }
+
+
+        if ($request->has('working_hours')) {
+            $data['working_hours'] = $request->input('working_hours');
+        }
+
+
+        if ($request->has('password')) {
+            $data['password'] = $request->input('password');
+        }
+
+        $result = $this->updateSalonService->updateSalon($data);
 
         return response()->json([
             'success' => $result->success,
