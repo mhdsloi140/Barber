@@ -212,14 +212,37 @@
                 font-size: 1.5rem;
             }
         }
+
+        .logo-icon {
+            background: linear-gradient(125deg, #7c3aed, #db2777);
+            width: 70px;
+            height: 70px;
+            border-radius: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            box-shadow: 0 10px 20px rgba(108, 43, 217, 0.3);
+            overflow: hidden;
+        }
+
+        .logo-image {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+            border-radius: 12px;
+        }
     </style>
+
 </head>
 
 <body>
     <div class="auth-wrapper">
         <div class="auth-card">
             <div class="auth-header">
-                <div class="logo-icon"> <i class="fas fa-cut text-purple-300 text-xl"></i></div>
+                <div class="logo-icon">
+                    <img src="{{ asset('img/logo2.png') }}" alt="شعار نعيما" class="logo-image">
+                </div>
                 <h2>نعيما</h2>
                 <p>مرحباً بك، قم بتسجيل الدخول للوصول إلى لوحة التحكم</p>
             </div>
@@ -248,8 +271,7 @@
                     <div class="input-icon">
                         <i class="fas fa-phone-alt"></i>
                         <input type="tel" name="phone" value="{{ old('phone') }}"
-                               class="@error('phone') is-invalid @enderror"
-                               placeholder="05xxxxxxxx">
+                            class="@error('phone') is-invalid @enderror" placeholder="05xxxxxxxx">
                     </div>
                     @error('phone')
                     <div class="error-text">{{ $message }}</div>
@@ -260,9 +282,8 @@
                     <label>كلمة المرور</label>
                     <div class="input-icon">
                         <i class="fas fa-lock"></i>
-                        <input type="password" name="password"
-                               class="@error('password') is-invalid @enderror"
-                               placeholder="••••••••" >
+                        <input type="password" name="password" class="@error('password') is-invalid @enderror"
+                            placeholder="••••••••">
                     </div>
                     @error('password')
                     <div class="error-text">{{ $message }}</div>

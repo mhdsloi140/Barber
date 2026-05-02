@@ -422,23 +422,22 @@
         <div class="flex items-center justify-between px-6 py-6 border-b border-white/20">
             <div class="flex items-center gap-5">
 
-                <!-- أيقونة داخل دائرة -->
-                <div
-                    class="w-16 h-16 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center shadow-xl">
-                    <i class="fas fa-cut text-purple-300 text-xl"></i>
-                </div>
+    <!-- صورة داخل دائرة -->
+    <div class="w-16 h-16 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center shadow-xl overflow-hidden">
+        <img src="{{ asset('img/logo2.png') }}" alt="شعار نعيما" class="w-full h-full object-cover">
+    </div>
 
-                <!-- اسم النظام -->
-                <div class="flex flex-col leading-tight">
-                    <span class="text-7xl font-bold text-white" style="font-family: 'Aref Ruqaa', serif;">
-                        نعيماً
-                    </span>
-                    <span class="text-7xl font-bold text-white"  style="font-family: 'Aref Ruqaa', serif;">
-                        لخدمات الحلاقة
-                    </span>
-                </div>
+    <!-- اسم النظام -->
+    <div class="flex flex-col leading-tight">
+        <span class="text-7xl font-bold text-white" style="font-family: 'Aref Ruqaa', serif;">
+            نعيماً
+        </span>
+        <span class="text-7xl font-bold text-white" style="font-family: 'Aref Ruqaa', serif;">
+            لخدمات الحلاقة
+        </span>
+    </div>
 
-            </div>
+</div>
 
 
 
