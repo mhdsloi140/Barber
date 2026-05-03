@@ -67,7 +67,7 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group(function () {
 
     Route::get('profile', [ProfileSalonController::class, 'show']);
-    Route::put('profile', [ProfileSalonController::class, 'update']);
+    Route::post('profile', [ProfileSalonController::class, 'update']);
     Route::apiResource('barbers', BarberController::class);
     // عرض خدمات حلاق معين في الصالون
     Route::get('barbers/{barber_id}/services', [SalonServiceController::class, 'getBarberServices']);

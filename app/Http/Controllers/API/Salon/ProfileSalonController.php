@@ -35,7 +35,7 @@ class ProfileSalonController extends Controller
      */
     public function update(UpdateSalonRequest $request)
     {
-       
+
         $data = $request->validated();
 
 
