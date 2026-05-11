@@ -97,8 +97,11 @@ Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(func
     Route::get('services/trashed', [ServicesController::class, 'trashed']);
     Route::post('services/{id}/restore', [ServicesController::class, 'restore']);
     Route::get('working-hours', [WorkingHourController::class, 'index']);
-    Route::put('working-hours', [WorkingHourController::class, 'update']);
+    Route::post('working-hours', [WorkingHourController::class, 'update']);
     Route::post('working-hours/reset', [WorkingHourController::class, 'reset']);
+    // Route::post('/working-hours/add-day', [WorkingHourController::class, 'addDay']);
+      Route::post('/working-hours/add-days', [WorkingHourController::class, 'addMultipleDays']);
+      Route::delete('/working-hours/{day}', [WorkingHourController::class, 'deleteDay']);
     Route::get('salon-working-days', [WorkingHourController::class, 'getSalonWorkingDays']);
     // الحجوزات الموافة و عرض و رفض
     Route::prefix('appointments')->group(function () {

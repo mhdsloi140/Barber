@@ -10,6 +10,7 @@ class BarberWorkingHoursRequest extends FormRequest
 {
     public function authorize(): bool
     {
+        //  dd($this->all());
         return auth()->user()?->hasRole('barber');
     }
 

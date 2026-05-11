@@ -4,8 +4,9 @@
 namespace App\Http\Controllers\API\Barber;
 
 use App\Http\Controllers\Controller;
-
-use App\Http\Requests\Barber\BarberWorkingHoursRequest;
+use App\Http\Requests\Barber\AddWorkingDaysRequest;
+use App\Http\Requests\Barber\BarberWorkingHoursUpdateRequest;
+use App\Http\Requests\Barber\AddMultipleWorkingDaysRequest;
 use App\Services\Barber\WorkingHourService;
 use Illuminate\Http\Request;
 
@@ -13,14 +14,14 @@ class WorkingHourController extends Controller
 {
     public function __construct(
         private WorkingHourService $workingHourService
-    ) {
-    }
+    ) {}
 
-
+    /**
+     * جلب أوقات عمل الحلاق الحالية
+     */
     public function index()
     {
-        $barber = auth()->user();
-        $result = $this->workingHourService->getWorkingHours($barber);
+        $result = $this->workingHourService->getWorkingHours(auth()->user());
 
         return response()->json([
             'success' => $result->success,
@@ -29,12 +30,13 @@ class WorkingHourController extends Controller
         ], $result->statusCode);
     }
 
-
-    public function update(BarberWorkingHoursRequest $request)
+    /**
+     * حفظ أو تحديث أوقات العمل (يدعم إضافة أيام جديدة وتعديلها وحذفها)
+     */
+    public function update(BarberWorkingHoursUpdateRequest $request)
     {
-        $barber = auth()->user();
         $result = $this->workingHourService->updateWorkingHours(
-            $barber,
+            auth()->user(),
             $request->validated()
         );
 
@@ -44,9 +46,16 @@ class WorkingHourController extends Controller
             'data' => $result->data,
         ], $result->statusCode);
     }
-    public function getSalonWorkingDays()
+
+    /**
+     * إضافة عدة أيام جديدة دفعة واحدة
+     */
+    public function addMultipleDays(AddWorkingDaysRequest $request)
     {
-        $result = $this->workingHourService->getSalonWorkingDays(auth()->user());
+        $result = $this->workingHourService->addMultipleWorkingDays(
+            auth()->user(),
+            $request->validated()
+        );
 
         return response()->json([
             'success' => $result->success,
@@ -55,10 +64,26 @@ class WorkingHourController extends Controller
         ], $result->statusCode);
     }
 
-    public function reset()
+    /**
+     * حذف يوم عمل
+     */
+    public function deleteDay($day)
     {
-        $barber = auth()->user();
-        $result = $this->workingHourService->resetWorkingHours($barber);
+        $result = $this->workingHourService->deleteWorkingDay(auth()->user(), $day);
+
+        return response()->json([
+            'success' => $result->success,
+            'message' => $result->message,
+            'data' => $result->data,
+        ], $result->statusCode);
+    }
+
+    /**
+     * جلب أيام عمل الصالون المفتوحة
+     */
+    public function getSalonOpenDays()
+    {
+        $result = $this->workingHourService->getSalonOpenDaysForBarber(auth()->user());
 
         return response()->json([
             'success' => $result->success,
