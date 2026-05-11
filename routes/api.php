@@ -107,6 +107,9 @@ Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(func
         Route::post('{id}/approve', [AppointmentController::class, 'approve']);
         Route::post('{id}/reject', [AppointmentController::class, 'reject']);
     });
+/// الاحصائيات
+    Route::get('/statistics', [BarberProfileController::class, 'index']);
+    Route::get('/statistics/monthly', [BarberProfileController::class, 'monthlyCompletedServices']);
 });
 
 

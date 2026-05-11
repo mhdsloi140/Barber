@@ -14,6 +14,39 @@ class BarberProfileController extends Controller
         private BarberProfileService $profileService
     ) {}
 
+     public function index()
+    {
+        $result = $this->profileService->getBarberStatistics(auth()->user());
+
+        return response()->json([
+            'success' => $result->success,
+            'message' => $result->message,
+            'data' => $result->data,
+        ], $result->statusCode);
+    }
+
+    /**
+     * جلب عدد الخدمات المنجزة في شهر محدد
+     * GET /api/barber/statistics/monthly?year=2026&month=5
+     */
+    public function monthlyCompletedServices(Request $request)
+    {
+        $year = $request->get('year', now()->year);
+        $month = $request->get('month', now()->month);
+
+        $result = $this->profileService->getMonthlyCompletedServices(
+            auth()->user(),
+            $year,
+            $month
+        );
+
+        return response()->json([
+            'success' => $result->success,
+            'message' => $result->message,
+            'data' => $result->data,
+        ], $result->statusCode);
+    }
+
     /**
      * عرض الملف الشخصي للحلاق
      * GET /api/barber/profile
