@@ -57,32 +57,57 @@ class BarberServiceService
     /**
      * جلب جميع خدمات الحلاق
      */
-    public function getServices(User $barber): AuthResult
-    {
-        try {
-            if (!$barber->hasRole('barber')) {
-                return AuthResult::error('هذا المستخدم ليس حلاقاً', null, 403);
-            }
-
-            $services = BarberService::where('barber_id', $barber->id)
-                ->orderBy('created_at', 'desc')
-                ->get();
-
-            return AuthResult::success(
-                'تم جلب الخدمات بنجاح',
-                $services
-            );
-
-        } catch (\Exception $e) {
-            Log::error('Get barber services error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء جلب الخدمات',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
+  
+public function getServices(User $barber): AuthResult
+{
+    try {
+        if (!$barber->hasRole('barber')) {
+            return AuthResult::error('هذا المستخدم ليس حلاقاً', null, 403);
         }
+
+        $services = BarberService::where('barber_id', $barber->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // إحصائيات الخدمات
+        $statistics = [
+            'total' => $services->count(),                           // إجمالي الخدمات
+            'active' => $services->where('is_active', true)->count(),   // الخدمات النشطة
+            'inactive' => $services->where('is_active', false)->count(), // الخدمات الموقفة
+        ];
+
+        // تنسيق البيانات
+        $formattedServices = $services->map(function ($service) {
+            return [
+                'id' => $service->id,
+                'name' => $service->name,
+                'description' => $service->description,
+                'price' => (float) $service->price,
+                'duration_minutes' => (int) $service->duration_minutes,
+                'is_active' => (bool) $service->is_active,
+                'status_text' => $service->is_active ? 'نشط' : 'موقوف',
+                'created_at' => $service->created_at,
+                'updated_at' => $service->updated_at,
+            ];
+        });
+
+        $response = [
+            'statistics' => $statistics,
+            'services' => $formattedServices,
+        ];
+
+        return AuthResult::success('تم جلب الخدمات بنجاح', $response);
+
+    } catch (\Exception $e) {
+        Log::error('Get barber services error: ' . $e->getMessage());
+
+        return AuthResult::error(
+            'حدث خطأ أثناء جلب الخدمات',
+            config('app.debug') ? $e->getMessage() : null,
+            500
+        );
     }
+}
 
     /**
      * جلب خدمة محددة
