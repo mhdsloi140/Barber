@@ -46,7 +46,7 @@ class UpdateSalonRequest extends FormRequest
             'delete_image_ids' => ['nullable', 'array'],
             'delete_image_ids.*' => ['exists:media,id'],
 
-            //  أوقات العمل (اختيارية)
+
             'working_hours' => ['nullable', 'array'],
             'working_hours.*.day' => ['required_with:working_hours', 'in:sunday,monday,tuesday,wednesday,thursday,friday,saturday'],
             'working_hours.*.is_open' => ['required_with:working_hours', 'boolean'],

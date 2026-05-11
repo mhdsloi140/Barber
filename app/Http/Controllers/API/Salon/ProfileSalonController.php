@@ -29,10 +29,7 @@ class ProfileSalonController extends Controller
         ], $result->statusCode);
     }
 
-    /**
-     * تحديث بيانات الصالون الشخصية
-     * PUT /api/salon/profile
-     */
+   
     public function update(UpdateSalonRequest $request)
     {
 

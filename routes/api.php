@@ -3,6 +3,7 @@
 use App\Http\Controllers\API\AuthController;
 
 use App\Http\Controllers\API\Barber\AppointmentController;
+use App\Http\Controllers\API\Barber\BarberProfileController;
 use App\Http\Controllers\API\Barber\WorkingHourController;
 use App\Http\Controllers\API\Barbers\ServicesController;
 use App\Http\Controllers\API\Customer\BookingController;
@@ -79,7 +80,7 @@ Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group
         Route::post('/{id}/toggle', [BarberController::class, 'toggleStatus'])->name('barbers.toggle');
     });
     Route::get('appointments', [AppointmentSalonController::class, 'index']);
-       Route::post('appointments/{id}/cancel', [AppointmentSalonController::class, 'cancel']);
+    Route::post('appointments/{id}/cancel', [AppointmentSalonController::class, 'cancel']);
     Route::get('appointments/status/{status}', [AppointmentSalonController::class, 'getByStatus']);
 });
 
@@ -87,6 +88,8 @@ Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group
 //////////الحلاقين
 Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(function () {
 
+    Route::get('/profile', [BarberProfileController::class, 'show']);
+    Route::post('/profile', [BarberProfileController::class, 'update']);
 
     Route::apiResource('services', ServicesController::class);
     Route::post('services/{id}/toggle', [ServicesController::class, 'toggleStatus']);
@@ -96,7 +99,7 @@ Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(func
     Route::get('working-hours', [WorkingHourController::class, 'index']);
     Route::put('working-hours', [WorkingHourController::class, 'update']);
     Route::post('working-hours/reset', [WorkingHourController::class, 'reset']);
-     Route::get('salon-working-days', [WorkingHourController::class, 'getSalonWorkingDays']);
+    Route::get('salon-working-days', [WorkingHourController::class, 'getSalonWorkingDays']);
     // الحجوزات الموافة و عرض و رفض
     Route::prefix('appointments')->group(function () {
         Route::get('show', [AppointmentController::class, 'index']);
