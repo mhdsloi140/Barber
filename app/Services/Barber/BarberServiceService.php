@@ -57,7 +57,7 @@ class BarberServiceService
     /**
      * جلب جميع خدمات الحلاق
      */
-  
+
 public function getServices(User $barber): AuthResult
 {
     try {
@@ -213,9 +213,9 @@ public function getServices(User $barber): AuthResult
             }
 
             // التحقق من وجود مواعيد مرتبطة بالخدمة
-            if ($service->appointments()->count() > 0) {
-                return AuthResult::error('لا يمكن حذف الخدمة لأن هناك مواعيد مرتبطة بها', null, 400);
-            }
+            // if ($service->appointments()->count() > 0) {
+            //     return AuthResult::error('لا يمكن حذف الخدمة لأن هناك مواعيد مرتبطة بها', null, 400);
+            // }
 
             $service->delete();
 

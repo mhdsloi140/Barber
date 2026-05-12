@@ -85,6 +85,7 @@ class ServicesController extends Controller
      */
     public function destroy($id)
     {
+        //  dd($id);
         $result = $this->serviceService->deleteService(auth()->user(), $id);
 
         return response()->json([
@@ -98,6 +99,7 @@ class ServicesController extends Controller
      */
     public function forceDelete($id)
     {
+
         $result = $this->serviceService->forceDeleteService(auth()->user(), $id);
 
         return response()->json([
