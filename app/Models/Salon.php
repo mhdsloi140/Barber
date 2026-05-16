@@ -51,8 +51,20 @@ class Salon extends Model implements HasMedia
     {
         return $this->morphMany(WorkingHour::class, 'workable');
     }
+    public function favoritedByCustomers()
+    {
+        return $this->belongsToMany(User::class, 'favorite_salons', 'salon_id', 'customer_id')
+            ->withTimestamps();
+    }
 
-    // ========== الصور ==========
+    /**
+     * التحقق مما إذا كان الصالون مفضلاً من قبل عميل معين
+     */
+    public function isFavoritedBy($customerId): bool
+    {
+        return $this->favoritedByCustomers()->where('customer_id', $customerId)->exists();
+    }
+    // 
 
     public function registerMediaCollections(): void
     {

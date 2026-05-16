@@ -117,17 +117,38 @@ class User extends Authenticatable implements HasMedia
     {
         return $this->favoriteBarbers()->where('barber_id', $barberId)->exists();
     }
-
+    public function favoriteSalons()
+    {
+        return $this->belongsToMany(Salon::class, 'favorite_salons', 'customer_id', 'salon_id')
+            ->withTimestamps();
+    }
 
     /**
-     * العلاقة مع التقييمات (كحلاق)
+     * التحقق مما إذا كان الصالون مفضلاً لدى العميل
      */
-    // public function ratings()
-    // {
-    //     return $this->hasMany(Rating::class, 'barber_id');
-    // }
+    public function isFavoriteSalon($salonId): bool
+    {
+        return $this->favoriteSalons()->where('salon_id', $salonId)->exists();
+    }
 
-    // ========== دوال مساعدة ==========
+    /**
+     * الحصول على معرفات الصالونات المفضلة
+     */
+    public function getFavoriteSalonIdsAttribute(): array
+    {
+        return $this->favoriteSalons()->pluck('salon_id')->toArray();
+    }
+
+    /**
+     * عدد الصالونات المفضلة
+     */
+    public function getFavoriteSalonsCountAttribute(): int
+    {
+        return $this->favoriteSalons()->count();
+    }
+
+
+   
 
     public function isSalonOwner(): bool
     {

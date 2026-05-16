@@ -8,6 +8,7 @@ use App\Http\Controllers\API\Barber\WorkingHourController;
 use App\Http\Controllers\API\Barbers\ServicesController;
 use App\Http\Controllers\API\Customer\BookingController;
 use App\Http\Controllers\API\Customer\FavoriteBarberController;
+use App\Http\Controllers\API\Customer\FavoriteSalonController;
 use App\Http\Controllers\API\Customer\SalonDetailsController;
 use App\Http\Controllers\API\ProfileController;
 use App\Http\Controllers\API\RatingController;
@@ -101,8 +102,8 @@ Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(func
     Route::post('working-hours', [WorkingHourController::class, 'update']);
     Route::post('working-hours/reset', [WorkingHourController::class, 'reset']);
     // Route::post('/working-hours/add-day', [WorkingHourController::class, 'addDay']);
-      Route::post('/working-hours/add-days', [WorkingHourController::class, 'addMultipleDays']);
-      Route::delete('/working-hours/{day}', [WorkingHourController::class, 'deleteDay']);
+    Route::post('/working-hours/add-days', [WorkingHourController::class, 'addMultipleDays']);
+    Route::delete('/working-hours/{day}', [WorkingHourController::class, 'deleteDay']);
     Route::get('salon-working-days', [WorkingHourController::class, 'getSalonWorkingDays']);
     // الحجوزات الموافة و عرض و رفض
     Route::prefix('appointments')->group(function () {
@@ -111,7 +112,7 @@ Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(func
         Route::post('{id}/approve', [AppointmentController::class, 'approve']);
         Route::post('{id}/reject', [AppointmentController::class, 'reject']);
     });
-/// الاحصائيات
+    /// الاحصائيات
     Route::get('/statistics', [BarberProfileController::class, 'index']);
     Route::get('/statistics/monthly', [BarberProfileController::class, 'monthlyCompletedServices']);
 });
@@ -137,10 +138,17 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
         Route::get('completed', [BookingController::class, 'completed']); // الحجوزات المنتهية
         Route::post('{id}/cancel', [BookingController::class, 'cancel']); // إلغاء حجز
     });
+    ///المفصلات للحلاقين 
     Route::get('/favorites', [FavoriteBarberController::class, 'index']);
     Route::post('/favorites', [FavoriteBarberController::class, 'store']);
     Route::get('/favorites/check/{barberId}', [FavoriteBarberController::class, 'check']);
     Route::delete('/favorites/{barberId}', [FavoriteBarberController::class, 'destroy']);
+    /// الفضلات الصالون
+    Route::get('/favorite-salons', [FavoriteSalonController::class, 'index']);
+    Route::post('/favorite-salons', [FavoriteSalonController::class, 'store']);
+    Route::get('/favorite-salons/check/{salonId}', [FavoriteSalonController::class, 'check']);
+    Route::get('/favorite-salons/stats', [FavoriteSalonController::class, 'stats']);
+    Route::delete('/favorite-salons/{salonId}', [FavoriteSalonController::class, 'destroy']);
 
 });
 Route::prefix('ratings')->group(function () {
