@@ -7,6 +7,7 @@ use App\Http\Controllers\API\Barber\BarberProfileController;
 use App\Http\Controllers\API\Barber\WorkingHourController;
 use App\Http\Controllers\API\Barbers\ServicesController;
 use App\Http\Controllers\API\Customer\BookingController;
+use App\Http\Controllers\API\Customer\FavoriteBarberController;
 use App\Http\Controllers\API\Customer\SalonDetailsController;
 use App\Http\Controllers\API\ProfileController;
 use App\Http\Controllers\API\RatingController;
@@ -136,6 +137,10 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
         Route::get('completed', [BookingController::class, 'completed']); // الحجوزات المنتهية
         Route::post('{id}/cancel', [BookingController::class, 'cancel']); // إلغاء حجز
     });
+    Route::get('/favorites', [FavoriteBarberController::class, 'index']);
+    Route::post('/favorites', [FavoriteBarberController::class, 'store']);
+    Route::get('/favorites/check/{barberId}', [FavoriteBarberController::class, 'check']);
+    Route::delete('/favorites/{barberId}', [FavoriteBarberController::class, 'destroy']);
 
 });
 Route::prefix('ratings')->group(function () {

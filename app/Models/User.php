@@ -103,6 +103,20 @@ class User extends Authenticatable implements HasMedia
     {
         return $this->hasMany(Rating::class, 'barber_id');
     }
+    public function favoriteBarbers()
+    {
+        return $this->belongsToMany(User::class, 'favorite_barbers', 'customer_id', 'barber_id')
+            ->withTimestamps();
+    }
+    public function favoritedByCustomers()
+    {
+        return $this->belongsToMany(User::class, 'favorite_barbers', 'barber_id', 'customer_id')
+            ->withTimestamps();
+    }
+    public function isFavoriteBarber($barberId): bool
+    {
+        return $this->favoriteBarbers()->where('barber_id', $barberId)->exists();
+    }
 
 
     /**
@@ -148,7 +162,7 @@ class User extends Authenticatable implements HasMedia
     {
         return $this->getFirstMediaUrl('avatar');
     }
-      public function getProfileImageUrlAttribute()
+    public function getProfileImageUrlAttribute()
     {
         $media = $this->getFirstMedia('profile_image');
         if ($media) {
