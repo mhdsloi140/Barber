@@ -7,9 +7,12 @@ use App\Http\Controllers\API\Barber\BarberProfileController;
 use App\Http\Controllers\API\Barber\WorkingHourController;
 use App\Http\Controllers\API\Barbers\ServicesController;
 use App\Http\Controllers\API\Customer\BookingController;
+use App\Http\Controllers\API\Customer\DashboardCustomerController;
 use App\Http\Controllers\API\Customer\FavoriteBarberController;
 use App\Http\Controllers\API\Customer\FavoriteSalonController;
 use App\Http\Controllers\API\Customer\SalonDetailsController;
+use App\Http\Controllers\API\Notification\DeviceTokenController;
+use App\Http\Controllers\API\Notification\FcmTokenController;
 use App\Http\Controllers\API\ProfileController;
 use App\Http\Controllers\API\RatingController;
 use App\Http\Controllers\API\Salon\AppointmentSalonController;
@@ -39,7 +42,20 @@ Route::prefix('auth')->group(function () {
     Route::post('register/salon-owner', [App\Http\Controllers\API\Salon\AuthController::class, 'registerSalonOwner']);
 });
 
+Route::middleware(['auth:sanctum'])->group(function () {
 
+    // FCM Token
+    Route::post('/fcm-token', [FcmTokenController::class, 'update']);
+    Route::delete('/fcm-token', [FcmTokenController::class, 'destroy']);
+
+});
+Route::middleware(['auth:sanctum'])->group(function () {
+
+    // Device Tokens
+    Route::post('/device-token', [DeviceTokenController::class, 'store']);
+    Route::delete('/device-token', [DeviceTokenController::class, 'destroy']);
+
+});
 Route::middleware('auth:sanctum')->group(function () {
 
 
@@ -67,6 +83,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/change-password', [ProfileController::class, 'changePassword'])->name('password.change');
 });
 /////     الصالونات او مدير الصالون
+Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salon-owner')->group(function () {
+
+    // FCM Token
+    Route::post('/fcm-token', [FcmTokenController::class, 'update']);
+    Route::delete('/fcm-token', [FcmTokenController::class, 'destroy']);
+
+});
 Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group(function () {
 
     Route::get('profile', [ProfileSalonController::class, 'show']);
@@ -121,6 +144,7 @@ Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(func
 //// الزبائن
 Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(function () {
 
+    Route::get('/dashboard', [DashboardCustomerController::class, 'index']);
 
     Route::get('salons', [SalonController::class, 'index']);
     Route::get('salons/{id}', [SalonController::class, 'show']);
@@ -138,7 +162,7 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
         Route::get('completed', [BookingController::class, 'completed']); // الحجوزات المنتهية
         Route::post('{id}/cancel', [BookingController::class, 'cancel']); // إلغاء حجز
     });
-    ///المفصلات للحلاقين 
+    ///المفصلات للحلاقين
     Route::get('/favorites', [FavoriteBarberController::class, 'index']);
     Route::post('/favorites', [FavoriteBarberController::class, 'store']);
     Route::get('/favorites/check/{barberId}', [FavoriteBarberController::class, 'check']);

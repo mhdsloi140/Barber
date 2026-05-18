@@ -8,11 +8,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>نعيما | لوحة تحكم عصرية</title>
+
+    <!-- Fonts -->
+    <link href="{{ asset('assets/css/soft-ui-dashboard-tailwind.css?v=1.0.5') }}" rel="stylesheet">
     <link
         href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Cairo:wght@300;400;700&display=swap"
         rel="stylesheet">
-
-    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,600,700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
@@ -74,23 +75,32 @@
             border-radius: 10px;
         }
 
+        /* شاشة الموبايل */
         @media (max-width: 1280px) {
             .naima-sidebar {
                 transform: translateX(100%);
                 border-radius: 0;
+                z-index: 9999;
             }
 
             .naima-sidebar.sidebar-visible {
-                transform: translateX(0);
-                box-shadow: -5px 0 25px rgba(0, 0, 0, 0.3);
+                transform: translateX(0) !important;
             }
         }
 
-        /* زر التحكم الدائري الأيقوني */
+        /* شاشة الكمبيوتر */
+        @media (min-width: 1281px) {
+            .naima-sidebar {
+                transform: translateX(0);
+            }
+        }
+
+        /* زر التحكم الدائري الأيقوني - يظهر فقط في الموبايل */
         .sidebar-ctrl-btn {
             position: fixed;
             bottom: 1.8rem;
-            right: 1.8rem;
+            left: 1.8rem;
+            right: auto;
             z-index: 1100;
             width: 58px;
             height: 58px;
@@ -114,7 +124,12 @@
         .sidebar-ctrl-btn:hover {
             transform: scale(1.05);
             box-shadow: 0 18px 28px rgba(108, 43, 217, 0.6);
-            background: linear-gradient(125deg, #8b4dff, #e83e8c);
+        }
+
+        @media (min-width: 1281px) {
+            .sidebar-ctrl-btn {
+                display: none;
+            }
         }
 
         /* روابط السايد بار */
@@ -149,7 +164,7 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
-        /* ========== NAVBAR جديدة بنفس لون السايد بار ========== */
+        /* ========== NAVBAR ========== */
         .naima-navbar {
             background: linear-gradient(135deg, #4a0e6e 0%, #9b30ff 100%);
             width: 100%;
@@ -213,7 +228,7 @@
             width: 100%;
         }
 
-        @media (min-width: 1280px) {
+        @media (min-width: 1281px) {
             .main-content-area {
                 margin-right: 280px;
                 width: calc(100% - 280px);
@@ -230,112 +245,6 @@
             }
         }
 
-        /* بطاقات إحصائيات */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .stat-card {
-            background: #fff;
-            border-radius: 28px;
-            padding: 1.3rem;
-            transition: all 0.25s;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.03), 0 6px 6px rgba(0, 0, 0, 0.05);
-            border: 1px solid rgba(128, 90, 213, 0.1);
-        }
-
-        .stat-card:hover {
-            transform: translateY(-6px);
-            box-shadow: 0 25px 35px -12px rgba(108, 43, 217, 0.2);
-            border-color: rgba(108, 43, 217, 0.3);
-        }
-
-        .icon-bg-grad {
-            background: linear-gradient(125deg, #8b5cf6, #ec4899);
-            width: 54px;
-            height: 54px;
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.8rem;
-            box-shadow: 0 8px 14px rgba(139, 92, 246, 0.3);
-        }
-
-        /* جدول متجاوب */
-        .table-wrapper {
-            overflow-x: auto;
-            border-radius: 24px;
-        }
-
-        .custom-table {
-            min-width: 600px;
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-        }
-
-        .custom-table th {
-            background: #f8f9ff;
-            padding: 1rem 1rem;
-            font-weight: 700;
-            font-size: 0.75rem;
-            color: #4a4e69;
-        }
-
-        .custom-table td {
-            padding: 0.9rem 1rem;
-            border-bottom: 1px solid #edeff5;
-        }
-
-        .badge-status {
-            padding: 5px 12px;
-            border-radius: 60px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .btn-action {
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            font-size: 0.9rem;
-            padding: 6px 12px;
-            border-radius: 8px;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .btn-edit {
-            color: #6c5ce7;
-            background: #f3f0ff;
-        }
-
-        .btn-delete {
-            color: #e84393;
-            background: #fff0f5;
-        }
-
-        .btn-view {
-            color: #3498db;
-            background: #e8f4ff;
-        }
-
-        .btn-edit:hover,
-        .btn-delete:hover,
-        .btn-view:hover {
-            transform: scale(1.02);
-        }
-
         .footer-note {
             margin-top: 2.5rem;
             text-align: center;
@@ -344,74 +253,7 @@
             font-size: 0.8rem;
             border-top: 1px solid #e4e9f2;
         }
-
-        .dir-ltr {
-            direction: ltr;
-            display: inline-block;
-        }
-
-        /* Pagination */
-        .pagination {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            margin-top: 20px;
-        }
-
-        .pagination .page-item {
-            list-style: none;
-        }
-
-        .pagination .page-link {
-            padding: 8px 12px;
-            border-radius: 8px;
-            background: #f3f4f6;
-            color: #4b5563;
-            text-decoration: none;
-            transition: all 0.2s;
-        }
-
-        .pagination .page-link:hover {
-            background: #6c5ce7;
-            color: white;
-        }
-
-        .pagination .active .page-link {
-            background: #6c5ce7;
-            color: white;
-        }
-
-        @media (max-width: 640px) {
-            .stats-grid {
-                gap: 1rem;
-            }
-
-            .stat-card {
-                padding: 1rem;
-            }
-
-            .naima-navbar {
-                padding: 0.7rem 1rem;
-            }
-
-            .navbar-brand {
-                font-size: 1.2rem;
-            }
-        }
-
-        /* تنسيق رسائل الخطأ */
-        .error-text {
-            color: #dc2626;
-            font-size: 0.7rem;
-            margin-top: 0.3rem;
-            margin-right: 0.5rem;
-        }
-
-        .hidden {
-            display: none;
-        }
     </style>
-
     @stack('styles')
 </head>
 
@@ -419,56 +261,44 @@
 
     <!-- ========== الشريط الجانبي ========== -->
     <aside id="naimaSidebar" class="naima-sidebar">
-        <div class="flex items-center justify-between px-6 py-6 border-b border-white/20">
-            <div class="flex items-center gap-5">
-
-    <!-- صورة داخل دائرة -->
-    <div class="w-16 h-16 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center shadow-xl overflow-hidden">
-        <img src="{{ asset('img/logo2.png') }}" alt="شعار نعيما" class="w-full h-full object-cover">
-    </div>
-
-    <!-- اسم النظام -->
-    <div class="flex flex-col leading-tight">
-        <span class="text-7xl font-bold text-white" style="font-family: 'Aref Ruqaa', serif;">
-            نعيماً
-        </span>
-        <span class="text-7xl font-bold text-white" style="font-family: 'Aref Ruqaa', serif;">
-            لخدمات الحلاقة
-        </span>
-    </div>
-
-</div>
-
-
-
-            <i class="fas fa-times-circle text-white text-2xl cursor-pointer opacity-80 hover:opacity-100 transition close-sidebar-mobile"
+        <div class="relative flex flex-col items-center pt-8 pb-6 px-6 border-b border-white/20">
+            {{-- زر الإغلاق داخل الشريط الجانبي --}}
+            <i class="fas fa-times-circle text-white text-2xl cursor-pointer opacity-80 hover:opacity-100 transition absolute top-4 left-4"
                 id="closeSidebarMobile"></i>
+
+            {{-- الصورة --}}
+            <div class="w-28 h-28 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-xl overflow-hidden mb-4">
+                <img src="{{ asset('img/logo2.png') }}" alt="شعار نعيما" class="w-full h-full object-cover"
+                    onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\'fas fa-cut text-white text-4xl\'></i>'">
+            </div>
+
+            {{-- النص تحت الصورة --}}
+            <div class="text-center">
+                <h2 class="text-2xl font-bold text-white" style="font-family: 'Aref Ruqaa', serif;">نعيماً</h2>
+                <p class="text-sm text-white/70 mt-1">لخدمات الحلاقة</p>
+            </div>
         </div>
 
         <div class="flex-1 mt-4">
             <ul class="flex flex-col gap-1">
+                <li><a href="{{ route('admin.dashboard') }}" id="dashboardNavLink" class="sidebar-link"><i
+                            class="fas fa-chart-line"></i><span>الرئيسية</span></a>
+                </li>
+                <li><a href="{{ route('admin.center') }}" id="centersNavLink" class="sidebar-link"><i
+                            class="fas fa-store"></i><span>إدارة الصالونات</span></a>
+                </li>
                 <li>
-                    <a href="{{ route('admin.dashboard') }}" id="dashboardNavLink" class="sidebar-link">
-                        <i class="fas fa-chart-line"></i>
-                        <span>الرئيسية</span>
+                    <a href="{{ route('ads.index') }}" id="adsNavLink" class="sidebar-link">
+                        <i class="fas fa-bullhorn"></i>
+                        <span>إدارة الإعلانات</span>
                     </a>
                 </li>
-
-                <li>
-                    <a href="{{ route('admin.center') }}" id="centersNavLink" class="sidebar-link">
-                        <i class="fas fa-store"></i>
-                        <span>إدارة الصالونات</span>
-                    </a>
-                </li>
-
-                {{-- زر تسجيل الخروج --}}
                 <li class="mt-4 pt-2 border-t border-white/20">
                     <form action="{{ route('admin.logout') }}" method="POST" id="logoutForm">
                         @csrf
                         <button type="submit" class="sidebar-link w-full text-right"
                             style="background: transparent; width: 100%;">
-                            <i class="fas fa-sign-out-alt"></i>
-                            <span>تسجيل الخروج</span>
+                            <i class="fas fa-sign-out-alt"></i><span>تسجيل الخروج</span>
                         </button>
                     </form>
                 </li>
@@ -476,7 +306,7 @@
         </div>
     </aside>
 
-    <!-- زر التحكم بالشريط الجانبي -->
+    {{-- زر فتح الشريط الجانبي (مرة واحدة فقط) --}}
     <div id="sidebarToggleFloating" class="sidebar-ctrl-btn">
         <i class="fas fa-bars-staggered"></i>
     </div>
@@ -488,9 +318,7 @@
     <div class="main-content-area" id="mainContent">
         <div class="content-padding">
             @yield('content')
-            <div class="footer-note">
-                <i class="fas fa-heart text-rose-400"></i> نعيما - | 2025
-            </div>
+            <div class="footer-note"><i class="fas fa-heart text-rose-400"></i> نعيما - | 2025</div>
         </div>
     </div>
 
@@ -499,66 +327,85 @@
     <script src="{{ asset('assets/js/soft-ui-dashboard-tailwind.js?v=1.0.5') }}" async></script>
 
     <script>
-        // التحكم بالشريط الجانبي
+        // ========== التحكم بالشريط الجانبي ==========
         const sidebarElement = document.getElementById('naimaSidebar');
         const toggleFloatBtn = document.getElementById('sidebarToggleFloating');
         const closeMobileBtn = document.getElementById('closeSidebarMobile');
 
+        function isMobile() {
+            return window.innerWidth < 1280;
+        }
+
         function openSidebar() {
-            if(window.innerWidth < 1280) sidebarElement.classList.add('sidebar-visible');
-        }
-        function closeSidebarManual() {
-            if(window.innerWidth < 1280) sidebarElement.classList.remove('sidebar-visible');
-        }
-        function toggleSidebar() {
-            if(window.innerWidth < 1280) {
-                if(sidebarElement.classList.contains('sidebar-visible')) closeSidebarManual();
-                else openSidebar();
+            if (isMobile()) {
+                sidebarElement.classList.add('sidebar-visible');
+                document.body.style.overflow = 'hidden';
             }
         }
 
-        if(toggleFloatBtn) toggleFloatBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleSidebar();
-        });
-        if(closeMobileBtn) closeMobileBtn.addEventListener('click', () => closeSidebarManual());
+        function closeSidebar() {
+            if (isMobile()) {
+                sidebarElement.classList.remove('sidebar-visible');
+                document.body.style.overflow = '';
+            }
+        }
 
-        // إغلاق السايد بار عند النقر خارجها
+        function toggleSidebar() {
+            if (isMobile()) {
+                if (sidebarElement.classList.contains('sidebar-visible')) {
+                    closeSidebar();
+                } else {
+                    openSidebar();
+                }
+            }
+        }
+
+        // زر فتح الشريط
+        if (toggleFloatBtn) {
+            toggleFloatBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleSidebar();
+            });
+        }
+
+        // زر إغلاق الشريط
+        if (closeMobileBtn) {
+            closeMobileBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                closeSidebar();
+            });
+        }
+
+        // إغلاق عند النقر خارج الشريط
         document.addEventListener('click', function(event) {
-            const isMobile = window.innerWidth < 1280;
-            if(isMobile && sidebarElement && toggleFloatBtn) {
-                if(!sidebarElement.contains(event.target) && !toggleFloatBtn.contains(event.target) && sidebarElement.classList.contains('sidebar-visible')) {
-                    closeSidebarManual();
+            if (isMobile() && sidebarElement && toggleFloatBtn) {
+                if (!sidebarElement.contains(event.target) && !toggleFloatBtn.contains(event.target)) {
+                    if (sidebarElement.classList.contains('sidebar-visible')) {
+                        closeSidebar();
+                    }
                 }
             }
         });
 
-        // عند تغيير حجم الشاشة
+        // عند تغيير حجم النافذة
         window.addEventListener('resize', function() {
-            if(window.innerWidth >= 1280) {
+            if (window.innerWidth >= 1280) {
                 sidebarElement.classList.remove('sidebar-visible');
-                sidebarElement.style.transform = '';
-            } else {
-                if(!sidebarElement.classList.contains('sidebar-visible')) sidebarElement.style.transform = 'translateX(100%)';
-                else sidebarElement.style.transform = 'translateX(0)';
+                document.body.style.overflow = '';
             }
         });
 
-        // تفعيل الرابط النشط بناءً على URL الحالي
+        // تعيين الرابط النشط
         function setActiveLink() {
             const currentUrl = window.location.pathname;
             document.querySelectorAll('.sidebar-link').forEach(link => {
                 link.classList.remove('active-sidebar');
-                if(link.getAttribute('href') === currentUrl) {
+                if (link.getAttribute('href') === currentUrl) {
                     link.classList.add('active-sidebar');
                 }
             });
         }
-
-        // تهيئة الحالة الأولية للشريط الجانبي
-        if(window.innerWidth < 1280) sidebarElement.style.transform = 'translateX(100%)';
-        else sidebarElement.style.transform = 'translateX(0)';
-
         setActiveLink();
     </script>
 

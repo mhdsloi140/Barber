@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\UploadedFile;
-
+use App\Services\Notification\SalonNotificationService;
 class RegisterService
 {
     /**
@@ -86,7 +86,12 @@ class RegisterService
                         'working_hours' => $this->getWorkingHoursFormatted($salon),
                     ],
                 ];
-
+                try {
+                    $notificationService = app(SalonNotificationService::class);
+                    $notificationService->notifyAdminsNewSalon($salon);
+                } catch (\Exception $e) {
+                    Log::error('Failed to send Firebase notification: ' . $e->getMessage());
+                }
                 return AuthResult::success('تم إنشاء حساب الصالون بنجاح', $result, 201);
 
             });

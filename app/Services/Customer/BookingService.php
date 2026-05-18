@@ -11,7 +11,7 @@ use App\Services\AuthResult;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
-
+use App\Services\Notification\FirebaseNotificationService;
 class BookingService
 {
     /**
@@ -403,7 +403,12 @@ class BookingService
                 ]);
 
                 $appointment->load(['customer', 'barber', 'salon']);
-
+      try {
+                $notificationService = app(FirebaseNotificationService::class);
+                $notificationService->notifyNewAppointment($salon, $appointment);
+            } catch (\Exception $e) {
+                Log::error('Failed to send notification: ' . $e->getMessage());
+            }
                 return AuthResult::success('تم إنشاء الحجز بنجاح', [
                     'appointment' => [
                         'id' => $appointment->id,

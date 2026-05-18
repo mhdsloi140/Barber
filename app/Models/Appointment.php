@@ -78,6 +78,12 @@ class Appointment extends Model
     {
         return $this->belongsTo(User::class, 'cancelled_by');
     }
+       public function services()
+    {
+        return $this->belongsToMany(BarberService::class, 'appointment_services', 'appointment_id', 'service_id')
+            ->withPivot('price', 'duration_minutes')
+            ->withTimestamps();
+    }
 
     /**
      *  الحصول على جميع الخدمات (للدعم متعدد الخدمات)

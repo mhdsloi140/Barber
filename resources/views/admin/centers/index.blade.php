@@ -7,134 +7,134 @@
 <div id="centersDashboardView" class="page-transition"></div>
 
 <!-- جدول الصالونات -->
-<div class="bg-white rounded-3xl shadow-lg overflow-hidden border border-gray-100">
+<div class="bg-white rounded-2xl md:rounded-3xl shadow-lg overflow-hidden border border-gray-100">
 
-    <!-- Header -->
-
-    <!-- فلترة البحث -->
-    <div class="p-4 bg-gray-50 border-b border-gray-100">
+    <!-- فلترة البحث - متجاوبة مع الهواتف -->
+    <div class="p-3 md:p-4 bg-gray-50 border-b border-gray-100">
         <form method="GET" action="{{ route('admin.center') }}" id="filterForm">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <!-- البحث باسم الصالون -->
-                <div class="relative">
-                    <label class="block text-xs text-gray-500 mb-1">البحث باسم الصالون</label>
+            <div class="space-y-2 md:space-y-0 md:grid md:grid-cols-4 md:gap-4">
+                <!-- البحث -->
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1"> البحث</label>
                     <div class="relative">
                         <i
                             class="fas fa-search absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
                         <input type="text" name="search" value="{{ request('search') }}"
-                            class="w-full pr-10 pl-3 py-2 border border-gray-200 rounded-xl focus:border-purple-400 focus:outline-none transition"
-                            placeholder="ابحث باسم الصالون...">
+                            class="w-full pr-10 pl-3 py-2 text-sm border border-gray-200 rounded-xl focus:border-purple-400 focus:outline-none transition"
+                            placeholder="اسم الصالون...">
                     </div>
                 </div>
 
-                <!-- فلترة حسب الحالة -->
+                <!-- الحالة -->
                 <div>
-                    <label class="block text-xs text-gray-500 mb-1">الحالة</label>
+                    <label class="block text-xs text-gray-500 mb-1"> الحالة</label>
                     <select name="status"
-                        class="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-purple-400 focus:outline-none transition">
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:border-purple-400 focus:outline-none transition">
                         <option value="">الكل</option>
                         <option value="active" {{ request('status')=='active' ? 'selected' : '' }}>نشط</option>
                         <option value="inactive" {{ request('status')=='inactive' ? 'selected' : '' }}>غير نشط</option>
                     </select>
                 </div>
 
-                <!-- ترتيب حسب التاريخ -->
+                <!-- الترتيب -->
                 <div>
-                    <label class="block text-xs text-gray-500 mb-1">الترتيب حسب التاريخ</label>
+                    <label class="block text-xs text-gray-500 mb-1"> الترتيب</label>
                     <select name="sort"
-                        class="w-full px-3 py-2 border border-gray-200 rounded-xl focus:border-purple-400 focus:outline-none transition">
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:border-purple-400 focus:outline-none transition">
                         <option value="desc" {{ request('sort')=='desc' ? 'selected' : '' }}>الأحدث أولاً</option>
                         <option value="asc" {{ request('sort')=='asc' ? 'selected' : '' }}>الأقدم أولاً</option>
                     </select>
                 </div>
 
-                <!-- أزرار الإجراءات -->
-                <div class="flex items-end gap-4">
-                    <div class="flex items-end gap-6">
-                        <!-- زر بحث - أبيض -->
-                        <button type="submit"
-                            class="bg-white text-purple-700 border-2 border-purple-500 px-6 py-2.5 rounded-xl font-semibold hover:bg-purple-50 hover:shadow-lg transition-all duration-200 flex items-center gap-2">
-                            <i class="fas fa-search"></i> بحث
-                        </button>
+                <!-- الأزرار -->
+               <div class="flex gap-2 pt-5 md:pt-0">
+    <button type="submit"
+            style="flex: 1; background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; padding: 10px 12px; border-radius: 12px; font-weight: 600; border: none; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; box-shadow: 0 2px 5px rgba(124, 58, 237, 0.3);"
+            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 10px rgba(124, 58, 237, 0.4)';"
+            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 5px rgba(124, 58, 237, 0.3)';">
+        <i class="fas fa-search"></i> بحث
+    </button>
 
-                        <!-- زر إعادة تعيين - رمادي غامق -->
-                        <a href="{{ route('admin.center') }}"
-                            class="bg-gray-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-gray-700 transition-all duration-200 flex items-center gap-2">
-                            <i class="fas fa-undo-alt"></i> إعادة تعيين
-                        </a>
+    <a href="{{ route('admin.center') }}"
+       style="flex: 1; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: white; padding: 10px 12px; border-radius: 12px; font-weight: 600; text-decoration: none; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; box-shadow: 0 2px 5px rgba(107, 114, 128, 0.3);"
+       onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 10px rgba(107, 114, 128, 0.4)';"
+       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 5px rgba(107, 114, 128, 0.3)';">
+        <i class="fas fa-undo-alt"></i> مسح
+    </a>
 
-                        <!-- زر تحديث - أزرق غامق -->
-                        <button type="button" onclick="refreshSalonsTable()"
-                            class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-2.5 rounded-xl font-semibold hover:shadow-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center gap-2">
-                            <i class="fas fa-sync-alt"></i> تحديث
-                        </button>
-                    </div>
-                </div>
+    <button type="button" onclick="refreshSalonsTable()"
+            style="flex: 1; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; padding: 10px 12px; border-radius: 12px; font-weight: 600; border: none; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; box-shadow: 0 2px 5px rgba(37, 99, 235, 0.3);"
+            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 10px rgba(37, 99, 235, 0.4)';"
+            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 5px rgba(37, 99, 235, 0.3)';">
+        <i class="fas fa-sync-alt"></i> تحديث
+    </button>
+</div>
+            </div>
         </form>
     </div>
 
-    <!-- Table -->
-    <div class="p-4">
+    <!-- Table - متجاوب مع تمرير أفقي على الهواتف -->
+    <div class="p-2 md:p-4">
         <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-            <table class="w-full text-center">
-                <thead class="bg-gray-50 text-gray-600 text-sm">
+            <table class="w-full text-center min-w-[600px] md:min-w-0">
+                <thead class="bg-gray-50 text-gray-600 text-xs md:text-sm">
                     <tr>
-                        <th class="py-3 px-2">#</th>
-                        <th class="py-3 px-2">اسم الصالون</th>
-                        <th class="py-3 px-2">صاحب الصالون</th>
-                        <th class="py-3 px-2">رقم الهاتف</th>
-                        <th class="py-3 px-2">العنوان</th>
-                        <th class="py-3 px-2">صور</th>
-                        <th class="py-3 px-2">الحالة</th>
-                        <th class="py-3 px-2">حلاقين</th>
-                        <th class="py-3 px-2">تفاصيل</th>
+                        <th class="py-2 md:py-3 px-1 md:px-2">#</th>
+                        <th class="py-2 md:py-3 px-2 md:px-2">اسم الصالون</th>
+                        <th class="py-2 md:py-3 px-1 md:px-2">صاحب الصالون</th>
+                        <th class="py-2 md:py-3 px-1 md:px-2">رقم الهاتف</th>
+                        <th class="py-2 md:py-3 px-1 md:px-2">العنوان</th>
+                        <th class="py-2 md:py-3 px-1 md:px-2">الصور</th>
+                        <th class="py-2 md:py-3 px-1 md:px-2">الحالة</th>
+                        <th class="py-2 md:py-3 px-1 md:px-2">حلاقين</th>
+                        <th class="py-2 md:py-3 px-2 md:px-2">تفاصيل</th>
                     </tr>
                 </thead>
                 <tbody id="salonsTableBody">
                     @forelse($salons as $index => $salon)
-                    <tr class="border-b border-gray-100 hover:bg-purple-50 transition">
-                        <td class="py-3 px-2">{{ ($salons->currentPage() - 1) * $salons->perPage() + $index + 1 }}</td>
-                        <td class="py-3 px-2 font-semibold">
-                            <i class="fas fa-store text-purple-500 ml-2"></i>
-                            {{ $salon->name }}
+                    <tr class="border-b border-gray-100 hover:bg-purple-50 transition text-sm">
+                        <td class="py-2 md:py-3 px-1 md:px-2">{{ ($salons->currentPage() - 1) * $salons->perPage() +
+                            $index + 1 }}</td>
+                        <td class="py-2 md:py-3 px-2 md:px-2 font-semibold text-xs md:text-sm">
+                            <i class="fas fa-store text-purple-500 ml-1 md:ml-2"></i>
+                            {{ Str::limit($salon->name, 15) }}
                         </td>
-                        <td class="py-3 px-2">
-                            <div class="flex items-center justify-center gap-2">
-                                <i class="fas fa-user-circle text-gray-400"></i>
-                                {{ $salon->owner ? $salon->owner->name : 'غير معروف' }}
-                            </div>
+                        <td class="py-2 md:py-3 px-1 md:px-2 text-xs md:text-sm">
+                            {{ $salon->owner ? Str::limit($salon->owner->name, 12) : 'غير معروف' }}
                         </td>
-                        <td class="py-3 px-2 dir-ltr">{{ $salon->phone ?? '---' }}</td>
-                        <td class="py-3 px-2 max-w-[200px] truncate" title="{{ $salon->address }}">
+                        <td class="py-2 md:py-3 px-1 md:px-2 dir-ltr text-xs md:text-sm">{{ $salon->phone ?? '---' }}
+                        </td>
+                        <td class="py-2 md:py-3 px-1 md:px-2 max-w-[120px] md:max-w-[200px] truncate text-xs md:text-sm"
+                            title="{{ $salon->address }}">
                             <i class="fas fa-location-dot text-gray-400 ml-1"></i>
-                            {{ Str::limit($salon->address, 30) }}
+                            {{ Str::limit($salon->address, 15) }}
                         </td>
-                        <td class="py-3 px-2">
-                            <span class="inline-flex items-center gap-1 text-sm text-gray-600">
+                        <td class="py-2 md:py-3 px-1 md:px-2">
+                            <span class="inline-flex items-center gap-1 text-xs">
                                 <i class="fas fa-image text-blue-500"></i>
                                 {{ $salon->getMedia('salon_images')->count() }}
                             </span>
                         </td>
-                        <td class="py-3 px-2">
+                        <td class="py-2 md:py-3 px-1 md:px-2">
                             @if($salon->is_active)
-                            <span class="badge-status bg-green-100 text-green-700">
+                            <span class="badge-status bg-green-100 text-green-700 text-xs">
                                 <i class="fas fa-circle-check ml-1 text-xs"></i> نشط
                             </span>
                             @else
-                            <span class="badge-status bg-red-100 text-red-700">
+                            <span class="badge-status bg-red-100 text-red-700 text-xs">
                                 <i class="fas fa-circle-exclamation ml-1 text-xs"></i> غير نشط
                             </span>
                             @endif
                         </td>
-                        <td class="py-3 px-2">
-                            <span class="inline-flex items-center gap-1">
+                        <td class="py-2 md:py-3 px-1 md:px-2">
+                            <span class="inline-flex items-center gap-1 text-xs">
                                 <i class="fas fa-cut text-purple-500"></i>
                                 {{ $salon->barbers()->count() }}
                             </span>
                         </td>
-                        <td class="py-3 px-2">
-                            <button onclick="openModal({{ $salon->id }})" class="btn-action btn-view"
-                                title="عرض التفاصيل">
+                        <td class="py-2 md:py-3 px-2 md:px-2">
+                            <button onclick="openModal({{ $salon->id }})"
+                                class="btn-action btn-view text-xs md:text-sm">
                                 <i class="fas fa-eye"></i> عرض
                             </button>
                         </td>
@@ -158,12 +158,10 @@
     </div>
 </div>
 
-<!-- ========== موديل عرض التفاصيل (في منتصف الصفحة) ========== -->
+<!-- ========== موديل عرض التفاصيل (كما هو بدون تغيير) ========== -->
 <div id="salonModal" class="modal-overlay" style="display: none;">
     <div class="modal-container">
         <div class="modal-content">
-
-            <!-- Header Modal -->
             <div class="modal-header">
                 <div class="modal-header-content">
                     <div class="modal-icon">
@@ -179,9 +177,7 @@
                 </button>
             </div>
 
-            <!-- Body Modal -->
             <div class="modal-body">
-                <!-- معلومات الصالون -->
                 <div class="info-card">
                     <div class="card-header">
                         <div class="card-icon purple">
@@ -189,7 +185,6 @@
                         </div>
                         <h4 class="card-title">معلومات الصالون</h4>
                     </div>
-
                     <div class="card-body">
                         <div class="info-row">
                             <span class="info-label">اسم الصالون:</span>
@@ -218,8 +213,6 @@
                     </div>
                 </div>
 
-               
-                <!-- أزرار الإجراءات -->
                 <div class="actions-card">
                     <div class="card-header">
                         <div class="card-icon pink">
@@ -227,9 +220,7 @@
                         </div>
                         <h4 class="card-title">الإجراءات المتاحة</h4>
                     </div>
-
                     <div class="card-body">
-                        <!-- زر تغيير الحالة -->
                         <form action="" method="POST" id="toggleStatusForm">
                             @csrf
                             @method('PUT')
@@ -238,20 +229,12 @@
                                 <span id="toggleText"></span>
                             </button>
                         </form>
-
-                        <!-- مسافة بين الزرين -->
                         <div style="height: 12px;"></div>
-
-                        <!-- زر الحذف -->
                         <button type="button" onclick="showDeleteConfirmation()" class="action-btn delete-btn">
                             <i class="fas fa-trash-alt"></i>
                             حذف الصالون
                         </button>
-
-                        <!-- مسافة بين الزرين -->
                         <div style="height: 12px;"></div>
-
-                        <!-- زر عرض التفاصيل الكاملة -->
                         <a href="#" id="viewDetailsLink" class="action-btn details-btn">
                             <i class="fas fa-external-link-alt"></i>
                             عرض التفاصيل الكاملة
@@ -263,7 +246,7 @@
     </div>
 </div>
 
-<!-- ========== رسالة تأكيد الحذف ========== -->
+<!-- ========== موديل تأكيد الحذف ========== -->
 <div id="deleteConfirmation" class="delete-confirmation" style="display: none;">
     <div class="delete-confirmation-content">
         <div class="delete-icon">
@@ -290,7 +273,7 @@
 </div>
 
 <style>
-    /* Badge styles */
+    /* نفس الـ Styles الموجودة مع إضافة تجاوب للهواتف للموديل */
     .badge-status {
         padding: 5px 12px;
         border-radius: 60px;
@@ -330,18 +313,11 @@
         display: inline-block;
     }
 
-    .truncate {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 200px;
-    }
-
-    /* Pagination styles */
     .pagination {
         display: flex;
         justify-content: center;
         gap: 8px;
+        flex-wrap: wrap;
     }
 
     .pagination .page-item {
@@ -349,12 +325,20 @@
     }
 
     .pagination .page-link {
-        padding: 8px 12px;
+        padding: 6px 10px;
         border-radius: 8px;
         background: #f3f4f6;
         color: #4b5563;
         text-decoration: none;
         transition: all 0.2s;
+        font-size: 0.8rem;
+    }
+
+    @media (min-width: 768px) {
+        .pagination .page-link {
+            padding: 8px 12px;
+            font-size: 0.9rem;
+        }
     }
 
     .pagination .page-link:hover {
@@ -367,7 +351,7 @@
         color: white;
     }
 
-    /* ========== Modal Styles (Centered) ========== */
+    /* موديل متجاوب مع الهواتف */
     .modal-overlay {
         position: fixed;
         top: 0;
@@ -380,13 +364,45 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        padding: 0.5rem;
     }
 
     .modal-container {
         width: 100%;
         max-width: 500px;
-        margin: 1rem;
+        margin: 0.5rem;
         animation: modalFadeIn 0.2s ease-out;
+    }
+
+    @media (max-width: 640px) {
+        .modal-container {
+            max-width: 95%;
+            margin: 0.5rem;
+        }
+
+        .modal-body {
+            padding: 1rem;
+            max-height: 80vh;
+        }
+
+        .info-row {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.25rem;
+        }
+
+        .info-label {
+            font-size: 0.7rem;
+        }
+
+        .info-value {
+            font-size: 0.8rem;
+        }
+
+        .action-btn {
+            padding: 0.6rem 0.8rem;
+            font-size: 0.8rem;
+        }
     }
 
     .modal-content {
@@ -396,10 +412,9 @@
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
     }
 
-    /* Modal Header */
     .modal-header {
         background: linear-gradient(135deg, #6c5ce7, #a855f7);
-        padding: 1.25rem 1.5rem;
+        padding: 1rem 1.5rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -412,8 +427,8 @@
     }
 
     .modal-icon {
-        width: 48px;
-        height: 48px;
+        width: 40px;
+        height: 40px;
         background: rgba(255, 255, 255, 0.2);
         border-radius: 16px;
         display: flex;
@@ -421,30 +436,53 @@
         justify-content: center;
     }
 
+    @media (min-width: 768px) {
+        .modal-icon {
+            width: 48px;
+            height: 48px;
+        }
+
+        .modal-icon i {
+            font-size: 1.5rem;
+        }
+    }
+
     .modal-icon i {
-        font-size: 1.5rem;
+        font-size: 1.2rem;
         color: white;
     }
 
     .modal-title {
-        font-size: 1.25rem;
+        font-size: 1rem;
         font-weight: 800;
         color: white;
         margin: 0;
     }
 
+    @media (min-width: 768px) {
+        .modal-title {
+            font-size: 1.25rem;
+        }
+    }
+
     .modal-subtitle {
-        font-size: 0.7rem;
+        font-size: 0.6rem;
         color: rgba(255, 255, 255, 0.8);
         margin-top: 0.2rem;
+    }
+
+    @media (min-width: 768px) {
+        .modal-subtitle {
+            font-size: 0.7rem;
+        }
     }
 
     .modal-close-btn {
         background: rgba(255, 255, 255, 0.2);
         border: none;
-        width: 32px;
-        height: 32px;
-        border-radius: 12px;
+        width: 28px;
+        height: 28px;
+        border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -453,19 +491,26 @@
         color: white;
     }
 
-    .modal-close-btn:hover {
-        background: rgba(255, 255, 255, 0.3);
-        transform: scale(1.05);
+    @media (min-width: 768px) {
+        .modal-close-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 12px;
+        }
     }
 
-    /* Modal Body */
     .modal-body {
-        padding: 1.5rem;
+        padding: 1rem;
         max-height: 70vh;
         overflow-y: auto;
     }
 
-    /* Cards inside modal */
+    @media (min-width: 768px) {
+        .modal-body {
+            padding: 1.5rem;
+        }
+    }
+
     .info-card,
     .actions-card {
         background: #f8fafc;
@@ -478,17 +523,38 @@
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        padding: 0.75rem 1rem;
+        padding: 0.6rem 1rem;
         border-bottom: 1px solid #e2e8f0;
     }
 
+    @media (min-width: 768px) {
+        .card-header {
+            padding: 0.75rem 1rem;
+        }
+    }
+
     .card-icon {
-        width: 28px;
-        height: 28px;
+        width: 24px;
+        height: 24px;
         border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
+    }
+
+    .card-icon i {
+        font-size: 0.8rem;
+    }
+
+    @media (min-width: 768px) {
+        .card-icon {
+            width: 28px;
+            height: 28px;
+        }
+
+        .card-icon i {
+            font-size: 0.9rem;
+        }
     }
 
     .card-icon.purple {
@@ -502,23 +568,42 @@
     }
 
     .card-title {
-        font-size: 0.9rem;
+        font-size: 0.8rem;
         font-weight: 700;
         color: #1e293b;
         margin: 0;
     }
 
-    .card-body {
-        padding: 1rem;
+    @media (min-width: 768px) {
+        .card-title {
+            font-size: 0.9rem;
+        }
     }
 
-    /* Info rows */
+    .card-body {
+        padding: 0.8rem;
+    }
+
+    @media (min-width: 768px) {
+        .card-body {
+            padding: 1rem;
+        }
+    }
+
     .info-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0.5rem 0;
+        padding: 0.4rem 0;
         border-bottom: 1px dashed #e2e8f0;
+    }
+
+    @media (max-width: 640px) {
+        .info-row {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.25rem;
+        }
     }
 
     .info-row:last-child {
@@ -526,23 +611,34 @@
     }
 
     .info-label {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         color: #64748b;
     }
 
+    @media (min-width: 768px) {
+        .info-label {
+            font-size: 0.75rem;
+        }
+    }
+
     .info-value {
-        font-size: 0.85rem;
+        font-size: 0.75rem;
         font-weight: 600;
         color: #1e293b;
     }
 
-    /* Action buttons */
+    @media (min-width: 768px) {
+        .info-value {
+            font-size: 0.85rem;
+        }
+    }
+
     .action-btn {
         width: 100%;
-        padding: 0.7rem 1rem;
+        padding: 0.6rem 0.8rem;
         border-radius: 14px;
         font-weight: 600;
-        font-size: 0.85rem;
+        font-size: 0.75rem;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -552,6 +648,13 @@
         border: none;
         margin-bottom: 0.75rem;
         text-decoration: none;
+    }
+
+    @media (min-width: 768px) {
+        .action-btn {
+            padding: 0.7rem 1rem;
+            font-size: 0.85rem;
+        }
     }
 
     .action-btn:last-child {
@@ -589,7 +692,6 @@
         box-shadow: 0 8px 20px rgba(220, 38, 38, 0.3);
     }
 
-    /* Animation */
     @keyframes modalFadeIn {
         from {
             opacity: 0;
@@ -602,7 +704,6 @@
         }
     }
 
-    /* Scrollbar */
     .modal-body::-webkit-scrollbar {
         width: 5px;
     }
@@ -617,7 +718,6 @@
         border-radius: 10px;
     }
 
-    /* ========== Delete Confirmation Modal Styles ========== */
     .delete-confirmation {
         position: fixed;
         top: 0;
@@ -637,14 +737,39 @@
         border-radius: 28px;
         max-width: 400px;
         width: 90%;
-        padding: 1.8rem;
+        padding: 1.5rem;
         text-align: center;
         animation: modalFadeIn 0.2s ease-out;
     }
 
+    @media (max-width: 640px) {
+        .delete-confirmation-content {
+            padding: 1.2rem;
+            width: 95%;
+        }
+
+        .delete-title {
+            font-size: 1.2rem;
+        }
+
+        .delete-message {
+            font-size: 0.85rem;
+        }
+
+        .delete-warning {
+            font-size: 0.7rem;
+        }
+
+        .delete-confirm-btn,
+        .delete-cancel-btn {
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+        }
+    }
+
     .delete-icon {
-        width: 70px;
-        height: 70px;
+        width: 60px;
+        height: 60px;
         background: #fee2e2;
         border-radius: 50%;
         display: flex;
@@ -653,21 +778,38 @@
         margin: 0 auto 1rem;
     }
 
+    @media (min-width: 768px) {
+        .delete-icon {
+            width: 70px;
+            height: 70px;
+        }
+
+        .delete-icon i {
+            font-size: 2.5rem;
+        }
+    }
+
     .delete-icon i {
-        font-size: 2.5rem;
+        font-size: 2rem;
         color: #dc2626;
     }
 
     .delete-title {
-        font-size: 1.4rem;
+        font-size: 1.2rem;
         font-weight: 800;
         color: #1e293b;
         margin-bottom: 0.5rem;
     }
 
+    @media (min-width: 768px) {
+        .delete-title {
+            font-size: 1.4rem;
+        }
+    }
+
     .delete-message {
         color: #475569;
-        font-size: 0.95rem;
+        font-size: 0.85rem;
         margin-bottom: 1rem;
     }
 
@@ -676,7 +818,7 @@
         color: #b45309;
         padding: 0.8rem;
         border-radius: 16px;
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         margin-bottom: 1.5rem;
         text-align: right;
         line-height: 1.6;
@@ -691,7 +833,7 @@
     .delete-confirm-btn {
         background: linear-gradient(135deg, #dc2626, #b91c1c);
         border: none;
-        padding: 0.6rem 1.2rem;
+        padding: 0.5rem 1rem;
         border-radius: 40px;
         color: white;
         font-weight: 600;
@@ -702,6 +844,12 @@
         gap: 0.5rem;
     }
 
+    @media (min-width: 768px) {
+        .delete-confirm-btn {
+            padding: 0.6rem 1.2rem;
+        }
+    }
+
     .delete-confirm-btn:hover {
         background: linear-gradient(135deg, #ef4444, #dc2626);
         transform: scale(1.02);
@@ -710,7 +858,7 @@
     .delete-cancel-btn {
         background: #e2e8f0;
         border: none;
-        padding: 0.6rem 1.2rem;
+        padding: 0.5rem 1rem;
         border-radius: 40px;
         color: #475569;
         font-weight: 600;
@@ -721,6 +869,12 @@
         gap: 0.5rem;
     }
 
+    @media (min-width: 768px) {
+        .delete-cancel-btn {
+            padding: 0.6rem 1.2rem;
+        }
+    }
+
     .delete-cancel-btn:hover {
         background: #cbd5e1;
         transform: scale(1.02);
@@ -728,18 +882,15 @@
 </style>
 
 <script>
+    // جميع الـ JavaScript كما هو دون تغيير
     let currentSalonId = null;
     let currentSalonStatus = null;
 
-    // فتح الموديل
     function openModal(salonId) {
         currentSalonId = salonId;
-
-        // عرض loading
         document.getElementById('modalSalonName').innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
         document.getElementById('salonModal').style.display = 'flex';
 
-        // إرسال طلب AJAX لجلب البيانات
         fetch(`/admin/centers/${salonId}/json`, {
             headers: {
                 'Accept': 'application/json',
@@ -751,22 +902,14 @@
             if (data.success) {
                 const salon = data.salon;
                 currentSalonStatus = salon.is_active;
-
-                // تعبئة البيانات
                 document.getElementById('modalSalonName').innerText = salon.name;
                 document.getElementById('modalName').innerText = salon.name;
                 document.getElementById('modalOwner').innerText = salon.owner?.name || 'غير معروف';
                 document.getElementById('modalPhone').innerText = salon.phone || '---';
                 document.getElementById('modalAddress').innerText = salon.address || 'غير محدد';
                 document.getElementById('modalBarbersCount').innerText = salon.barbers_count || 0;
-
-                // تحديث حالة الصالون
                 updateStatusBadge(salon.is_active);
-
-                // تحديث زر تغيير الحالة
                 updateToggleButton(salon.is_active, salonId);
-
-                // تحديث رابط عرض التفاصيل
                 const viewLink = document.getElementById('viewDetailsLink');
                 viewLink.href = `/admin/centers/${salonId}`;
             } else {
@@ -781,17 +924,14 @@
         });
     }
 
-    // عرض رسالة تأكيد الحذف
     function showDeleteConfirmation() {
         if (currentSalonId) {
             document.getElementById('deleteConfirmation').style.display = 'flex';
         }
     }
 
-    // تأكيد الحذف
     function confirmDeleteAction() {
         if (!currentSalonId) return;
-
         fetch(`/admin/centers/${currentSalonId}`, {
             method: 'DELETE',
             headers: {
@@ -803,10 +943,8 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // إخفاء رسالة التأكيد والموديل
                 cancelDelete();
                 closeModal();
-                // إعادة تحميل الصفحة
                 location.reload();
             } else {
                 alert('حدث خطأ أثناء حذف الصالون: ' + (data.message || 'خطأ غير معروف'));
@@ -820,12 +958,10 @@
         });
     }
 
-    // إلغاء الحذف
     function cancelDelete() {
         document.getElementById('deleteConfirmation').style.display = 'none';
     }
 
-    // تحديث عرض حالة الصالون
     function updateStatusBadge(isActive) {
         const badgeContainer = document.getElementById('currentStatusBadge');
         if (isActive) {
@@ -835,13 +971,11 @@
         }
     }
 
-    // تحديث زر تغيير الحالة
     function updateToggleButton(isActive, salonId) {
         const toggleBtn = document.getElementById('toggleStatusBtn');
         const toggleIcon = document.getElementById('toggleIcon');
         const toggleText = document.getElementById('toggleText');
         const toggleForm = document.getElementById('toggleStatusForm');
-
         if (isActive) {
             toggleBtn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
             toggleIcon.className = 'fas fa-ban';
@@ -855,13 +989,11 @@
         }
     }
 
-    // إغلاق الموديل
     function closeModal() {
         document.getElementById('salonModal').style.display = 'none';
         currentSalonId = null;
     }
 
-    // إغلاق الموديل عند الضغط على ESC
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             if (document.getElementById('deleteConfirmation').style.display === 'flex') {
@@ -872,14 +1004,12 @@
         }
     });
 
-    // إغلاق الموديل عند النقر خارج المحتوى
     document.getElementById('salonModal').addEventListener('click', function(e) {
         if (e.target === this) {
             closeModal();
         }
     });
 
-    // إغلاق رسالة التأكيد عند النقر خارج المحتوى
     document.getElementById('deleteConfirmation').addEventListener('click', function(e) {
         if (e.target === this) {
             cancelDelete();
@@ -893,7 +1023,6 @@
     let currentStatus = '';
     let currentSort = 'desc';
 
-    // حفظ قيم الفلترة الحالية
     function saveFilterValues() {
         currentSearch = document.querySelector('input[name="search"]')?.value || '';
         currentStatus = document.querySelector('select[name="status"]')?.value || '';
@@ -901,24 +1030,12 @@
         currentPage = document.querySelector('.pagination .active .page-link')?.innerText || 1;
     }
 
-    // تحديث الجدول بالكامل
     function refreshSalonsTable() {
         saveFilterValues();
-
-        // إظهار مؤشر التحميل
         const tbody = document.getElementById('salonsTableBody');
         if (tbody) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="10" class="py-8 text-center">
-                        <i class="fas fa-spinner fa-spin text-purple-500 text-2xl"></i>
-                        <p class="text-gray-400 mt-2">جاري تحديث البيانات...</p>
-                    </td>
-                </tr>
-            `;
+            tbody.innerHTML = `<tr><td colspan="10" class="py-8 text-center"><i class="fas fa-spinner fa-spin text-purple-500 text-2xl"></i><p class="text-gray-400 mt-2">جاري تحديث البيانات...</p></td></td>`;
         }
-
-        // إرسال طلب AJAX
         fetch(`{{ route('admin.center') }}?search=${encodeURIComponent(currentSearch)}&status=${currentStatus}&sort=${currentSort}&page=${currentPage}&ajax=1`, {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
@@ -928,20 +1045,15 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // تحديث محتوى الجدول
                 if (data.html) {
                     tbody.innerHTML = data.html;
                 }
-
-                // تحديث روابط التصفح
                 if (data.pagination) {
                     const paginationContainer = document.querySelector('.mt-4');
                     if (paginationContainer) {
                         paginationContainer.innerHTML = data.pagination;
                     }
                 }
-
-                // عرض رسالة نجاح
                 showToast('تم تحديث البيانات بنجاح', 'success');
             } else {
                 showToast('حدث خطأ في تحديث البيانات', 'error');
@@ -953,31 +1065,24 @@
         });
     }
 
-    // دالة عرض رسالة منبثقة
     function showToast(message, type = 'success') {
-        // إنشاء عنصر التوست
         const toast = document.createElement('div');
         toast.className = `fixed bottom-5 left-5 z-50 px-4 py-2 rounded-lg text-white shadow-lg transition-all duration-300 ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
         toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} ml-2"></i> ${message}`;
         document.body.appendChild(toast);
-
-        // إخفاء التوست بعد 3 ثوانٍ
         setTimeout(() => {
             toast.style.opacity = '0';
             setTimeout(() => toast.remove(), 300);
         }, 3000);
     }
 
-    // تحديث تلقائي كل 30 ثانية
     let autoRefreshInterval = null;
-
     function startAutoRefresh() {
         if (autoRefreshInterval) clearInterval(autoRefreshInterval);
         autoRefreshInterval = setInterval(() => {
             refreshSalonsTable();
-        }, 30000); // 30 ثانية
+        }, 30000);
     }
-
     function stopAutoRefresh() {
         if (autoRefreshInterval) {
             clearInterval(autoRefreshInterval);
@@ -985,17 +1090,14 @@
         }
     }
 
-    // بدء التحديث التلقائي عند تحميل الصفحة
     document.addEventListener('DOMContentLoaded', function() {
         startAutoRefresh();
     });
 
-    // إيقاف التحديث عند مغادرة الصفحة
     window.addEventListener('beforeunload', function() {
         stopAutoRefresh();
     });
 
-    // إضافة مستمع لأزرار التصفح بعد تحميلها
     document.addEventListener('click', function(e) {
         if (e.target.closest('.pagination a')) {
             e.preventDefault();
@@ -1010,7 +1112,6 @@
         }
     });
 
-    // تحديث الفلترة عند الضغط على زر البحث
     const filterForm = document.getElementById('filterForm');
     if (filterForm) {
         filterForm.addEventListener('submit', function(e) {
@@ -1021,6 +1122,5 @@
         });
     }
 </script>
-
 
 @endsection

@@ -8,7 +8,7 @@ use App\Models\BarberService;
 use App\Services\AuthResult;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-
+use App\Services\Notification\FirebaseNotificationService;
 class BarberServiceService
 {
     /**
@@ -25,7 +25,7 @@ class BarberServiceService
 
                 $service = BarberService::create([
                     'barber_id' => $barber->id,
-                  //  'service_id' => $data['service_id'] ?? null,
+                    //  'service_id' => $data['service_id'] ?? null,
                     'name' => $data['name'],
                     // 'name_ar' => $data['name_ar'] ?? null,
                     'description' => $data['description'] ?? null,
@@ -35,7 +35,12 @@ class BarberServiceService
                     'is_active' => $data['is_active'] ?? true,
                 ]);
 
-
+                try {
+                    $notificationService = app(FirebaseNotificationService::class);
+                    $notificationService->notifyNewService($salon, $service);
+                } catch (\Exception $e) {
+                    Log::error('Failed to send notification: ' . $e->getMessage());
+                }
                 return AuthResult::success(
                     'تم إضافة الخدمة بنجاح',
                     $service,
@@ -58,56 +63,56 @@ class BarberServiceService
      * جلب جميع خدمات الحلاق
      */
 
-public function getServices(User $barber): AuthResult
-{
-    try {
-        if (!$barber->hasRole('barber')) {
-            return AuthResult::error('هذا المستخدم ليس حلاقاً', null, 403);
-        }
+    public function getServices(User $barber): AuthResult
+    {
+        try {
+            if (!$barber->hasRole('barber')) {
+                return AuthResult::error('هذا المستخدم ليس حلاقاً', null, 403);
+            }
 
-        $services = BarberService::where('barber_id', $barber->id)
-            ->orderBy('created_at', 'desc')
-            ->get();
+            $services = BarberService::where('barber_id', $barber->id)
+                ->orderBy('created_at', 'desc')
+                ->get();
 
-        // إحصائيات الخدمات
-        $statistics = [
-            'total' => $services->count(),                           // إجمالي الخدمات
-            'active' => $services->where('is_active', true)->count(),   // الخدمات النشطة
-            'inactive' => $services->where('is_active', false)->count(), // الخدمات الموقفة
-        ];
-
-        // تنسيق البيانات
-        $formattedServices = $services->map(function ($service) {
-            return [
-                'id' => $service->id,
-                'name' => $service->name,
-                'description' => $service->description,
-                'price' => (float) $service->price,
-                'duration_minutes' => (int) $service->duration_minutes,
-                'is_active' => (bool) $service->is_active,
-                'status_text' => $service->is_active ? 'نشط' : 'موقوف',
-                'created_at' => $service->created_at,
-                'updated_at' => $service->updated_at,
+            // إحصائيات الخدمات
+            $statistics = [
+                'total' => $services->count(),                           // إجمالي الخدمات
+                'active' => $services->where('is_active', true)->count(),   // الخدمات النشطة
+                'inactive' => $services->where('is_active', false)->count(), // الخدمات الموقفة
             ];
-        });
 
-        $response = [
-            'statistics' => $statistics,
-            'services' => $formattedServices,
-        ];
+            // تنسيق البيانات
+            $formattedServices = $services->map(function ($service) {
+                return [
+                    'id' => $service->id,
+                    'name' => $service->name,
+                    'description' => $service->description,
+                    'price' => (float) $service->price,
+                    'duration_minutes' => (int) $service->duration_minutes,
+                    'is_active' => (bool) $service->is_active,
+                    'status_text' => $service->is_active ? 'نشط' : 'موقوف',
+                    'created_at' => $service->created_at,
+                    'updated_at' => $service->updated_at,
+                ];
+            });
 
-        return AuthResult::success('تم جلب الخدمات بنجاح', $response);
+            $response = [
+                'statistics' => $statistics,
+                'services' => $formattedServices,
+            ];
 
-    } catch (\Exception $e) {
-        Log::error('Get barber services error: ' . $e->getMessage());
+            return AuthResult::success('تم جلب الخدمات بنجاح', $response);
 
-        return AuthResult::error(
-            'حدث خطأ أثناء جلب الخدمات',
-            config('app.debug') ? $e->getMessage() : null,
-            500
-        );
+        } catch (\Exception $e) {
+            Log::error('Get barber services error: ' . $e->getMessage());
+
+            return AuthResult::error(
+                'حدث خطأ أثناء جلب الخدمات',
+                config('app.debug') ? $e->getMessage() : null,
+                500
+            );
+        }
     }
-}
 
     /**
      * جلب خدمة محددة
@@ -169,7 +174,7 @@ public function getServices(User $barber): AuthResult
                     'name' => $data['name'] ?? $service->name,
                     // 'name_ar' => $data['name_ar'] ?? $service->name_ar,
                     'description' => $data['description'] ?? $service->description,
-                   // 'description_ar' => $data['description_ar'] ?? $service->description_ar,
+                    // 'description_ar' => $data['description_ar'] ?? $service->description_ar,
                     'price' => $data['price'] ?? $service->price,
                     'duration_minutes' => $data['duration_minutes'] ?? $service->duration_minutes,
                     'is_active' => $data['is_active'] ?? $service->is_active,

@@ -148,7 +148,7 @@ class User extends Authenticatable implements HasMedia
     }
 
 
-   
+
 
     public function isSalonOwner(): bool
     {
@@ -190,5 +190,14 @@ class User extends Authenticatable implements HasMedia
             return $media->getUrl('thumb');
         }
         return null;
+    }
+    public function deviceTokens()
+    {
+        return $this->hasMany(DeviceToken::class);
+    }
+
+    public function activeDeviceTokens()
+    {
+        return $this->hasMany(DeviceToken::class)->where('is_active', true);
     }
 }
