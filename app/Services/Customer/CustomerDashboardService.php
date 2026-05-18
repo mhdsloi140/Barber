@@ -5,6 +5,7 @@ namespace App\Services\Customer;
 
 use App\Models\User;
 use App\Models\Appointment;
+use App\Models\Advertisement;
 use App\Services\AuthResult;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -12,7 +13,7 @@ use Carbon\Carbon;
 class CustomerDashboardService
 {
     /**
-     * جلب الحجوزات والمفضلة للزبون
+     * جلب الحجوزات والمفضلة والاعلانات للزبون
      */
     public function getDashboard(User $customer): AuthResult
     {
@@ -33,11 +34,15 @@ class CustomerDashboardService
             // 4. الحلاقين المفضلين
             $favoriteBarbers = $this->getFavoriteBarbers($customer);
 
+            // 5. الاعلانات النشطة
+            $activeAds = $this->getActiveAds();
+
             $data = [
                 'upcoming_appointments' => $upcomingAppointments,
                 'past_appointments' => $pastAppointments,
                 'favorite_salons' => $favoriteSalons,
                 'favorite_barbers' => $favoriteBarbers,
+                'active_ads' => $activeAds,
             ];
 
             return AuthResult::success('تم جلب البيانات بنجاح', $data);
@@ -143,6 +148,56 @@ class CustomerDashboardService
         return $favorites;
     }
 
+    /**
+     * الاعلانات النشطة
+     */
+   /**
+ * الاعلانات النشطة
+ */
+private function getActiveAds()
+{
+    $ads = Advertisement::where('is_active', true)
+        ->where(function ($query) {
+            $query->whereNull('starts_at')
+                  ->orWhere('starts_at', '<=', now());
+        })
+        ->where(function ($query) {
+            $query->whereNull('ends_at')
+                  ->orWhere('ends_at', '>=', now());
+        })
+        ->orderBy('sort_order', 'asc')
+        ->get();
+
+    // جلب الصور لكل إعلان
+    $ads->load('media'); // تحميل علاقة media مسبقاً
+
+    return $ads->map(function ($ad) {
+        $images = collect();
+
+        // محاولة جلب الصور من Collection 'ad_images'
+        $mediaItems = $ad->getMedia('ad_images');
+
+        if ($mediaItems->isEmpty()) {
+            // محاولة جلب من collection الافتراضي
+            $mediaItems = $ad->getMedia();
+        }
+
+        foreach ($mediaItems as $image) {
+            $images->push([
+                'id' => $image->id,
+                'url' => $image->getUrl(),
+                'thumb' => $image->getUrl('thumb'),
+                'medium' => $image->getUrl('medium'),
+            ]);
+        }
+
+        return [
+            'id' => $ad->id,
+            'images' => $images,
+            'first_image' => $images->isNotEmpty() ? $images->first()['url'] : null,
+        ];
+    });
+}
     /**
      * تنسيق بيانات الحجز
      */
