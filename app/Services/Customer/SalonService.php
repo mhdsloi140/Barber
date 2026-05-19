@@ -408,7 +408,7 @@ class SalonService
             return [
                 'name' => $service->name,
                 'price' => $service->price,
-                'duration' => $service->duration_minutes,
+                'duration_minutes' => $service->duration_minutes,
                 'description' => $service->description
             ];
         })->toArray();
