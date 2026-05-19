@@ -38,7 +38,7 @@ class CustomerDashboardService
             $activeAds = $this->getActiveAds();
 
             $data = [
-                'upcoming_appointments' => $upcomingAppointments,
+                'appointments' => $upcomingAppointments,
                 'past_appointments' => $pastAppointments,
                 'favorite_salons' => $favoriteSalons,
                 'favorite_barbers' => $favoriteBarbers,
