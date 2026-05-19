@@ -38,7 +38,7 @@
         Route::put('/admin/centers/{id}/activate', [CentersController::class, 'activate'])->name('admin.centers.activate');
         Route::put('/admin/centers/{id}/deactivate', [CentersController::class, 'deactivate'])->name('admin.centers.deactivate');
         Route::get('/admin/centers/{id}/json', [CentersController::class, 'getSalonJson'])->name('admin.centers.json');
-        Route::get('/admin/centers/{id}', [CentersController::class, 'show'])->name('admin.centers.show');
+        // Route::get('/admin/centers/{id}', [CentersController::class, 'show'])->name('admin.centers.show');
         Route::delete('/admin/centers/{id}', [CentersController::class, 'destroy'])->name('admin.centers.destroy');
         Route::put('/admin/profile', [ProfileController::class, 'update'])->name('admin.profile.update');
 
