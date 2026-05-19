@@ -393,24 +393,30 @@ class SalonService
     /**
      * جلب خدمات الصالون
      */
-    private function getSalonServices(Salon $salon): array
-    {
-        $barberIds = $salon->barbers()->pluck('users.id')->toArray();
+private function getSalonServices(Salon $salon): array
+{
+    $barberIds = $salon->barbers()->pluck('users.id')->toArray();
 
-        $services = \App\Models\BarberService::whereIn('barber_id', $barberIds)
-            ->where('is_active', true)
-            ->select('name', 'price', 'description', 'duration_minutes')
-            ->distinct('name')
-            ->limit(10)
-            ->get();
+    // جلب جميع الخدمات بدون group by
+    $services = \App\Models\BarberService::whereIn('barber_id', $barberIds)
+        ->where('is_active', true)
+        ->select('id', 'name', 'price', 'description', 'duration_minutes')
+        ->orderBy('name', 'asc')
+        ->get();
 
-        return $services->map(function($service) {
-            return [
-                'name' => $service->name,
-                'price' => $service->price,
-                'duration_minutes' => $service->duration_minutes,
-                'description' => $service->description
-            ];
-        })->toArray();
-    }
+    // تجميع حسب الاسم وأخذ أول خدمة من كل مجموعة
+    $uniqueServices = $services->groupBy('name')->map(function ($group) {
+        return $group->first();
+    })->take(10);
+
+    return $uniqueServices->map(function($service) {
+        return [
+            'id' => $service->id,
+            'name' => $service->name,
+            'price' => (float) $service->price,
+            'duration_minutes' => $service->duration_minutes,
+            'description' => $service->description ?? ''
+        ];
+    })->values()->toArray();
+}
 }
