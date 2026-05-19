@@ -397,7 +397,7 @@ private function getSalonServices(Salon $salon): array
 {
     $barberIds = $salon->barbers()->pluck('users.id')->toArray();
 
-    // جلب جميع الخدمات بدون group by
+
     $services = \App\Models\BarberService::whereIn('barber_id', $barberIds)
         ->where('is_active', true)
         ->select('id', 'name', 'price', 'description', 'duration_minutes')
