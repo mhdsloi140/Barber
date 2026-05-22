@@ -34,12 +34,14 @@ class SalonController extends Controller
      * عرض صالون محدد
      * GET /api/customer/salons/{id}
      */
-    public function show($id, SalonShowRequest $request)
+   public function show($id, Request $request)
     {
         $result = $this->salonService->getSalon(
             $id,
             $request->input('latitude'),
-            $request->input('longitude')
+            $request->input('longitude'),
+            $request->input('date'),        // التاريخ المطلوب
+            $request->input('service_id')   // معرف الخدمة (اختياري)
         );
 
         return response()->json([
