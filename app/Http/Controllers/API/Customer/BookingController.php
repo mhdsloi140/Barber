@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Customer;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\StoreBookingRequest;
+use App\Http\Requests\Customer\UpdateAppointmentRequest;
 use App\Services\Customer\BookingService;
 use Illuminate\Http\Request;
 
@@ -67,6 +68,33 @@ class BookingController extends Controller
     public function store(StoreBookingRequest $request)
     {
         $result = $this->bookingService->storeBooking($request->validated());
+
+        return response()->json([
+            'success' => $result->success,
+            'message' => $result->message,
+            'data' => $result->data,
+        ], $result->statusCode);
+    }
+
+    /**
+     * تعديل حجز موجود
+     * PUT /api/customer/appointments/{id}
+     */
+    public function update(UpdateAppointmentRequest $request, $id)
+    {
+        // التحقق من وجود بيانات للتحديث
+        if (!$request->hasAnyUpdateData()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'لم يتم إرسال أي بيانات للتحديث',
+            ], 400);
+        }
+
+        $result = $this->bookingService->updateAppointment(
+            auth()->user(),
+            (int) $id,
+            $request->getUpdateData()
+        );
 
         return response()->json([
             'success' => $result->success,

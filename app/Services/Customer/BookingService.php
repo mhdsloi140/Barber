@@ -564,7 +564,7 @@ class BookingService
     /**
      * التحقق من إمكانية إلغاء الحجز
      */
- 
+
 private function canCancelAppointment(Appointment $appointment): bool
 {
     if (!in_array($appointment->status, ['pending', 'confirmed'])) {
@@ -738,8 +738,9 @@ public function getCompletedAppointments(User $customer): AuthResult
         return AuthResult::error('حدث خطأ أثناء جلب الحجوزات المنتهية', $e->getMessage(), 500);
     }
 }
-    /**
-     * إلغاء حجز من قبل الزبون
+ 
+     /**
+     * إلغاء حجز من قبل الزبون (محسن)
      */
     public function cancelAppointment(User $customer, int $appointmentId, ?string $reason = null): AuthResult
     {
@@ -754,31 +755,259 @@ public function getCompletedAppointments(User $customer): AuthResult
                     return AuthResult::error('الحجز غير موجود', null, 404);
                 }
 
+                // التحقق من أن الحجز قابل للإلغاء
                 if (!in_array($appointment->status, ['pending', 'confirmed'])) {
-                    return AuthResult::error('لا يمكن إلغاء هذا الحجز، حالته الحالية: ' . $appointment->status, null, 400);
+                    $statusText = $this->getStatusText($appointment->status);
+                    return AuthResult::error("لا يمكن إلغاء هذا الحجز، حالته الحالية: {$statusText}", null, 400);
                 }
 
+                // التحقق من أن الموعد لم يبدأ
                 $appointmentDateTime = Carbon::parse($appointment->appointment_date . ' ' . $appointment->appointment_time);
                 if ($appointmentDateTime->isPast()) {
                     return AuthResult::error('لا يمكن إلغاء موعد بدأ بالفعل', null, 400);
                 }
 
+                // حساب وقت الإلغاء بالنسبة للموعد
+                $hoursDiff = now()->diffInHours($appointmentDateTime, false);
+
+                // حفظ معلومات الإلغاء
                 $appointment->status = 'cancelled';
                 $appointment->cancellation_reason = $reason ?? 'تم الإلغاء من قبل العميل';
                 $appointment->cancelled_by = $customer->id;
                 $appointment->cancelled_at = now();
                 $appointment->save();
 
+                // إرسال إشعار للحلاق
+                // try {
+                //     $notificationService = app(FirebaseNotificationService::class);
+                //     $notificationService->sendToUser(
+                //         $appointment->barber,
+                //         ' تم إلغاء حجز',
+                //         "تم إلغاء حجز العميل {$customer->name}",
+                //         ['type' => 'appointment_cancelled', 'appointment_id' => $appointment->id]
+                //     );
+                // } catch (\Exception $e) {
+                //     Log::error('Failed to send cancellation notification: ' . $e->getMessage());
+                // }
+
                 return AuthResult::success('تم إلغاء الحجز بنجاح', [
                     'id' => $appointment->id,
                     'status' => $appointment->status,
+                    'status_text' => $this->getStatusText($appointment->status),
                     'cancelled_at' => $appointment->cancelled_at,
+                    'cancellation_reason' => $appointment->cancellation_reason,
                 ]);
 
             });
         } catch (\Exception $e) {
             Log::error('Cancel appointment error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء إلغاء الحجز', $e->getMessage(), 500);
+            return AuthResult::error('حدث خطأ أثناء إلغاء الحجز: ' . $e->getMessage(), null, 500);
+        }
+    }
+
+    /**
+     * تعديل حجز موجود (التاريخ، الوقت، الخدمات)
+     */
+    public function updateAppointment(User $customer, int $appointmentId, array $data): AuthResult
+    {
+        try {
+            return DB::transaction(function () use ($customer, $appointmentId, $data) {
+
+                // جلب الحجز الأصلي
+                $appointment = Appointment::where('customer_id', $customer->id)
+                    ->where('id', $appointmentId)
+                    ->with(['barber', 'salon'])
+                    ->first();
+
+                if (!$appointment) {
+                    return AuthResult::error('الحجز غير موجود', null, 404);
+                }
+
+                // التحقق من أن الحجز قابل للتعديل
+                if (!in_array($appointment->status, ['pending', 'confirmed'])) {
+                    return AuthResult::error('لا يمكن تعديل هذا الحجز، حالته الحالية: ' . $appointment->status, null, 400);
+                }
+
+                // التحقق من أن الموعد لم يبدأ
+                $appointmentDateTime = Carbon::parse($appointment->appointment_date . ' ' . $appointment->appointment_time);
+                if ($appointmentDateTime->isPast()) {
+                    return AuthResult::error('لا يمكن تعديل موعد بدأ بالفعل', null, 400);
+                }
+
+                $salon = $appointment->salon;
+                $barber = $appointment->barber;
+
+                // تحديد التاريخ الجديد
+                $newDate = $data['appointment_date'] ?? $appointment->appointment_date;
+
+                // إذا تم تغيير اليوم (سلسلة نصية مثل 'monday')
+                if (isset($data['day']) && !isset($data['appointment_date'])) {
+                    $newDate = $this->getNextDateFromDay($data['day']);
+                }
+
+                // التحقق من أن الصالون مفتوح في التاريخ الجديد
+                if (!$this->isSalonOpenOnDate($salon, $newDate)) {
+                    $dayName = Carbon::parse($newDate)->format('l');
+                    return AuthResult::error("الصالون مغلق في يوم " . $this->getArabicDayName($dayName), null, 400);
+                }
+
+                // تحديد الوقت الجديد
+                $newTime = $data['time'] ?? $appointment->appointment_time;
+
+                // تحديد الخدمات الجديدة
+                $serviceIds = $data['service_ids'] ?? null;
+                $services = null;
+                $totalDuration = $appointment->duration_minutes;
+                $totalPrice = $appointment->total_price;
+
+                if ($serviceIds) {
+                    $services = BarberService::whereIn('id', $serviceIds)
+                        ->where('barber_id', $barber->id)
+                        ->where('is_active', true)
+                        ->get();
+
+                    if ($services->count() !== count($serviceIds)) {
+                        return AuthResult::error('بعض الخدمات غير متاحة لهذا الحلاق', null, 404);
+                    }
+
+                    $totals = $this->calculateTotals($services);
+                    $totalDuration = $totals['total_duration'];
+                    $totalPrice = $totals['total_price'];
+                }
+
+                // تنسيق الوقت
+                $newTimeFormatted = Carbon::parse($newTime)->format('H:i:s');
+                $newEndTime = Carbon::parse($newTime)->addMinutes($totalDuration)->format('H:i:s');
+
+                // التحقق من أن الوقت ضمن ساعات عمل الصالون
+                if (!$this->isTimeWithinSalonHours($salon, $newDate, $newTimeFormatted, $totalDuration)) {
+                    return AuthResult::error('الوقت المحدد خارج ساعات عمل الصالون', null, 400);
+                }
+
+                // التحقق من ساعات عمل الحلاق
+                $dayOfWeek = strtolower(Carbon::parse($newDate)->format('l'));
+                $workingHour = $barber->workingHours()
+                    ->where('day_of_week', $dayOfWeek)
+                    ->where('is_open', true)
+                    ->first();
+
+                if (!$workingHour) {
+                    return AuthResult::error('الحلاق لا يعمل في هذا اليوم', null, 400);
+                }
+
+                $isValidTime = false;
+                if ($workingHour->shift1_start && $workingHour->shift1_end) {
+                    if ($newTimeFormatted >= $workingHour->shift1_start && $newEndTime <= $workingHour->shift1_end) {
+                        $isValidTime = true;
+                    }
+                }
+
+                if (!$isValidTime && $workingHour->shift2_start && $workingHour->shift2_end) {
+                    if ($newTimeFormatted >= $workingHour->shift2_start && $newEndTime <= $workingHour->shift2_end) {
+                        $isValidTime = true;
+                    }
+                }
+
+                if (!$isValidTime) {
+                    return AuthResult::error('الوقت المحدد خارج ساعات عمل الحلاق', null, 400);
+                }
+
+                // التحقق من عدم وجود تعارض مع حجوزات أخرى (باستثناء الحجز الحالي)
+                $conflictingBooking = Appointment::where('barber_id', $barber->id)
+                    ->where('id', '!=', $appointmentId)
+                    ->whereDate('appointment_date', $newDate)
+                    ->whereIn('status', ['pending', 'confirmed'])
+                    ->where(function ($query) use ($newTimeFormatted, $newEndTime) {
+                        $query->where(function ($q) use ($newTimeFormatted, $newEndTime) {
+                            $q->where('appointment_time', '<', $newEndTime)
+                              ->where('end_time', '>', $newTimeFormatted);
+                        });
+                    })
+                    ->exists();
+
+                if ($conflictingBooking) {
+                    return AuthResult::error('هذا الوقت غير متاح، يرجى اختيار وقت آخر', null, 400);
+                }
+
+                // تحديث الحجز
+                $oldDate = $appointment->appointment_date;
+                $oldTime = $appointment->appointment_time;
+                $oldServices = $appointment->services;
+
+                $appointment->appointment_date = $newDate;
+                $appointment->appointment_time = $newTimeFormatted;
+                $appointment->end_time = $newEndTime;
+                $appointment->duration_minutes = $totalDuration;
+                $appointment->total_price = $totalPrice;
+
+                if ($serviceIds) {
+                    $appointment->service_id = $serviceIds[0];
+                    $appointment->services = json_encode($serviceIds);
+                    $appointment->services_details = json_encode($services->toArray());
+                }
+
+                if (isset($data['notes'])) {
+                    $appointment->notes = $data['notes'];
+                }
+                $appointment->save();
+
+                // إرسال إشعار للتعديل
+                // try {
+                //     $notificationService = app(FirebaseNotificationService::class);
+                //     $notificationService->sendToUser(
+                //         $barber,
+                //         ' تم تعديل حجز',
+                //         "تم تعديل حجز العميل {$customer->name} إلى {$newDate} الساعة {$newTime}",
+                //         ['type' => 'appointment_updated', 'appointment_id' => $appointment->id]
+                //     );
+                // } catch (\Exception $e) {
+                //     Log::error('Failed to send update notification: ' . $e->getMessage());
+                // }
+
+                // تحميل العلاقات للتنسيق
+                $appointment->load(['customer', 'barber', 'salon']);
+
+                $servicesList = $services ?: BarberService::whereIn('id', json_decode($appointment->services ?? '[]'))->get();
+                $totals = $this->calculateTotals($servicesList);
+
+                return AuthResult::success('تم تعديل الحجز بنجاح', [
+                    'appointment' => [
+                        'id' => $appointment->id,
+                        'customer' => [
+                            'id' => $appointment->customer->id,
+                            'name' => $appointment->customer->name,
+                        ],
+                        'barber' => [
+                            'id' => $appointment->barber->id,
+                            'name' => $appointment->barber->name,
+                        ],
+                        'salon' => [
+                            'id' => $appointment->salon->id,
+                            'name' => $appointment->salon->name,
+                        ],
+                        'services' => $servicesList->map(fn($service) => [
+                            'id' => $service->id,
+                            'name' => $service->name,
+                            'price' => $service->price,
+                            'duration_minutes' => $service->duration_minutes,
+                        ]),
+                        'services_summary' => $totals['services_names'],
+                        'total_duration' => $totalDuration,
+                        'total_price' => $totalPrice,
+                        'date' => $appointment->appointment_date,
+                        'time' => Carbon::parse($appointment->appointment_time)->format('H:i'),
+                        'end_time' => Carbon::parse($appointment->end_time)->format('H:i'),
+                        'status' => $appointment->status,
+                        'status_text' => $this->getStatusText($appointment->status),
+                        'notes' => $appointment->notes,
+                        'updated_at' => $appointment->updated_at,
+                    ],
+                ]);
+
+            });
+        } catch (\Exception $e) {
+            Log::error('Update appointment error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء تعديل الحجز: ' . $e->getMessage(), null, 500);
         }
     }
 }

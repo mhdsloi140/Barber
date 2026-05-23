@@ -152,6 +152,7 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
 
     // حفظ الحجز الجديد
     Route::post('booking/store', [BookingController::class, 'store']);
+     Route::post('/appointments/{id}', [BookingController::class, 'update']);
     //عرض الخدمات او التفاصيل
     Route::get('salons/{id}/details', [SalonDetailsController::class, 'show']);
     //    Route::post('{id}/cancel', [BookingController::class, 'cancel']);

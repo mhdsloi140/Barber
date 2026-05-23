@@ -31,7 +31,7 @@ class SalonService
      */
     private function parseDate(?string $date): string
     {
-        // إذا لم يتم إرسال تاريخ، استخدم تاريخ اليوم
+        // إذا لم يتم إرسال تاريخ، استخدم تاريخ اليومa
         if (empty($date)) {
             return Carbon::now()->format('Y-m-d');
         }
