@@ -27,6 +27,30 @@ class SalonService
     ];
 
     /**
+     * معالجة التاريخ المدخل (اليوم، غداً، أو تاريخ محدد)
+     */
+    private function parseDate(?string $date): string
+    {
+        // إذا لم يتم إرسال تاريخ، استخدم تاريخ اليوم
+        if (empty($date)) {
+            return Carbon::now()->format('Y-m-d');
+        }
+
+        // إذا تم إرسال "tomorrow" أو "غداً"
+        if (strtolower($date) === 'tomorrow' || $date === 'غداً' || $date === 'غدا') {
+            return Carbon::tomorrow()->format('Y-m-d');
+        }
+
+        // إذا تم إرسال تاريخ محدد، تحقق من صحته
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return $date;
+        }
+
+        // إذا كانت صيغة التاريخ غير صحيحة، استخدم تاريخ اليوم
+        return Carbon::now()->format('Y-m-d');
+    }
+
+    /**
      * عرض جميع الصالونات للزبون مع الصور والتقييمات
      */
     public function getSalons(array $filters): AuthResult
@@ -122,12 +146,14 @@ class SalonService
             $data['working_hours'] = $this->getWorkingHoursFormatted($salon);
             $data['services'] = $this->getSalonServices($salon);
 
-            //  إضافة أوقات الفراغ للحلاقين إذا تم تحديد التاريخ
-            if ($date) {
-                $data['barbers_with_slots'] = $this->getBarbersWithAvailableSlots($salon, $date, $serviceId);
-                $data['selected_date'] = $date;
-                // $data['selected_service_id'] = $serviceId;
-            }
+            // معالجة التاريخ (تلقائياً اليوم أو غداً)
+            $parsedDate = $this->parseDate($date);
+
+            // إضافة أوقات الفراغ للحلاقين
+            $data['barbers_with_slots'] = $this->getBarbersWithAvailableSlots($salon, $parsedDate, $serviceId);
+            $data['selected_date'] = $parsedDate;
+            $data['selected_date_formatted'] = $this->formatDateInArabic($parsedDate);
+            $data['selected_service_id'] = $serviceId;
 
             return AuthResult::success('تم جلب بيانات الصالون بنجاح', $data);
 
@@ -138,210 +164,40 @@ class SalonService
     }
 
     /**
-     * جلب أوقات الفراغ للحلاق في يوم محدد
+     * تنسيق التاريخ بالعربية
      */
-    public function getBarberAvailableSlots(int $barberId, string $date, ?int $serviceId = null): AuthResult
+    private function formatDateInArabic(string $date): string
     {
-        try {
-            $barber = \App\Models\User::where('id', $barberId)
-                ->whereHas('roles', function($q) {
-                    $q->where('name', 'barber');
-                })
-                ->with(['salons', 'workingHours' => function($q) {
-                    $q->where('is_open', true);
-                }])
-                ->first();
+        $carbonDate = Carbon::parse($date);
+        $dayOfWeek = $this->daysInArabic[strtolower($carbonDate->format('l'))];
+        $day = $carbonDate->format('d');
+        $month = $this->getMonthInArabic((int)$carbonDate->format('m'));
+        $year = $carbonDate->format('Y');
 
-            if (!$barber) {
-                return AuthResult::error('الحلاق غير موجود', null, 404);
-            }
-
-            $salon = $barber->salons->first();
-            if (!$salon) {
-                return AuthResult::error('هذا الحلاق لا يعمل في أي صالون', null, 404);
-            }
-
-            // جلب مدة الخدمة إذا تم تحديد خدمة
-            $serviceDuration = null;
-            $serviceName = null;
-            $servicePrice = null;
-
-            if ($serviceId) {
-                $service = BarberService::where('id', $serviceId)
-                    ->where('barber_id', $barberId)
-                    ->first();
-
-                if ($service) {
-                    $serviceDuration = $service->duration_minutes;
-                    $serviceName = $service->name;
-                    $servicePrice = $service->price;
-                }
-            }
-
-            // جلب يوم الأسبوع من التاريخ
-            $dayOfWeek = strtolower(Carbon::parse($date)->format('l'));
-
-            // جلب أوقات عمل الحلاق في هذا اليوم
-            $barberWorkingHour = $barber->workingHours()
-                ->where('day_of_week', $dayOfWeek)
-                ->where('is_open', true)
-                ->first();
-
-            if (!$barberWorkingHour) {
-                return AuthResult::success('الحلاق غير متوفر في هذا اليوم', [
-                    'barber_id' => $barberId,
-                    'barber_name' => $barber->name,
-                    'date' => $date,
-                    'day' => $this->getArabicDay($dayOfWeek),
-                    'is_available' => false,
-                    'available_slots' => [],
-                    'message' => 'الحلاق غير متوفر في هذا اليوم'
-                ]);
-            }
-
-            // وقت بداية ونهاية العمل
-            $startTime = $barberWorkingHour->shift1_start;
-            $endTime = $barberWorkingHour->shift1_end;
-
-            // إذا لم يتم تحديد خدمة، لا يمكن حساب الفترات
-            if (!$serviceDuration) {
-                return AuthResult::success('الرجاء تحديد خدمة لحساب أوقات الفراغ', [
-                    'barber_id' => $barberId,
-                    'barber_name' => $barber->name,
-                    'date' => $date,
-                    'day' => $this->getArabicDay($dayOfWeek),
-                    'working_hours' => [
-                        'start' => $startTime,
-                        'end' => $endTime,
-                    ],
-                    'message' => 'الرجاء تحديد خدمة أولاً',
-                    'need_service' => true
-                ]);
-            }
-
-            // جلب الحجوزات المؤكدة والقيد الانتظار لهذا الحلاق في التاريخ المحدد
-            $bookedAppointments = Appointment::where('barber_id', $barberId)
-                ->where('appointment_date', $date)
-                ->whereIn('status', ['pending', 'confirmed'])
-                ->get();
-
-            // إنشاء جميع الفترات الزمنية الممكنة حسب مدة الخدمة
-            $allSlots = $this->generateTimeSlots($startTime, $endTime, $serviceDuration);
-
-            // إزالة الفترات المحجوزة
-            $availableSlots = $this->filterBookedSlots($allSlots, $bookedAppointments, $serviceDuration);
-
-            return AuthResult::success('تم جلب أوقات الفراغ بنجاح', [
-                'barber_id' => $barberId,
-                'barber_name' => $barber->name,
-                'barber_avatar' => $barber->getAvatarUrlAttribute(),
-                'salon_id' => $salon->id,
-                'salon_name' => $salon->name,
-                'date' => $date,
-                'day' => $this->getArabicDay($dayOfWeek),
-                'working_hours' => [
-                    'start' => $startTime,
-                    'end' => $endTime,
-                ],
-                'service' => [
-                    'id' => $serviceId,
-                    'name' => $serviceName,
-                    'price' => $servicePrice,
-                    'duration_minutes' => $serviceDuration,
-                ],
-                'available_slots' => $availableSlots,
-                'available_count' => count($availableSlots),
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Get barber available slots error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب أوقات الفراغ', null, 500);
-        }
+        return "{$dayOfWeek}، {$day} {$month} {$year}";
     }
 
     /**
-     * جلب أوقات الفراغ لحلاق معين بدون تحديد خدمة (لجميع الخدمات)
+     * الحصول على اسم الشهر بالعربية
      */
-    public function getBarberAvailableSlotsForAllServices(int $barberId, string $date): AuthResult
+    private function getMonthInArabic(int $month): string
     {
-        try {
-            $barber = \App\Models\User::where('id', $barberId)
-                ->whereHas('roles', function($q) {
-                    $q->where('name', 'barber');
-                })
-                ->with(['salons', 'workingHours' => function($q) {
-                    $q->where('is_open', true);
-                }, 'barberServices'])
-                ->first();
+        $months = [
+            1 => 'يناير',
+            2 => 'فبراير',
+            3 => 'مارس',
+            4 => 'أبريل',
+            5 => 'مايو',
+            6 => 'يونيو',
+            7 => 'يوليو',
+            8 => 'أغسطس',
+            9 => 'سبتمبر',
+            10 => 'أكتوبر',
+            11 => 'نوفمبر',
+            12 => 'ديسمبر',
+        ];
 
-            if (!$barber) {
-                return AuthResult::error('الحلاق غير موجود', null, 404);
-            }
-
-            $salon = $barber->salons->first();
-            if (!$salon) {
-                return AuthResult::error('هذا الحلاق لا يعمل في أي صالون', null, 404);
-            }
-
-            // جلب يوم الأسبوع من التاريخ
-            $dayOfWeek = strtolower(Carbon::parse($date)->format('l'));
-
-            // جلب أوقات عمل الحلاق في هذا اليوم
-            $barberWorkingHour = $barber->workingHours()
-                ->where('day_of_week', $dayOfWeek)
-                ->where('is_open', true)
-                ->first();
-
-            if (!$barberWorkingHour) {
-                return AuthResult::success('الحلاق غير متوفر في هذا اليوم', [
-                    'barber_id' => $barberId,
-                    'barber_name' => $barber->name,
-                    'date' => $date,
-                    'day' => $this->getArabicDay($dayOfWeek),
-                    'is_available' => false,
-                    'available_slots' => [],
-                    'services' => [],
-                    'message' => 'الحلاق غير متوفر في هذا اليوم'
-                ]);
-            }
-
-            // وقت بداية ونهاية العمل
-            $startTime = $barberWorkingHour->shift1_start;
-            $endTime = $barberWorkingHour->shift1_end;
-
-            // جلب خدمات الحلاق
-            $services = $barber->barberServices()
-                ->where('is_active', true)
-                ->get()
-                ->map(function($service) {
-                    return [
-                        'id' => $service->id,
-                        'name' => $service->name,
-                        'price' => (float) $service->price,
-                        'duration_minutes' => $service->duration_minutes,
-                    ];
-                });
-
-            return AuthResult::success('تم جلب بيانات الحلاق بنجاح', [
-                'barber_id' => $barberId,
-                'barber_name' => $barber->name,
-                'barber_avatar' => $barber->getAvatarUrlAttribute(),
-                'salon_id' => $salon->id,
-                'salon_name' => $salon->name,
-                'date' => $date,
-                'day' => $this->getArabicDay($dayOfWeek),
-                'working_hours' => [
-                    'start' => $startTime,
-                    'end' => $endTime,
-                ],
-                'services' => $services,
-                'services_count' => $services->count(),
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Get barber available slots for all services error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب البيانات', null, 500);
-        }
+        return $months[$month] ?? '';
     }
 
     /**
@@ -435,18 +291,16 @@ class SalonService
     private function generateTimeSlots(string $startTime, string $endTime, int $slotDuration): array
     {
         $slots = [];
-    $current = Carbon::parse($startTime);
-    $end = Carbon::parse($endTime);
+        $current = Carbon::parse($startTime);
+        $end = Carbon::parse($endTime);
 
-    while ($current->lt($end)) {
-        $slotEnd = (clone $current)->addMinutes($slotDuration);
+        while ($current->lt($end)) {
+            $slotEnd = (clone $current)->addMinutes($slotDuration);
 
-        if ($slotEnd->lte($end)) {
-            $slots[] = [
-                'start' => $current->format('H:i'),
-                'end' => $slotEnd->format('H:i'),
-                // 'duration_minutes' => $slotDuration,
-                    // 'duration_minutes' => $slotDuration,
+            if ($slotEnd->lte($end)) {
+                $slots[] = [
+                    'start' => $current->format('H:i'),
+                    'end' => $slotEnd->format('H:i'),
                 ];
             }
 
@@ -472,7 +326,6 @@ class SalonService
                 $appointmentStart = Carbon::parse($appointment->appointment_time);
                 $appointmentEnd = Carbon::parse($appointment->end_time);
 
-                // التحقق من تداخل الفترات
                 if ($slotStart->lt($appointmentEnd) && $slotEnd->gt($appointmentStart)) {
                     $isBooked = true;
                     break;
@@ -486,6 +339,9 @@ class SalonService
 
         return $availableSlots;
     }
+
+
+
 
     /**
      * تنسيق بيانات الصالون مع جميع الصور والتقييمات
