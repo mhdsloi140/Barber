@@ -60,7 +60,7 @@ class BarberScheduleService
                 ->where('is_open', true)
                 ->first();
 
-            // الخدمات
+            // 1. الخدمات
             $services = BarberService::where('barber_id', $barberId)
                 ->orderBy('name', 'asc')
                 ->get()
@@ -75,28 +75,40 @@ class BarberScheduleService
                     ];
                 });
 
-
+            //  2. الحجوزات (الأوقات المحجوزة)
             $appointments = Appointment::where('barber_id', $barberId)
                 ->whereDate('appointment_date', $selectedDate)
                 ->with(['customer'])
                 ->orderBy('appointment_time', 'asc')
                 ->get();
 
-            // تنسيق الحجوزات
-            $formattedAppointments = $appointments->map(function($appointment) {
+            // الأوقات المحجوزة (فقط الأوقات مع حالة الحجز)
+            $bookedSlots = [];
+            $formattedAppointments = $appointments->map(function($appointment) use (&$bookedSlots) {
+                $startTime = Carbon::parse($appointment->appointment_time)->format('H:i');
+                $endTime = Carbon::parse($appointment->end_time)->format('H:i');
+
+                // تخزين الأوقات المحجوزة
+                $bookedSlots[] = [
+                    'start' => $startTime,
+                    'end' => $endTime,
+                    'status' => $appointment->status,
+                ];
+
                 return [
                     'id' => $appointment->id,
                     'customer_name' => $appointment->customer->name,
                     'customer_phone' => $appointment->customer->phone,
-                    'start_time' => Carbon::parse($appointment->appointment_time)->format('H:i'),
-                    'end_time' => Carbon::parse($appointment->end_time)->format('H:i'),
+                    'start_time' => $startTime,
+                    'end_time' => $endTime,
                     'duration_minutes' => $appointment->duration_minutes,
                     'total_price' => (float) $appointment->total_price,
                     'status' => $appointment->status,
+                    'status_text' => $this->getStatusText($appointment->status),
                 ];
             });
 
-
+            //(الأوقات المتاحة)
             $freeSlots = [];
             $workingHoursInfo = null;
 
@@ -110,18 +122,16 @@ class BarberScheduleService
                 $freeSlots = $this->generateFreeSlots(
                     $workingHour->shift1_start,
                     $workingHour->shift1_end,
-                    30, // مدة افتراضية 30 دقيقة
+                    30,
                     $appointments
                 );
             }
 
-            // 4. إحصائيات الخدمات
+            // احصائيات الخدمات
             $servicesStatistics = [
                 'total' => $services->count(),
                 'active' => $services->where('is_active', true)->count(),
                 'inactive' => $services->where('is_active', false)->count(),
-                // 'min_price' => $services->where('is_active', true)->min('price') ?? 0,
-                // 'max_price' => $services->where('is_active', true)->max('price') ?? 0,
             ];
 
             // بناء الـ Response
@@ -145,16 +155,18 @@ class BarberScheduleService
                 'is_working_day' => $workingHour !== null,
                 'working_hours' => $workingHoursInfo,
 
-
+                // ========== الخدمات ==========
                 'services' => $services,
                 'services_statistics' => $servicesStatistics,
                 'services_count' => $services->count(),
 
-
+                // اوقات محجوزة
+                'booked_slots' => $bookedSlots,
+                'booked_slots_count' => count($bookedSlots),
                 // 'booked_appointments' => $formattedAppointments,
                 'booked_appointments_count' => $formattedAppointments->count(),
 
-                // ========== القسم 3: أوقات الفراغ (أوقات متاحة) ==========
+                // اوقات متاحة
                 'available' => $freeSlots,
                 'available_count' => count($freeSlots),
             ];
@@ -177,10 +189,10 @@ class BarberScheduleService
         $end = Carbon::parse($endTime);
 
         // تجهيز الأوقات المحجوزة
-        $bookedSlots = [];
+        $bookedRanges = [];
         foreach ($appointments as $appointment) {
             if (in_array($appointment->status, ['pending', 'confirmed'])) {
-                $bookedSlots[] = [
+                $bookedRanges[] = [
                     'start' => Carbon::parse($appointment->appointment_time),
                     'end' => Carbon::parse($appointment->end_time),
                 ];
@@ -193,7 +205,7 @@ class BarberScheduleService
             if ($slotEnd->lte($end)) {
                 $isAvailable = true;
 
-                foreach ($bookedSlots as $booked) {
+                foreach ($bookedRanges as $booked) {
                     if ($current->lt($booked['end']) && $slotEnd->gt($booked['start'])) {
                         $isAvailable = false;
                         break;
@@ -212,5 +224,19 @@ class BarberScheduleService
         }
 
         return $slots;
+    }
+
+    /**
+     * نص الحالة بالعربية
+     */
+    private function getStatusText(string $status): string
+    {
+        return match ($status) {
+            'pending' => 'قيد الانتظار',
+            'confirmed' => 'مؤكد',
+            'completed' => 'مكتمل',
+            'cancelled' => 'ملغي',
+            default => $status,
+        };
     }
 }
