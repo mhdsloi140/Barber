@@ -6,6 +6,7 @@ use App\Http\Controllers\API\Barber\AppointmentController;
 use App\Http\Controllers\API\Barber\BarberProfileController;
 use App\Http\Controllers\API\Barber\WorkingHourController;
 use App\Http\Controllers\API\Barbers\ServicesController;
+use App\Http\Controllers\API\Customer\BarberAvailabilityController;
 use App\Http\Controllers\API\Customer\BookingController;
 use App\Http\Controllers\API\Customer\DashboardCustomerController;
 use App\Http\Controllers\API\Customer\FavoriteBarberController;
@@ -152,16 +153,18 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
 
     // حفظ الحجز الجديد
     Route::post('booking/store', [BookingController::class, 'store']);
-     Route::post('/appointments/{id}', [BookingController::class, 'update']);
+    Route::post('/appointments/{id}', [BookingController::class, 'update']);
     //عرض الخدمات او التفاصيل
     Route::get('salons/{id}/details', [SalonDetailsController::class, 'show']);
     //    Route::post('{id}/cancel', [BookingController::class, 'cancel']);
-
+    // Route::get('barber/{barberId}/schedule', [BarberAvailabilityController::class, 'getBarberSchedule']);
+    Route::get('barber/{barberId}/schedule', [BarberAvailabilityController::class, 'getBarberSchedule']);
     Route::prefix('appointments')->group(function () {
         Route::get('/', [BookingController::class, 'index']);           // جميع الحجوزات
         Route::get('active', [BookingController::class, 'active']);     // الحجوزات النشطة
         Route::get('completed', [BookingController::class, 'completed']); // الحجوزات المنتهية
-        Route::post('{id}/cancel', [BookingController::class, 'cancel']); // إلغاء حجز
+        Route::post('{id}/cancel', [BookingController::class, 'cancel']);
+        Route::post('{id}/get-cancel', [BookingController::class, 'cancel']); // الحجوزات الملغية
     });
     ///المفصلات للحلاقين
     Route::get('/favorites', [FavoriteBarberController::class, 'index']);

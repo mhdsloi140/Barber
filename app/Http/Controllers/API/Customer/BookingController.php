@@ -125,4 +125,19 @@ class BookingController extends Controller
             'data' => $result->data,
         ], $result->statusCode);
     }
+        public function GetCancel(Request $request, $id)
+    {
+       
+        $result = $this->bookingService->cancelAppointment(
+            auth()->user(),
+            (int) $id,
+            $request->reason
+        );
+
+        return response()->json([
+            'success' => $result->success,
+            'message' => $result->message,
+            'data' => $result->data,
+        ], $result->statusCode);
+    }
 }
