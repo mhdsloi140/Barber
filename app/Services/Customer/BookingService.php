@@ -744,7 +744,7 @@ class BookingService
                 'id' => $appointment->id,
                 'barber_name' => $appointment->barber->name,
                 'barber_phone' => $appointment->barber->phone,
-                'barber_avatar' => $appointment->barber->getAvatarUrlAttribute(),
+                // 'barber_avatar' => $appointment->barber->getAvatarUrlAttribute(),
                 'salon' => $this->formatSalonData($appointment->salon),
                 'services' => $this->getAppointmentServices($appointment),
                 'total_price' => $appointment->total_price,
