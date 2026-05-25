@@ -5,6 +5,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Casts\Attribute;
+
 
 class Appointment extends Model
 {
@@ -78,7 +80,7 @@ class Appointment extends Model
     {
         return $this->belongsTo(User::class, 'cancelled_by');
     }
-       public function services()
+    public function services()
     {
         return $this->belongsToMany(BarberService::class, 'appointment_services', 'appointment_id', 'service_id')
             ->withPivot('price', 'duration_minutes')
@@ -128,7 +130,7 @@ class Appointment extends Model
     public function canBeCancelled(): bool
     {
         return in_array($this->status, ['pending', 'confirmed']) &&
-               !$this->isPast();
+            !$this->isPast();
     }
 
     /**
@@ -138,5 +140,47 @@ class Appointment extends Model
     {
         $dateTime = $this->appointment_date . ' ' . $this->appointment_time;
         return now()->parse($dateTime)->isPast();
+    }
+
+
+
+    protected function appointmentTime(): Attribute
+    {
+        return Attribute::make(
+            get: function ($value) {
+                if (is_string($value) && strpos($value, ' ') !== false) {
+                    $parts = explode(' ', $value);
+                    return end($parts);
+                }
+                return $value;
+            },
+            set: function ($value) {
+                if (is_string($value) && strpos($value, ' ') !== false) {
+                    $parts = explode(' ', $value);
+                    return end($parts);
+                }
+                return $value;
+            }
+        );
+    }
+
+    protected function endTime(): Attribute
+    {
+        return Attribute::make(
+            get: function ($value) {
+                if (is_string($value) && strpos($value, ' ') !== false) {
+                    $parts = explode(' ', $value);
+                    return end($parts);
+                }
+                return $value;
+            },
+            set: function ($value) {
+                if (is_string($value) && strpos($value, ' ') !== false) {
+                    $parts = explode(' ', $value);
+                    return end($parts);
+                }
+                return $value;
+            }
+        );
     }
 }

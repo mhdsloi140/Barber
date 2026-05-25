@@ -349,27 +349,58 @@ class BookingService
         return $days[$day] ?? $day;
     }
 
-    /**
-     * التحقق من إمكانية إلغاء الحجز
-     */
-    private function canCancelAppointment(Appointment $appointment): bool
-    {
-        if (!in_array($appointment->status, ['pending', 'confirmed'])) {
-            return false;
-        }
-
-        $date = $appointment->appointment_date instanceof Carbon
-            ? $appointment->appointment_date->format('Y-m-d')
-            : (is_string($appointment->appointment_date) ? $appointment->appointment_date : '');
-
-        $time = $appointment->appointment_time instanceof Carbon
-            ? $appointment->appointment_time->format('H:i:s')
-            : (is_string($appointment->appointment_time) ? $appointment->appointment_time : '00:00:00');
-
-        $appointmentDateTime = Carbon::parse($date . ' ' . $time);
-        return !$appointmentDateTime->isPast();
+/**
+ * التحقق من إمكانية إلغاء الحجز
+ */
+private function canCancelAppointment(Appointment $appointment): bool
+{
+    if (!in_array($appointment->status, ['pending', 'confirmed'])) {
+        return false;
     }
 
+    try {
+        // الحصول على التاريخ والوقت
+        $date = $appointment->appointment_date;
+        $time = $appointment->appointment_time;
+
+        // تنظيف الوقت إذا كان يحتوي على تاريخ كامل
+        if (is_string($time)) {
+            // إذا كان الوقت يحتوي على مسافة (تاريخ كامل + وقت)
+            if (strpos($time, ' ') !== false) {
+                $parts = explode(' ', $time);
+                $time = end($parts); // أخذ الجزء الأخير وهو الوقت
+            }
+
+            // إذا كان الوقت لا يزال يحتوي على تاريخ (YYYY-MM-DD)
+            if (preg_match('/^\d{4}-\d{2}-\d{2}/', $time)) {
+                $timeParts = explode(' ', $time);
+                $time = end($timeParts);
+            }
+
+            // التأكد من أن الوقت بصيغة H:i:s
+            if (strlen($time) > 8) {
+                $time = substr($time, 0, 8);
+            }
+        }
+
+        // معالجة التاريخ
+        if ($date instanceof Carbon) {
+            $dateString = $date->toDateString();
+        } else {
+            $dateString = Carbon::parse($date)->toDateString();
+        }
+
+        // بناء التاريخ والوقت الكامل
+        $appointmentDateTime = Carbon::parse($dateString . ' ' . $time);
+
+        // التحقق من أن الموعد في المستقبل
+        return $appointmentDateTime->isFuture();
+
+    } catch (\Exception $e) {
+        Log::error('Can cancel appointment error: ' . $e->getMessage());
+        return false;
+    }
+}
     /**
      * حفظ الحجز الجديد
      */
@@ -558,70 +589,85 @@ class BookingService
         }
     }
 
-    /**
-     * جلب جميع حجوزات الزبون
-     */
-    public function getCustomerAppointments(User $customer, ?string $status = null): AuthResult
-    {
-        try {
-            if (!$customer->hasRole('customer')) {
-                return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
+/**
+ * إلغاء حجز من قبل الزبون
+ */
+public function cancelAppointment(User $customer, int $appointmentId, ?string $reason = null): AuthResult
+{
+    try {
+        return DB::transaction(function () use ($customer, $appointmentId, $reason) {
+
+            $appointment = Appointment::where('customer_id', $customer->id)
+                ->where('id', $appointmentId)
+                ->first();
+
+            if (!$appointment) {
+                return AuthResult::error('الحجز غير موجود', null, 404);
             }
 
-            $query = Appointment::where('customer_id', $customer->id)
-                ->with(['barber', 'salon']);
-
-            if ($status && in_array($status, ['pending', 'confirmed', 'completed', 'cancelled'])) {
-                $query->where('status', $status);
+            if (!in_array($appointment->status, ['pending', 'confirmed'])) {
+                $statusText = $this->getStatusText($appointment->status);
+                return AuthResult::error("لا يمكن إلغاء هذا الحجز، حالته الحالية: {$statusText}", null, 400);
             }
 
-            $appointments = $query->orderBy('appointment_date', 'desc')
-                ->orderBy('appointment_time', 'desc')
-                ->get();
+            // التحقق من أن الموعد لم يبدأ
+            try {
+                $date = $appointment->appointment_date;
+                $time = $appointment->appointment_time;
 
-            $formattedAppointments = $appointments->map(fn($appointment) => [
+                // تنظيف الوقت
+                if (is_string($time)) {
+                    // إذا كان الوقت يحتوي على مسافة (تاريخ كامل + وقت)
+                    if (strpos($time, ' ') !== false) {
+                        $parts = explode(' ', $time);
+                        $time = end($parts);
+                    }
+
+                    // إذا كان الوقت يحتوي على تاريخ كامل
+                    if (preg_match('/^\d{4}-\d{2}-\d{2}/', $time)) {
+                        $timeParts = explode(' ', $time);
+                        $time = end($timeParts);
+                    }
+
+                    // التأكد من الطول
+                    if (strlen($time) > 8) {
+                        $time = substr($time, 0, 8);
+                    }
+                }
+
+                if ($date instanceof Carbon) {
+                    $dateString = $date->toDateString();
+                } else {
+                    $dateString = Carbon::parse($date)->toDateString();
+                }
+
+                $appointmentDateTime = Carbon::parse($dateString . ' ' . $time);
+
+                if ($appointmentDateTime->isPast()) {
+                    return AuthResult::error('لا يمكن إلغاء موعد بدأ بالفعل', null, 400);
+                }
+            } catch (\Exception $e) {
+                Log::error('Error parsing appointment datetime: ' . $e->getMessage());
+                return AuthResult::error('حدث خطأ في التحقق من وقت الموعد', null, 400);
+            }
+
+            $appointment->status = 'cancelled';
+            
+            $appointment->save();
+
+            return AuthResult::success('تم إلغاء الحجز بنجاح', [
                 'id' => $appointment->id,
-                'barber_name' => $appointment->barber->name,
-                'barber_phone' => $appointment->barber->phone,
-                'barber_avatar' => $appointment->barber->getAvatarUrlAttribute(),
-                'salon' => $this->formatSalonData($appointment->salon),
-                'services' => $this->getAppointmentServices($appointment),
-                'total_price' => $appointment->total_price,
-                'duration_minutes' => $appointment->duration_minutes,
-                'date' => $appointment->appointment_date instanceof Carbon
-                    ? $appointment->appointment_date->format('Y-m-d')
-                    : date('Y-m-d', strtotime($appointment->appointment_date)),
-                'time' => $appointment->appointment_time instanceof Carbon
-                    ? $appointment->appointment_time->format('H:i')
-                    : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
-                'end_time' => $appointment->end_time instanceof Carbon
-                    ? $appointment->end_time->format('H:i')
-                    : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
                 'status' => $appointment->status,
                 'status_text' => $this->getStatusText($appointment->status),
-                'notes' => $appointment->notes,
-                'created_at' => $appointment->created_at,
-                'can_cancel' => $this->canCancelAppointment($appointment),
+                // 'cancelled_at' => $appointment->cancelled_at,
+                // 'cancellation_reason' => $appointment->cancellation_reason,
             ]);
-
-            $stats = [
-                'total' => $appointments->count(),
-                'pending' => $appointments->where('status', 'pending')->count(),
-                'confirmed' => $appointments->where('status', 'confirmed')->count(),
-                'completed' => $appointments->where('status', 'completed')->count(),
-                'cancelled' => $appointments->where('status', 'cancelled')->count(),
-            ];
-
-            return AuthResult::success('تم جلب حجوزاتك بنجاح', [
-                'statistics' => $stats,
-                'appointments' => $formattedAppointments,
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Get customer appointments error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب حجوزاتك', $e->getMessage(), 500);
-        }
+        });
+    } catch (\Exception $e) {
+        Log::error('Cancel appointment error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء إلغاء الحجز: ' . $e->getMessage(), null, 500);
     }
-
+}
     /**
      * جلب الحجوزات النشطة
      */
@@ -840,48 +886,48 @@ class BookingService
     /**
      * إلغاء حجز من قبل الزبون
      */
-    public function cancelAppointment(User $customer, int $appointmentId, ?string $reason = null): AuthResult
-    {
-        try {
-            return DB::transaction(function () use ($customer, $appointmentId, $reason) {
+    // public function cancelAppointment(User $customer, int $appointmentId, ?string $reason = null): AuthResult
+    // {
+    //     try {
+    //         return DB::transaction(function () use ($customer, $appointmentId, $reason) {
 
-                $appointment = Appointment::where('customer_id', $customer->id)
-                    ->where('id', $appointmentId)
-                    ->first();
+    //             $appointment = Appointment::where('customer_id', $customer->id)
+    //                 ->where('id', $appointmentId)
+    //                 ->first();
 
-                if (!$appointment) {
-                    return AuthResult::error('الحجز غير موجود', null, 404);
-                }
+    //             if (!$appointment) {
+    //                 return AuthResult::error('الحجز غير موجود', null, 404);
+    //             }
 
-                if (!in_array($appointment->status, ['pending', 'confirmed'])) {
-                    $statusText = $this->getStatusText($appointment->status);
-                    return AuthResult::error("لا يمكن إلغاء هذا الحجز، حالته الحالية: {$statusText}", null, 400);
-                }
+    //             if (!in_array($appointment->status, ['pending', 'confirmed'])) {
+    //                 $statusText = $this->getStatusText($appointment->status);
+    //                 return AuthResult::error("لا يمكن إلغاء هذا الحجز، حالته الحالية: {$statusText}", null, 400);
+    //             }
 
-                $appointmentDateTime = Carbon::parse($appointment->appointment_date . ' ' . $appointment->appointment_time);
-                if ($appointmentDateTime->isPast()) {
-                    return AuthResult::error('لا يمكن إلغاء موعد بدأ بالفعل', null, 400);
-                }
+    //             $appointmentDateTime = Carbon::parse($appointment->appointment_date . ' ' . $appointment->appointment_time);
+    //             if ($appointmentDateTime->isPast()) {
+    //                 return AuthResult::error('لا يمكن إلغاء موعد بدأ بالفعل', null, 400);
+    //             }
 
-                $appointment->status = 'cancelled';
-                $appointment->cancellation_reason = $reason ?? 'تم الإلغاء من قبل العميل';
-                $appointment->cancelled_by = $customer->id;
-                $appointment->cancelled_at = now();
-                $appointment->save();
+    //             $appointment->status = 'cancelled';
+    //             $appointment->cancellation_reason = $reason ?? 'تم الإلغاء من قبل العميل';
+    //             $appointment->cancelled_by = $customer->id;
+    //             $appointment->cancelled_at = now();
+    //             $appointment->save();
 
-                return AuthResult::success('تم إلغاء الحجز بنجاح', [
-                    'id' => $appointment->id,
-                    'status' => $appointment->status,
-                    'status_text' => $this->getStatusText($appointment->status),
-                    'cancelled_at' => $appointment->cancelled_at,
-                    'cancellation_reason' => $appointment->cancellation_reason,
-                ]);
-            });
-        } catch (\Exception $e) {
-            Log::error('Cancel appointment error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء إلغاء الحجز: ' . $e->getMessage(), null, 500);
-        }
-    }
+    //             return AuthResult::success('تم إلغاء الحجز بنجاح', [
+    //                 'id' => $appointment->id,
+    //                 'status' => $appointment->status,
+    //                 'status_text' => $this->getStatusText($appointment->status),
+    //                 'cancelled_at' => $appointment->cancelled_at,
+    //                 'cancellation_reason' => $appointment->cancellation_reason,
+    //             ]);
+    //         });
+    //     } catch (\Exception $e) {
+    //         Log::error('Cancel appointment error: ' . $e->getMessage());
+    //         return AuthResult::error('حدث خطأ أثناء إلغاء الحجز: ' . $e->getMessage(), null, 500);
+    //     }
+    // }
 
     /**
      * تعديل حجز موجود
