@@ -164,7 +164,7 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
         Route::get('active', [BookingController::class, 'active']);     // الحجوزات النشطة
         Route::get('completed', [BookingController::class, 'completed']); // الحجوزات المنتهية
         Route::post('{id}/cancel', [BookingController::class, 'cancel']);
-        Route::post('{id}/get-cancel', [BookingController::class, 'cancel']); // الحجوزات الملغية
+       Route::get('cancelled', [BookingController::class, 'cancelled']);  // الحجوزات الملغية
     });
     ///المفصلات للحلاقين
     Route::get('/favorites', [FavoriteBarberController::class, 'index']);

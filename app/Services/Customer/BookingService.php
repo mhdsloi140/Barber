@@ -700,47 +700,121 @@ class BookingService
         }
     }
 
-    /**
-     * جلب الحجوزات المنتهية (مكتملة + ملغية)
-     */
-    public function getCompletedAppointments(User $customer): AuthResult
-    {
-        try {
-            if (!$customer->hasRole('customer')) {
-                return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
-            }
-
-            $appointments = Appointment::where('customer_id', $customer->id)
-                ->whereIn('status', ['completed', 'cancelled'])
-                ->with(['barber', 'salon', 'service'])
-                ->orderBy('appointment_date', 'desc')
-                ->orderBy('appointment_time', 'desc')
-                ->get();
-
-            $formattedAppointments = $appointments->map(fn($appointment) => [
-                'id' => $appointment->id,
-                'barber_name' => $appointment->barber->name,
-                'salon_name' => $appointment->salon->name,
-                'services' => $this->getAppointmentServices($appointment),
-                'total_price' => $appointment->total_price,
-                'date' => $appointment->appointment_date instanceof Carbon
-                    ? $appointment->appointment_date->format('Y-m-d')
-                    : date('Y-m-d', strtotime($appointment->appointment_date)),
-                'time' => $appointment->appointment_time instanceof Carbon
-                    ? $appointment->appointment_time->format('H:i')
-                    : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
-                'status' => $appointment->status,
-                'status_text' => $this->getStatusText($appointment->status),
-            ]);
-
-            return AuthResult::success('تم جلب الحجوزات المنتهية بنجاح', $formattedAppointments);
-
-        } catch (\Exception $e) {
-            Log::error('Get completed appointments error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب الحجوزات المنتهية', $e->getMessage(), 500);
+/**
+ * جلب الحجوزات المكتملة فقط
+ */
+public function getCompletedAppointments(User $customer): AuthResult
+{
+    try {
+        if (!$customer->hasRole('customer')) {
+            return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
         }
-    }
 
+        $appointments = Appointment::where('customer_id', $customer->id)
+            ->where('status', 'completed')  // فقط المكتملة
+            ->with(['barber', 'salon'])
+            ->orderBy('appointment_date', 'desc')
+            ->orderBy('appointment_time', 'desc')
+            ->get();
+
+        $formattedAppointments = $appointments->map(fn($appointment) => [
+            'id' => $appointment->id,
+            'barber_name' => $appointment->barber->name,
+            'barber_phone' => $appointment->barber->phone,
+            'salon_name' => $appointment->salon->name,
+            'salon_address' => $appointment->salon->address,
+            'services' => $this->getAppointmentServices($appointment),
+            'total_price' => $appointment->total_price,
+            'duration_minutes' => $appointment->duration_minutes,
+            'date' => $appointment->appointment_date instanceof Carbon
+                ? $appointment->appointment_date->format('Y-m-d')
+                : date('Y-m-d', strtotime($appointment->appointment_date)),
+            'time' => $appointment->appointment_time instanceof Carbon
+                ? $appointment->appointment_time->format('H:i')
+                : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
+            'end_time' => $appointment->end_time instanceof Carbon
+                ? $appointment->end_time->format('H:i')
+                : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
+            'status' => $appointment->status,
+            'status_text' => $this->getStatusText($appointment->status),
+            'notes' => $appointment->notes,
+            'created_at' => $appointment->created_at,
+        ]);
+
+        $stats = [
+            'total_completed' => $appointments->count(),
+        ];
+
+        return AuthResult::success('تم جلب الحجوزات المكتملة بنجاح', [
+            'statistics' => $stats,
+            'appointments' => $formattedAppointments,
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Get completed appointments error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب الحجوزات المكتملة', $e->getMessage(), 500);
+    }
+}
+
+/**
+ * جلب الحجوزات المنتهية (مكتملة + ملغية) - للتوافق مع الإصدارات السابقة
+ */
+public function getFinishedAppointments(User $customer): AuthResult
+{
+    try {
+        if (!$customer->hasRole('customer')) {
+            return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
+        }
+
+        $appointments = Appointment::where('customer_id', $customer->id)
+            ->whereIn('status', ['completed', 'cancelled'])
+            ->with(['barber', 'salon'])
+            ->orderBy('appointment_date', 'desc')
+            ->orderBy('appointment_time', 'desc')
+            ->get();
+
+        $formattedAppointments = $appointments->map(fn($appointment) => [
+            'id' => $appointment->id,
+            'barber_name' => $appointment->barber->name,
+            'barber_phone' => $appointment->barber->phone,
+            'salon_name' => $appointment->salon->name,
+            'salon_address' => $appointment->salon->address,
+            'services' => $this->getAppointmentServices($appointment),
+            'total_price' => $appointment->total_price,
+            'duration_minutes' => $appointment->duration_minutes,
+            'date' => $appointment->appointment_date instanceof Carbon
+                ? $appointment->appointment_date->format('Y-m-d')
+                : date('Y-m-d', strtotime($appointment->appointment_date)),
+            'time' => $appointment->appointment_time instanceof Carbon
+                ? $appointment->appointment_time->format('H:i')
+                : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
+            'end_time' => $appointment->end_time instanceof Carbon
+                ? $appointment->end_time->format('H:i')
+                : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
+            'status' => $appointment->status,
+            'status_text' => $this->getStatusText($appointment->status),
+            'cancellation_reason' => $appointment->cancellation_reason,
+            'cancelled_at' => $appointment->cancelled_at,
+            'notes' => $appointment->notes,
+            'created_at' => $appointment->created_at,
+        ]);
+
+        $stats = [
+            'total_completed' => $appointments->where('status', 'completed')->count(),
+            'total_cancelled' => $appointments->where('status', 'cancelled')->count(),
+            'total' => $appointments->count(),
+        ];
+
+        return AuthResult::success('تم جلب الحجوزات المنتهية بنجاح', [
+            'statistics' => $stats,
+            'appointments' => $formattedAppointments,
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Get finished appointments error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب الحجوزات المنتهية', $e->getMessage(), 500);
+    }
+}
     /**
      * إلغاء حجز من قبل الزبون (محسن)
      */
@@ -1009,4 +1083,61 @@ class BookingService
             return AuthResult::error('حدث خطأ أثناء تعديل الحجز: ' . $e->getMessage(), null, 500);
         }
     }
+    /**
+ * جلب الحجوزات الملغية فقط
+ */
+public function getCancelledAppointments(User $customer): AuthResult
+{
+    try {
+        if (!$customer->hasRole('customer')) {
+            return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
+        }
+
+        $appointments = Appointment::where('customer_id', $customer->id)
+            ->where('status', 'cancelled')
+            ->with(['barber', 'salon'])
+            ->orderBy('appointment_date', 'desc')
+            ->orderBy('appointment_time', 'desc')
+            ->get();
+
+        $formattedAppointments = $appointments->map(fn($appointment) => [
+            'id' => $appointment->id,
+            'barber_name' => $appointment->barber->name,
+            'barber_phone' => $appointment->barber->phone,
+            'salon_name' => $appointment->salon->name,
+            'salon_address' => $appointment->salon->address,
+            'services' => $this->getAppointmentServices($appointment),
+            'total_price' => $appointment->total_price,
+            'duration_minutes' => $appointment->duration_minutes,
+            'date' => $appointment->appointment_date instanceof Carbon
+                ? $appointment->appointment_date->format('Y-m-d')
+                : date('Y-m-d', strtotime($appointment->appointment_date)),
+            'time' => $appointment->appointment_time instanceof Carbon
+                ? $appointment->appointment_time->format('H:i')
+                : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
+            'end_time' => $appointment->end_time instanceof Carbon
+                ? $appointment->end_time->format('H:i')
+                : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
+            'status' => $appointment->status,
+            'status_text' => $this->getStatusText($appointment->status),
+            'cancellation_reason' => $appointment->cancellation_reason,
+            'cancelled_at' => $appointment->cancelled_at,
+            'notes' => $appointment->notes,
+            'created_at' => $appointment->created_at,
+        ]);
+
+        $stats = [
+            'total_cancelled' => $appointments->count(),
+        ];
+
+        return AuthResult::success('تم جلب الحجوزات الملغية بنجاح', [
+            'statistics' => $stats,
+            'appointments' => $formattedAppointments,
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Get cancelled appointments error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب الحجوزات الملغية', $e->getMessage(), 500);
+    }
+}
 }
