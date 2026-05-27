@@ -804,50 +804,72 @@ public function cancelAppointment(User $customer, int $appointmentId, ?string $r
     /**
      * جلب الحجوزات النشطة
      */
-    public function getActiveAppointments(User $customer): AuthResult
-    {
-        try {
-            if (!$customer->hasRole('customer')) {
-                return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
-            }
-
-            $today = Carbon::today()->format('Y-m-d');
-
-            $appointments = Appointment::where('customer_id', $customer->id)
-                ->whereIn('status', ['pending', 'confirmed'])
-                ->whereDate('appointment_date', '>=', $today)
-                ->with(['barber', 'salon'])
-                ->orderBy('appointment_date', 'asc')
-                ->orderBy('appointment_time', 'asc')
-                ->get();
-
-            $formattedAppointments = $appointments->map(fn($appointment) => [
-                'id' => $appointment->id,
-                'barber_name' => $appointment->barber->name,
-                'barber_avatar' => $appointment->barber->getAvatarUrlAttribute(),
-                'salon' => $this->formatSalonData($appointment->salon),
-                'services' => $this->getAppointmentServices($appointment),
-                'total_price' => $appointment->total_price,
-                'date' => $appointment->appointment_date instanceof Carbon
-                    ? $appointment->appointment_date->format('Y-m-d')
-                    : date('Y-m-d', strtotime($appointment->appointment_date)),
-                'time' => $appointment->appointment_time instanceof Carbon
-                    ? $appointment->appointment_time->format('H:i')
-                    : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
-                'end_time' => $appointment->end_time instanceof Carbon
-                    ? $appointment->end_time->format('H:i')
-                    : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
-                'status' => $appointment->status,
-                'status_text' => $this->getStatusText($appointment->status),
-                'can_cancel' => $this->canCancelAppointment($appointment),
-            ]);
-
-            return AuthResult::success('تم جلب الحجوزات النشطة بنجاح', $formattedAppointments);
-        } catch (\Exception $e) {
-            Log::error('Get active appointments error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب الحجوزات النشطة', $e->getMessage(), 500);
+   public function getActiveAppointments(User $customer): AuthResult
+{
+    try {
+        if (!$customer->hasRole('customer')) {
+            return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
         }
+
+        $today = Carbon::today()->format('Y-m-d');
+
+        $appointments = Appointment::where('customer_id', $customer->id)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->whereDate('appointment_date', '>=', $today)
+            ->with(['barber', 'salon'])
+            ->orderBy('appointment_date', 'asc')
+            ->orderBy('appointment_time', 'asc')
+            ->get();
+
+        $formattedAppointments = $appointments->map(fn($appointment) => [
+            'id' => $appointment->id,
+
+
+            'barber' => [
+                'id' => $appointment->barber->id,
+                'name' => $appointment->barber->name,
+                'email' => $appointment->barber->email,
+                'phone' => $appointment->barber->phone,
+                'avatar' => $appointment->barber->getAvatarUrlAttribute(),
+                'bio' => $appointment->barber->bio,
+                'is_active' => $appointment->barber->is_active,
+                'created_at' => $appointment->barber->created_at,
+                'rating' => round($appointment->barber->ratingsReceived()->avg('rating') ?? 0, 1),
+                'total_ratings' => $appointment->barber->ratingsReceived()->count(),
+                // 'experience_years' => $appointment->barber->experience_years ?? null,
+                // 'specialization' => $appointment->barber->specialization ?? null,
+            ],
+
+            // كائن الصالون كاملاً
+            'salon' => $this->formatSalonData($appointment->salon),
+
+            // الخدمات
+            'services' => $this->getAppointmentServices($appointment),
+
+            // تفاصيل الحجز
+            'total_price' => (float) $appointment->total_price,
+            'date' => $appointment->appointment_date instanceof Carbon
+                ? $appointment->appointment_date->format('Y-m-d')
+                : date('Y-m-d', strtotime($appointment->appointment_date)),
+            'time' => $appointment->appointment_time instanceof Carbon
+                ? $appointment->appointment_time->format('H:i')
+                : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
+            'end_time' => $appointment->end_time instanceof Carbon
+                ? $appointment->end_time->format('H:i')
+                : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
+            'status' => $appointment->status,
+            'status_text' => $this->getStatusText($appointment->status),
+            'can_cancel' => $this->canCancelAppointment($appointment),
+            // 'notes' => $appointment->notes,
+            'created_at' => $appointment->created_at,
+        ]);
+
+        return AuthResult::success('تم جلب الحجوزات النشطة بنجاح', $formattedAppointments);
+    } catch (\Exception $e) {
+        Log::error('Get active appointments error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب الحجوزات النشطة', $e->getMessage(), 500);
     }
+}
 
     /**
      * جلب الحجوزات المكتملة فقط
