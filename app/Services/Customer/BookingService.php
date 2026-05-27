@@ -589,6 +589,140 @@ private function canCancelAppointment(Appointment $appointment): bool
         }
     }
 
+    /**
+ * جلب تفاصيل حجز محدد
+ */
+public function getAppointmentDetails(User $customer, int $appointmentId): AuthResult
+{
+    try {
+        if (!$customer->hasRole('customer')) {
+            return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
+        }
+
+        $appointment = Appointment::where('customer_id', $customer->id)
+            ->where('id', $appointmentId)
+            ->with(['barber', 'salon', 'barber.workingHours', 'salon.workingHours'])
+            ->first();
+
+        if (!$appointment) {
+            return AuthResult::error('الحجز غير موجود', null, 404);
+        }
+
+        // الحصول على تفاصيل الخدمات
+        $services = $this->getAppointmentServices($appointment);
+
+        // حساب إجمالي المدة والسعر
+        $totalDuration = $appointment->duration_minutes;
+        $totalPrice = (float) $appointment->total_price;
+
+        // الحصول على ساعات عمل الحلاق في يوم الحجز
+        $dayOfWeek = strtolower(Carbon::parse($appointment->appointment_date)->format('l'));
+        $barberWorkingHours = $appointment->barber->workingHours()
+            ->where('day_of_week', $dayOfWeek)
+            ->where('is_open', true)
+            ->first();
+
+        // الحصول على ساعات عمل الصالون في يوم الحجز
+        $salonWorkingHours = $appointment->salon->workingHours()
+            ->where('day_of_week', $dayOfWeek)
+            ->where('is_open', true)
+            ->first();
+
+        $data = [
+            'id' => $appointment->id,
+            'status' => $appointment->status,
+            'status_text' => $this->getStatusText($appointment->status),
+            'can_cancel' => $this->canCancelAppointment($appointment),
+            'can_reschedule' => in_array($appointment->status, ['pending', 'confirmed']) &&
+                               Carbon::parse($appointment->appointment_date)->isFuture(),
+
+            // معلومات العميل
+            'customer' => [
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'phone' => $customer->phone,
+                'email' => $customer->email,
+            ],
+
+            // معلومات الحلاق
+            'barber' => [
+                'id' => $appointment->barber->id,
+                'name' => $appointment->barber->name,
+                'phone' => $appointment->barber->phone,
+                'avatar' => $appointment->barber->getAvatarUrlAttribute(),
+                'working_hours' => $barberWorkingHours ? [
+                    'start' => $barberWorkingHours->shift1_start,
+                    'end' => $barberWorkingHours->shift1_end,
+
+                ] : null,
+            ],
+
+            // معلومات الصالون
+            'salon' => $this->formatSalonData($appointment->salon),
+            'salon_working_hours' => $salonWorkingHours ? [
+                'start' => $salonWorkingHours->shift1_start,
+                'end' => $salonWorkingHours->shift1_end,
+
+            ] : null,
+
+            // تفاصيل الخدمات
+            'services' => $services,
+            'services_summary' => implode(' + ', array_column($services, 'name')),
+            'total_duration' => $totalDuration,
+            'total_duration_formatted' => $this->formatDuration($totalDuration),
+            'total_price' => $totalPrice,
+            'total_price_formatted' => number_format($totalPrice, 2) . ' ₪',
+
+            // موعد الحجز
+            'date' => $appointment->appointment_date,
+            'date_formatted' => Carbon::parse($appointment->appointment_date)->format('Y-m-d'),
+            'day_name' => $this->getArabicDayName(Carbon::parse($appointment->appointment_date)->format('l')),
+            'time' => $appointment->appointment_time instanceof Carbon
+                ? $appointment->appointment_time->format('H:i')
+                : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
+            'end_time' => $appointment->end_time instanceof Carbon
+                ? $appointment->end_time->format('H:i')
+                : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
+
+            // ملاحظات
+            // 'notes' => $appointment->notes,
+
+            // تواريخ الإنشاء والتحديث
+            'created_at' => $appointment->created_at,
+            'created_at_formatted' => Carbon::parse($appointment->created_at)->format('Y-m-d H:i'),
+            'updated_at' => $appointment->updated_at,
+
+            // معلومات الإلغاء (إذا كان ملغي)
+            // 'cancellation_reason' => $appointment->cancellation_reason,
+            'cancelled_at' => $appointment->cancelled_at,
+            'cancelled_at_formatted' => $appointment->cancelled_at ? Carbon::parse($appointment->cancelled_at)->format('Y-m-d H:i') : null,
+        ];
+
+        return AuthResult::success('تم جلب تفاصيل الحجز بنجاح', $data);
+
+    } catch (\Exception $e) {
+        Log::error('Get appointment details error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب تفاصيل الحجز', $e->getMessage(), 500);
+    }
+}
+
+/**
+ * تنسيق المدة (دقائق) إلى نص مقروء
+ */
+private function formatDuration(int $minutes): string
+{
+    $hours = floor($minutes / 60);
+    $remainingMinutes = $minutes % 60;
+
+    if ($hours > 0 && $remainingMinutes > 0) {
+        return "{$hours} ساعة و {$remainingMinutes} دقيقة";
+    } elseif ($hours > 0) {
+        return $hours == 1 ? "{$hours} ساعة" : "{$hours} ساعات";
+    } else {
+        return "{$remainingMinutes} دقيقة";
+    }
+}
+
 /**
  * إلغاء حجز من قبل الزبون
  */

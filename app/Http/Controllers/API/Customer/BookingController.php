@@ -61,7 +61,16 @@ class BookingController extends Controller
             'data' => $result->data,
         ], $result->statusCode);
     }
+    public function show($id)
+    {
+    $result = $this->bookingService->getAppointmentDetails(auth()->user(), (int) $id);
 
+    return response()->json([
+        'success' => $result->success,
+        'message' => $result->message,
+        'data' => $result->data,
+    ], $result->statusCode);
+}
     /**
      * إنشاء حجز جديد (يدعم خدمات متعددة)
      * POST /api/customer/booking/store

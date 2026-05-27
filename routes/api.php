@@ -147,36 +147,44 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
 
     Route::get('/dashboard', [DashboardCustomerController::class, 'index']);
 
+    // الصالونات
     Route::get('salons', [SalonController::class, 'index']);
     Route::get('salons/{id}', [SalonController::class, 'show']);
-
-
-    // حفظ الحجز الجديد
-    Route::post('booking/store', [BookingController::class, 'store']);
-    Route::post('/appointments/{id}', [BookingController::class, 'update']);
-    //عرض الخدمات او التفاصيل
     Route::get('salons/{id}/details', [SalonDetailsController::class, 'show']);
-    //    Route::post('{id}/cancel', [BookingController::class, 'cancel']);
-    // Route::get('barber/{barberId}/schedule', [BarberAvailabilityController::class, 'getBarberSchedule']);
-    Route::get('barber/{barberId}/schedule', [BarberAvailabilityController::class, 'getBarberSchedule']);
+
+    // الحجوزات
     Route::prefix('appointments')->group(function () {
-        Route::get('/', [BookingController::class, 'index']);           // جميع الحجوزات
-        Route::get('active', [BookingController::class, 'active']);     // الحجوزات النشطة
-        Route::get('completed', [BookingController::class, 'completed']); // الحجوزات المنتهية
-        Route::post('{id}/cancel', [BookingController::class, 'cancel']);
-       Route::get('cancelled', [BookingController::class, 'cancelled']);  // الحجوزات الملغية
+        Route::get('/', [BookingController::class, 'index']);                    // جميع الحجوزات
+        Route::get('active', [BookingController::class, 'active']);              // الحجوزات النشطة
+        Route::get('completed', [BookingController::class, 'completed']);        // الحجوزات المكتملة
+        Route::get('cancelled', [BookingController::class, 'cancelled']);        // الحجوزات الملغية
+        Route::get('{id}', [BookingController::class, 'show']);                  // تفاصيل حجز محدد (هذا السطر سيأتي قبل الـ cancel)
+        Route::post('{id}/cancel', [BookingController::class, 'cancel']);        // إلغاء حجز
+        Route::post('{id}', [BookingController::class, 'update']);               // تحديث حجز
     });
-    ///المفصلات للحلاقين
-    Route::get('/favorites', [FavoriteBarberController::class, 'index']);
-    Route::post('/favorites', [FavoriteBarberController::class, 'store']);
-    Route::get('/favorites/check/{barberId}', [FavoriteBarberController::class, 'check']);
-    Route::delete('/favorites/{barberId}', [FavoriteBarberController::class, 'destroy']);
-    /// الفضلات الصالون
-    Route::get('/favorite-salons', [FavoriteSalonController::class, 'index']);
-    Route::post('/favorite-salons', [FavoriteSalonController::class, 'store']);
-    Route::get('/favorite-salons/check/{salonId}', [FavoriteSalonController::class, 'check']);
-    Route::get('/favorite-salons/stats', [FavoriteSalonController::class, 'stats']);
-    Route::delete('/favorite-salons/{salonId}', [FavoriteSalonController::class, 'destroy']);
+
+    // حفظ الحجز الجديد (خارج مجموعة appointments لأن له مسار مختلف)
+    Route::post('booking/store', [BookingController::class, 'store']);
+
+    // جدول الحلاق
+    Route::get('barber/{barberId}/schedule', [BarberAvailabilityController::class, 'getBarberSchedule']);
+
+    // المفضلة - حلاقين
+    Route::prefix('favorites')->group(function () {
+        Route::get('/', [FavoriteBarberController::class, 'index']);
+        Route::post('/', [FavoriteBarberController::class, 'store']);
+        Route::get('check/{barberId}', [FavoriteBarberController::class, 'check']);
+        Route::delete('{barberId}', [FavoriteBarberController::class, 'destroy']);
+    });
+
+    // المفضلة - صالونات
+    Route::prefix('favorite-salons')->group(function () {
+        Route::get('/', [FavoriteSalonController::class, 'index']);
+        Route::post('/', [FavoriteSalonController::class, 'store']);
+        Route::get('check/{salonId}', [FavoriteSalonController::class, 'check']);
+        Route::get('stats', [FavoriteSalonController::class, 'stats']);
+        Route::delete('{salonId}', [FavoriteSalonController::class, 'destroy']);
+    });
 
 });
 Route::prefix('ratings')->group(function () {
