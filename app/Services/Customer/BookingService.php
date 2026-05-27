@@ -888,10 +888,10 @@ private function getBarberRatingData(User $barber): array
                 'name' => $appointment->barber->name,
                 'phone' => $appointment->barber->phone,
                 'avatar' => $appointment->barber->getAvatarUrlAttribute(),
-                'bio' => $appointment->barber->bio,
+                // 'bio' => $appointment->barber->bio,
                 'is_active' => $appointment->barber->is_active,
                 'created_at' => $appointment->barber->created_at,
-                'rating' => $this->getBarberRatingData($appointment->barber), // استخدام الدالة الجديدة
+                'rating' => $this->getBarberRatingData($appointment->barber),
             ],
 
             'salon' => $this->formatSalonData($appointment->salon),
