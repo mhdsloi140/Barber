@@ -801,10 +801,69 @@ public function cancelAppointment(User $customer, int $appointmentId, ?string $r
         return AuthResult::error('حدث خطأ أثناء إلغاء الحجز: ' . $e->getMessage(), null, 500);
     }
 }
-    /**
-     * جلب الحجوزات النشطة
-     */
-   public function getActiveAppointments(User $customer): AuthResult
+ /**
+ * حساب تقييم الحلاق مع التوزيع
+ */
+private function getBarberRatingData(User $barber): array
+{
+    $ratings = $barber->ratingsReceived()
+        ->where('status', 'approved')
+        ->get();
+
+    $totalRatings = $ratings->count();
+
+    if ($totalRatings === 0) {
+        return [
+            'average' => 0,
+            'total' => 0,
+            'distribution' => [
+                5 => 0,
+                4 => 0,
+                3 => 0,
+                2 => 0,
+                1 => 0,
+            ],
+            'recent' => []
+        ];
+    }
+
+    // حساب التوزيع
+    $distribution = [
+        5 => 0,
+        4 => 0,
+        3 => 0,
+        2 => 0,
+        1 => 0,
+    ];
+
+    foreach ($ratings as $rating) {
+        $ratingValue = (int) round($rating->rating);
+        if (isset($distribution[$ratingValue])) {
+            $distribution[$ratingValue]++;
+        }
+    }
+
+    // حساب المتوسط
+    $average = round($ratings->avg('rating'), 1);
+
+    // جلب آخر 3 تقييمات
+    $recent = $ratings->sortByDesc('created_at')->take(3)->map(fn($rating) => [
+        'id' => $rating->id,
+        'rating' => $rating->rating,
+        'comment' => $rating->comment,
+        'customer_name' => $rating->customer->name ?? null,
+        'created_at' => $rating->created_at,
+        'created_at_formatted' => Carbon::parse($rating->created_at)->format('Y-m-d'),
+    ]);
+
+    return [
+        'average' => $average,
+        'total' => $totalRatings,
+        'distribution' => $distribution,
+        'recent' => $recent,
+    ];
+}
+ public function getActiveAppointments(User $customer): AuthResult
 {
     try {
         if (!$customer->hasRole('customer')) {
@@ -824,29 +883,21 @@ public function cancelAppointment(User $customer, int $appointmentId, ?string $r
         $formattedAppointments = $appointments->map(fn($appointment) => [
             'id' => $appointment->id,
 
-
             'barber' => [
                 'id' => $appointment->barber->id,
                 'name' => $appointment->barber->name,
-                'email' => $appointment->barber->email,
                 'phone' => $appointment->barber->phone,
                 'avatar' => $appointment->barber->getAvatarUrlAttribute(),
                 'bio' => $appointment->barber->bio,
                 'is_active' => $appointment->barber->is_active,
                 'created_at' => $appointment->barber->created_at,
-                'rating' => round($appointment->barber->ratingsReceived()->avg('rating') ?? 0, 1),
-                'total_ratings' => $appointment->barber->ratingsReceived()->count(),
-                // 'experience_years' => $appointment->barber->experience_years ?? null,
-                // 'specialization' => $appointment->barber->specialization ?? null,
+                'rating' => $this->getBarberRatingData($appointment->barber), // استخدام الدالة الجديدة
             ],
 
-            // كائن الصالون كاملاً
             'salon' => $this->formatSalonData($appointment->salon),
 
-            // الخدمات
             'services' => $this->getAppointmentServices($appointment),
 
-            // تفاصيل الحجز
             'total_price' => (float) $appointment->total_price,
             'date' => $appointment->appointment_date instanceof Carbon
                 ? $appointment->appointment_date->format('Y-m-d')
@@ -860,7 +911,6 @@ public function cancelAppointment(User $customer, int $appointmentId, ?string $r
             'status' => $appointment->status,
             'status_text' => $this->getStatusText($appointment->status),
             'can_cancel' => $this->canCancelAppointment($appointment),
-            // 'notes' => $appointment->notes,
             'created_at' => $appointment->created_at,
         ]);
 
