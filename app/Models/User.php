@@ -200,4 +200,10 @@ class User extends Authenticatable implements HasMedia
     {
         return $this->hasMany(DeviceToken::class)->where('is_active', true);
     }
+    public function specializations()
+{
+    return $this->belongsToMany(Specialization::class, 'barber_specializations', 'barber_id', 'specialization_id')
+        ->withTimestamps();
+}
+
 }

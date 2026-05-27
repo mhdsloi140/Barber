@@ -652,15 +652,14 @@ public function cancelAppointment(User $customer, int $appointmentId, ?string $r
             }
 
             $appointment->status = 'cancelled';
-            
+
             $appointment->save();
 
-            return AuthResult::success('تم إلغاء الحجز بنجاح', [
+            return AuthResult::success('تم إلغاء الحجز بنجاح',[
                 'id' => $appointment->id,
                 'status' => $appointment->status,
                 'status_text' => $this->getStatusText($appointment->status),
-                // 'cancelled_at' => $appointment->cancelled_at,
-                // 'cancellation_reason' => $appointment->cancellation_reason,
+
             ]);
         });
     } catch (\Exception $e) {
@@ -759,10 +758,10 @@ public function cancelAppointment(User $customer, int $appointmentId, ?string $r
 
             $stats = ['total_completed' => $appointments->count()];
 
-            return AuthResult::success('تم جلب الحجوزات المكتملة بنجاح', [
+            return AuthResult::success('تم جلب الحجوزات المكتملة بنجاح',
 
               $formattedAppointments,
-            ]);
+            );
         } catch (\Exception $e) {
             Log::error('Get completed appointments error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء جلب الحجوزات المكتملة', $e->getMessage(), 500);
@@ -814,10 +813,10 @@ public function cancelAppointment(User $customer, int $appointmentId, ?string $r
 
             $stats = ['total_cancelled' => $appointments->count()];
 
-            return AuthResult::success('تم جلب الحجوزات الملغية بنجاح', [
+            return AuthResult::success('تم جلب الحجوزات الملغية بنجاح',
 
               $formattedAppointments,
-            ]);
+            );
         } catch (\Exception $e) {
             Log::error('Get cancelled appointments error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء جلب الحجوزات الملغية', $e->getMessage(), 500);
@@ -873,10 +872,10 @@ public function cancelAppointment(User $customer, int $appointmentId, ?string $r
                 'total' => $appointments->count(),
             ];
 
-            return AuthResult::success('تم جلب الحجوزات المنتهية بنجاح', [
+            return AuthResult::success('تم جلب الحجوزات المنتهية بنجاح',
 
               $formattedAppointments,
-            ]);
+            );
         } catch (\Exception $e) {
             Log::error('Get finished appointments error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء جلب الحجوزات المنتهية', $e->getMessage(), 500);

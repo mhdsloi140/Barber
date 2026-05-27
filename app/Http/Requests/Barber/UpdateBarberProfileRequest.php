@@ -1,5 +1,5 @@
 <?php
-
+// app/Http/Requests/Barber/UpdateBarberProfileRequest.php
 
 namespace App\Http\Requests\Barber;
 
@@ -33,7 +33,66 @@ class UpdateBarberProfileRequest extends FormRequest
             'working_hours.*.is_open' => ['required_with:working_hours', 'boolean'],
             'working_hours.*.start' => ['required_if:working_hours.*.is_open,true', 'nullable', 'date_format:H:i'],
             'working_hours.*.end' => ['required_if:working_hours.*.is_open,true', 'nullable', 'date_format:H:i', 'after:working_hours.*.start'],
+
+            
+            'specialization_ids' => ['nullable'],
         ];
+    }
+
+    /**
+     * تجهيز البيانات قبل التحقق
+     */
+    protected function prepareForValidation(): void
+    {
+        // تحويل specialization_ids إلى مصفوفة إذا كان نص JSON
+        if ($this->has('specialization_ids')) {
+            $specializationIds = $this->input('specialization_ids');
+
+            // إذا كان نص JSON مثل "[1,2]"
+            if (is_string($specializationIds) && str_starts_with($specializationIds, '[')) {
+                $decoded = json_decode($specializationIds, true);
+                if (is_array($decoded)) {
+                    $this->merge([
+                        'specialization_ids' => $decoded
+                    ]);
+                }
+            }
+            // إذا كان نص مفصول بفواصل مثل "1,2"
+            elseif (is_string($specializationIds) && str_contains($specializationIds, ',')) {
+                $ids = explode(',', $specializationIds);
+                $ids = array_map('intval', array_map('trim', $ids));
+                $this->merge([
+                    'specialization_ids' => $ids
+                ]);
+            }
+            // إذا كان رقم واحد مثل "1"
+            elseif (is_string($specializationIds) && is_numeric($specializationIds)) {
+                $this->merge([
+                    'specialization_ids' => [(int)$specializationIds]
+                ]);
+            }
+        }
+    }
+
+    /**
+     * التحقق من صحة البيانات بعد التحضير
+     */
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            // التحقق من وجود الاختصاصات في قاعدة البيانات
+            if ($this->has('specialization_ids') && is_array($this->specialization_ids)) {
+                $invalidIds = [];
+                foreach ($this->specialization_ids as $id) {
+                    if (!\App\Models\Specialization::where('id', $id)->exists()) {
+                        $invalidIds[] = $id;
+                    }
+                }
+                if (!empty($invalidIds)) {
+                    $validator->errors()->add('specialization_ids', 'الاختصاصات التالية غير موجودة: ' . implode(', ', $invalidIds));
+                }
+            }
+        });
     }
 
     public function messages(): array
