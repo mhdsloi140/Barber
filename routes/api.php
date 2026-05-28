@@ -153,7 +153,7 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
     Route::get('salons/{id}/details', [SalonDetailsController::class, 'show']);
 
   Route::prefix('appointments')->group(function () {
-        
+
         Route::get('/', [BookingController::class, 'index']);           // جميع الحجوزات
         Route::get('active', [BookingController::class, 'active']);     // النشطة (pending + confirmed + مستقبلية)
         Route::get('pending', [BookingController::class, 'pending']);   // قيد الانتظار فقط
@@ -164,11 +164,13 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
         // Routes مع {id} (تأكد من وضعها في النهاية)
         Route::get('{id}', [BookingController::class, 'show']);         // تفاصيل حجز محدد
         Route::post('{id}/cancel', [BookingController::class, 'cancel']);
-        Route::put('{id}', [BookingController::class, 'update']);
+        Route::post('{id}', [BookingController::class, 'update']);
     });
 
     // حفظ الحجز الجديد (خارج مجموعة appointments لأن له مسار مختلف)
     Route::post('booking/store', [BookingController::class, 'store']);
+    // Route::put('booking/{id}', [BookingController::class, 'update']);
+
 
     // جدول الحلاق
     Route::get('barber/{barberId}/schedule', [BarberAvailabilityController::class, 'getBarberSchedule']);

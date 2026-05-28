@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Http\Requests\Customer;
 
 use Illuminate\Foundation\Http\FormRequest;
@@ -8,57 +7,20 @@ use Illuminate\Validation\Rule;
 
 class UpdateAppointmentRequest extends FormRequest
 {
-   
     public function authorize(): bool
     {
         return auth()->user()?->hasRole('customer');
     }
 
-    /**
-     * قواعد التحقق من صحة البيانات
-     */
     public function rules(): array
     {
         return [
-            // تاريخ الموعد - يمكن أن يكون تاريخ محدد أو يوم من أيام الأسبوع
             'appointment_date' => ['nullable', 'date', 'after_or_equal:today'],
             'day' => ['nullable', 'string', Rule::in(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'])],
-
-            // وقت الموعد
             'time' => ['nullable', 'date_format:H:i'],
-
-            // الخدمات - مصفوفة من معرفات الخدمات
             'service_ids' => ['nullable', 'array', 'min:1'],
             'service_ids.*' => ['exists:barber_services,id'],
 
-            // ملاحظات إضافية
-
-        ];
-    }
-
-    /**
-     * رسائل الخطأ المخصصة
-     */
-    public function messages(): array
-    {
-        return [
-            // تاريخ الموعد
-            'appointment_date.date' => 'صيغة التاريخ غير صحيحة',
-            'appointment_date.after_or_equal' => 'لا يمكن تحديد تاريخ مضى، يرجى اختيار تاريخ اليوم أو مستقبلي',
-
-            // اليوم
-            'day.in' => 'اليوم غير صالح، يرجى اختيار يوم صحيح (sunday, monday, ...)',
-
-            // الوقت
-            'time.date_format' => 'صيغة الوقت غير صحيحة، يرجى استخدام صيغة H:i (مثال: 14:30)',
-
-            // الخدمات
-            'service_ids.array' => 'يجب أن تكون الخدمات مصفوفة',
-            'service_ids.min' => 'يجب اختيار خدمة واحدة على الأقل',
-            'service_ids.*.exists' => 'إحدى الخدمات المحددة غير موجودة',
-
-            // الملاحظات
-            'notes.max' => 'الملاحظات لا يجب أن تتجاوز 500 حرف',
         ];
     }
 
@@ -67,26 +29,72 @@ class UpdateAppointmentRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        // إذا تم إرسال اليوم وليس التاريخ، نحوله إلى تاريخ
-        if ($this->has('day') && !$this->has('appointment_date')) {
-            // سيتم التعامل مع تحويل اليوم إلى تاريخ في الـ Service
+        // معالجة service_ids إذا أرسلت كـ string
+        if ($this->has('service_ids') && is_string($this->input('service_ids'))) {
+            $serviceIds = $this->input('service_ids');
+
+            // إذا كانت بصيغة JSON: "[1,2,3]"
+            if (str_starts_with($serviceIds, '[') && str_ends_with($serviceIds, ']')) {
+                $serviceIds = json_decode($serviceIds, true);
+            }
+            // إذا كانت بصيغة مفصولة بفواصل: "1,2,3"
+            elseif (str_contains($serviceIds, ',')) {
+                $serviceIds = array_map('intval', explode(',', $serviceIds));
+            }
+            // إذا كانت قيمة واحدة: "1"
+            else {
+                $serviceIds = [(int) $serviceIds];
+            }
+
+            // التأكد من أنها مصفوفة أرقام صالحة
+            if (is_array($serviceIds) && !empty($serviceIds)) {
+                $this->merge([
+                    'service_ids' => $serviceIds
+                ]);
+            }
         }
 
-        // تنظيف الوقت (إزالة الثواني إذا وجدت)
+        // تنظيف الوقت
         if ($this->has('time')) {
             $time = $this->input('time');
-            // إذا كان الوقت يحتوي على ثواني (H:i:s)، نقوم بقصه إلى H:i
             if (strlen($time) > 5 && substr_count($time, ':') == 2) {
-                $this->merge([
-                    'time' => substr($time, 0, 5)
-                ]);
+                $this->merge(['time' => substr($time, 0, 5)]);
             }
         }
     }
 
     /**
-     * الحصول على البيانات المعالجة للتحديث
+     * التحقق من صحة البيانات بعد التحضير
      */
+    public function withValidator($validator)
+    {
+        // إذا فشل التحقق من service_ids، اطبع القيمة الأصلية للتصحيح
+        if ($validator->errors()->has('service_ids')) {
+            $validator->after(function ($validator) {
+                $originalValue = $this->input('service_ids');
+                logger()->error('service_ids validation failed', [
+                    'original_value' => $originalValue,
+                    'original_type' => gettype($originalValue),
+                    'processed_value' => $this->input('service_ids'),
+                ]);
+            });
+        }
+    }
+
+    public function messages(): array
+    {
+        return [
+            'appointment_date.date' => 'صيغة التاريخ غير صحيحة',
+            'appointment_date.after_or_equal' => 'لا يمكن تحديد تاريخ مضى',
+            'day.in' => 'اليوم غير صالح',
+            'time.date_format' => 'صيغة الوقت غير صحيحة',
+            'service_ids.array' => 'يجب أن تكون الخدمات مصفوفة (مثال: [1,2,3])',
+            'service_ids.min' => 'يجب اختيار خدمة واحدة على الأقل',
+            'service_ids.*.exists' => 'إحدى الخدمات المحددة غير موجودة',
+            'notes.max' => 'الملاحظات لا يجب أن تتجاوز 500 حرف',
+        ];
+    }
+
     public function getUpdateData(): array
     {
         $data = [];
@@ -114,9 +122,6 @@ class UpdateAppointmentRequest extends FormRequest
         return $data;
     }
 
-    /**
-     * التحقق من وجود أي بيانات للتحديث
-     */
     public function hasAnyUpdateData(): bool
     {
         return $this->has('appointment_date')
