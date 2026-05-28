@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "59d5afdfafbcd4c2b25a7108665026cc",
+    "content-hash": "20b01268d1673ddc2dce42532d6ca52e",
     "packages": [
         {
             "name": "beste/clock",
@@ -4701,6 +4701,44 @@
                 }
             ],
             "time": "2025-12-02T15:19:04+00:00"
+        },
+        {
+            "name": "saeed/otp",
+            "version": "dev-main",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/saeed-mirjalili/Otp.git",
+                "reference": "3fb5d52a4be0622d7a0ad2a83c3c0b2d699bfa82"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/saeed-mirjalili/Otp/zipball/3fb5d52a4be0622d7a0ad2a83c3c0b2d699bfa82",
+                "reference": "3fb5d52a4be0622d7a0ad2a83c3c0b2d699bfa82",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/support": "^10.0"
+            },
+            "default-branch": true,
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Saeed\\Otp\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "authors": [
+                {
+                    "name": "saeed mirjalili",
+                    "email": "saeedmirjalili1367@gmail.com"
+                }
+            ],
+            "description": "otp for send password to whatsapp 1",
+            "support": {
+                "issues": "https://github.com/saeed-mirjalili/Otp/issues",
+                "source": "https://github.com/saeed-mirjalili/Otp/tree/main"
+            },
+            "time": "2025-03-13T18:24:14+00:00"
         },
         {
             "name": "spatie/image",
@@ -10450,7 +10488,9 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": {
+        "saeed/otp": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {

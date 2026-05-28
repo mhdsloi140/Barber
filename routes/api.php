@@ -153,16 +153,19 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
     Route::get('salons/{id}/details', [SalonDetailsController::class, 'show']);
 
     // الحجوزات
-    Route::prefix('appointments')->group(function () {
-        Route::get('/', [BookingController::class, 'index']);                    // جميع الحجوزات
-        Route::get('active', [BookingController::class, 'active']);              // الحجوزات النشطة
-        Route::get('completed', [BookingController::class, 'completed']);        // الحجوزات المكتملة
-        Route::get('cancelled', [BookingController::class, 'cancelled']);        // الحجوزات الملغية
-        Route::get('{id}', [BookingController::class, 'show']);                  // تفاصيل حجز محدد (هذا السطر سيأتي قبل الـ cancel)
-        Route::post('{id}/cancel', [BookingController::class, 'cancel']);        // إلغاء حجز
-        Route::post('{id}', [BookingController::class, 'update']);               // تحديث حجز
-    });
+  Route::prefix('appointments')->group(function () {
+    // أولاً: كل routes الثابتة (بدون متغيرات)
+    Route::get('active', [BookingController::class, 'active']);
+    Route::get('completed', [BookingController::class, 'completed']);
+    Route::get('cancelled', [BookingController::class, 'cancelled']);
 
+    // ثانياً: routes التي تحتوي على {id} ولكن مع كلمات ثابتة
+    Route::post('{id}/cancel', [BookingController::class, 'cancel']);
+    Route::post('{id}', [BookingController::class, 'update']);
+
+    // أخيراً: route الديناميكي {id} (يجب أن يكون آخر شيء)
+    Route::get('{id}', [BookingController::class, 'show']);
+});
     // حفظ الحجز الجديد (خارج مجموعة appointments لأن له مسار مختلف)
     Route::post('booking/store', [BookingController::class, 'store']);
 
