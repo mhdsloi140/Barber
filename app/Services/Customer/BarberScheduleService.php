@@ -91,7 +91,7 @@ public function getBarberSchedule(int $barberId, ?string $date = null): AuthResu
 
             // تخزين الأوقات المحجوزة مع id الحجز
             $bookedSlots[] = [
-                'id' => $appointment->id,  // إضافة id الحجز هنا
+                'id' => $appointment->id,  
                 'start' => $startTime,
                 'end' => $endTime,
                 'status' => $appointment->status,
