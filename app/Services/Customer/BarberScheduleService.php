@@ -25,23 +25,8 @@ class BarberScheduleService
     /**
  * جلب معرف الحجز للزبون الحالي في هذا الموعد
  */
-private function getCustomerAppointmentId(int $barberId, string $date, string $time): ?int
-{
-    $customer = auth()->user();
 
-    if (!$customer || !$customer->hasRole('customer')) {
-        return null;
-    }
-
-    $appointment = Appointment::where('barber_id', $barberId)
-        ->where('customer_id', $customer->id)
-        ->whereDate('appointment_date', $date)
-        ->whereTime('appointment_time', $time)
-        ->first();
-
-    return $appointment?->id;
-}
-   public function getBarberSchedule(int $barberId, ?string $date = null): AuthResult
+public function getBarberSchedule(int $barberId, ?string $date = null): AuthResult
 {
     try {
         // 1. جلب بيانات الحلاق
@@ -98,19 +83,19 @@ private function getCustomerAppointmentId(int $barberId, string $date, string $t
             ->orderBy('appointment_time', 'asc')
             ->get();
 
-        // الأوقات المحجوزة (فقط الأوقات مع حالة الحجز)
+        // الأوقات المحجوزة (مع إضافة id الحجز)
         $bookedSlots = [];
         $formattedAppointments = $appointments->map(function($appointment) use (&$bookedSlots) {
             $startTime = Carbon::parse($appointment->appointment_time)->format('H:i');
             $endTime = Carbon::parse($appointment->end_time)->format('H:i');
 
-            // تخزين الأوقات المحجوزة مع إضافة appointment_id
+            // تخزين الأوقات المحجوزة مع id الحجز
             $bookedSlots[] = [
+                'id' => $appointment->id,  // إضافة id الحجز هنا
                 'start' => $startTime,
                 'end' => $endTime,
                 'status' => $appointment->status,
-                'appointment_id' => $appointment->id, // إضافة معرف الحجز
-                'is_my_booking' => false, // سيتم تحديثها لاحقاً
+                'customer_name' => $appointment->customer->name,
             ];
 
             return [
@@ -125,18 +110,6 @@ private function getCustomerAppointmentId(int $barberId, string $date, string $t
                 'status_text' => $this->getStatusText($appointment->status),
             ];
         });
-
-        // الحصول على معرف الزبون الحالي
-        $currentCustomer = auth()->user();
-        $currentCustomerId = $currentCustomer && $currentCustomer->hasRole('customer') ? $currentCustomer->id : null;
-
-        // تحديث bookedSlots لتحديد إذا كان الحجز للزبون الحالي
-        foreach ($bookedSlots as $key => $slot) {
-            $appointment = $appointments->firstWhere('id', $slot['appointment_id']);
-            if ($appointment && $currentCustomerId && $appointment->customer_id === $currentCustomerId) {
-                $bookedSlots[$key]['is_my_booking'] = true;
-            }
-        }
 
         // الأوقات المتاحة
         $freeSlots = [];
@@ -155,18 +128,6 @@ private function getCustomerAppointmentId(int $barberId, string $date, string $t
                 30,
                 $appointments
             );
-        }
-
-        // إضافة appointment_id إلى الأوقات المتاحة إذا كان للزبون الحالي
-        $freeSlotsWithIds = [];
-        foreach ($freeSlots as $slot) {
-            $appointmentId = $this->getCustomerAppointmentId($barberId, $selectedDate, $slot['time']);
-            $freeSlotsWithIds[] = [
-                'time' => $slot['time'],
-                'display' => $slot['display'] ?? $slot['time'],
-                'available' => true,
-                'appointment_id' => $appointmentId, // قد يكون null إذا لم يكن هناك حجز
-            ];
         }
 
         // احصائيات الخدمات
@@ -202,15 +163,14 @@ private function getCustomerAppointmentId(int $barberId, string $date, string $t
             'services_statistics' => $servicesStatistics,
             'services_count' => $services->count(),
 
-            // أوقات محجوزة (مع إمكانية معرفة إذا كان الحجز للزبون الحالي)
+            // اوقات محجوزة (مع id الحجز)
             'booked_slots' => $bookedSlots,
             'booked_slots_count' => count($bookedSlots),
-            'booked_appointments' => $formattedAppointments,
             'booked_appointments_count' => $formattedAppointments->count(),
 
-            // أوقات متاحة (مع إمكانية وجود appointment_id إذا كان للزبون الحالي)
-            'available_slots' => $freeSlotsWithIds,
-            'available_count' => count($freeSlotsWithIds),
+            // اوقات متاحة
+            'available_slots' => $freeSlots,
+            'available_count' => count($freeSlots),
         ];
 
         return AuthResult::success('تم جلب بيانات الحلاق بنجاح', $data);
