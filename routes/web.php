@@ -7,6 +7,7 @@
     use App\Http\Controllers\Admin\ProfileController;
 
     use App\Http\Controllers\FcmTokenController;
+    use App\Services\ultraMessage\UltraMsgService;
     use Illuminate\Support\Facades\Route;
 
     /*
@@ -51,3 +52,15 @@
         Route::post('ads/{ad}/duplicate', [AdvertisementController::class, 'duplicate'])->name('ads.duplicate');
         Route::get('/admin/ads/{ad}/json', [AdvertisementController::class, 'getJson'])->name('admin.ads.json');
     });
+    Route::get('/test-whatsapp', function (UltraMsgService $whatsapp) {
+    return response()->json([
+        'configured' => $whatsapp->isConfigured(),
+        'instance_id' => config('services.ultramsg.instance_id') ? 'set' : 'not set',
+        'api_token' => config('services.ultramsg.api_token') ? 'set' : 'not set',
+    ]);
+    Route::get('/test-whatsapp-send', function (UltraMsgService $whatsapp) {
+    $result = $whatsapp->sendMessage('96', '🟢 تم تفعيل واتساب بنجاح! النظام جاهز لإرسال OTP.');
+
+    return response()->json($result);
+});
+});

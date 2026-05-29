@@ -31,4 +31,16 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | UltraMsg WhatsApp Service
+    |--------------------------------------------------------------------------
+    */
+    'ultramsg' => [
+        'enabled' => env('WHATSAPP_ENABLED', false),
+        'base_url' => env('ULTRAMSG_BASE_URL', 'https://api.ultramsg.com'),
+        'instance_id' => env('ULTRAMSG_INSTANCE_ID'),
+        'api_token' => env('ULTRAMSG_API_TOKEN'),
+    ],
+
 ];
