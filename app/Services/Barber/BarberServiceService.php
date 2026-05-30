@@ -23,30 +23,44 @@ class BarberServiceService
                     return AuthResult::error('هذا المستخدم ليس حلاقاً', null, 403);
                 }
 
+                // إنشاء الخدمة
                 $service = BarberService::create([
                     'barber_id' => $barber->id,
-                    //  'service_id' => $data['service_id'] ?? null,
                     'name' => $data['name'],
-                    // 'name_ar' => $data['name_ar'] ?? null,
                     'description' => $data['description'] ?? null,
-                    // 'description_ar' => $data['description_ar'] ?? null,
                     'price' => $data['price'],
                     'duration_minutes' => $data['duration_minutes'],
                     'is_active' => $data['is_active'] ?? true,
                 ]);
 
+                //  إرسال إشعارات لجميع الزبائن عن الخدمة الجديدة
                 try {
                     $notificationService = app(FirebaseNotificationService::class);
-                    $notificationService->notifyNewService($salon, $service);
+
+                    // جلب الصالون الذي يعمل فيه الحلاق
+                    $salon = $barber->salons()->first();
+
+                    if ($salon) {
+                        // إرسال إشعار لجميع الزبائن
+                        $notificationService->notifySalonCustomersAboutNewService($service, $barber, $salon);
+
+                        // إرسال إشعار لمدير الصالون
+                        $notificationService->notifySalonOwnerAboutNewService($service, $barber, $salon);
+                    } else {
+                        // إذا لم يكن للحلاق صالون، أرسل للجميع
+                        $notificationService->notifyAllCustomersAboutNewService($service, $barber);
+                    }
+
                 } catch (\Exception $e) {
-                    Log::error('Failed to send notification: ' . $e->getMessage());
+                    Log::error('Failed to send new service notifications: ' . $e->getMessage());
                 }
+
+
                 return AuthResult::success(
                     'تم إضافة الخدمة بنجاح',
                     $service,
                     201
                 );
-
             });
         } catch (\Exception $e) {
             Log::error('Add barber service error: ' . $e->getMessage());

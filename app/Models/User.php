@@ -25,6 +25,7 @@ class User extends Authenticatable implements HasMedia
         'verification_expires_at',
         'phone_verified_at',
         'email_verified_at',
+        'notifications_enabled',
     ];
 
     protected $hidden = [
@@ -38,6 +39,7 @@ class User extends Authenticatable implements HasMedia
         'phone_verified_at' => 'datetime',
         'verification_expires_at' => 'datetime',
         'is_active' => 'boolean',
+        'notifications_enabled' => 'boolean',
     ];
 
     // ========== العلاقات ==========
@@ -148,7 +150,37 @@ class User extends Authenticatable implements HasMedia
     }
 
 
+  public function canReceiveNotifications(): bool
+    {
+        return $this->notifications_enabled && !empty($this->fcm_token);
+    }
 
+    /**
+     * تفعيل الإشعارات
+     */
+    public function enableNotifications(): void
+    {
+        $this->update(['notifications_enabled' => true]);
+    }
+
+    /**
+     * تعطيل الإشعارات
+     */
+    public function disableNotifications(): void
+    {
+        $this->update(['notifications_enabled' => false]);
+    }
+
+    /**
+     * تبديل حالة الإشعارات
+     */
+    public function toggleNotifications(): bool
+    {
+        $this->notifications_enabled = !$this->notifications_enabled;
+        $this->save();
+
+        return $this->notifications_enabled;
+    }
 
     public function isSalonOwner(): bool
     {
@@ -191,19 +223,63 @@ class User extends Authenticatable implements HasMedia
         }
         return null;
     }
-    public function deviceTokens()
-    {
-        return $this->hasMany(DeviceToken::class);
-    }
+
 
     public function activeDeviceTokens()
     {
         return $this->hasMany(DeviceToken::class)->where('is_active', true);
     }
     public function specializations()
-{
-    return $this->belongsToMany(Specialization::class, 'barber_specializations', 'barber_id', 'specialization_id')
-        ->withTimestamps();
-}
+    {
+        return $this->belongsToMany(Specialization::class, 'barber_specializations', 'barber_id', 'specialization_id')
+            ->withTimestamps();
+    }
+    public function deviceTokens()
+    {
+        return $this->hasMany(UserDeviceToken::class);
+    }
+    public function getLatestDeviceTokenAttribute()
+    {
+        return $this->deviceTokens()
+            ->where('is_active', true)
+            ->latest('last_used_at')
+            ->value('device_token');
+    }
 
+    /**
+     * تحديث أو إنشاء توكن جهاز
+     */
+    public function updateDeviceToken(string $token, string $deviceType = 'android', ?string $deviceName = null): UserDeviceToken
+    {
+        return $this->deviceTokens()->updateOrCreate(
+            ['device_token' => $token],
+            [
+                'device_type' => $deviceType,
+                'device_name' => $deviceName,
+                'is_active' => true,
+                'last_used_at' => now(),
+            ]
+        );
+    }
+
+    /**
+     * تعطيل توكن جهاز
+     */
+    public function deactivateDeviceToken(string $token): bool
+    {
+        return $this->deviceTokens()
+            ->where('device_token', $token)
+            ->update(['is_active' => false]);
+    }
+
+    /**
+     * حذف التوكنات غير النشطة القديمة
+     */
+    public function cleanupInactiveTokens(): int
+    {
+        return $this->deviceTokens()
+            ->where('is_active', false)
+            ->where('updated_at', '<', now()->subDays(30))
+            ->delete();
+    }
 }

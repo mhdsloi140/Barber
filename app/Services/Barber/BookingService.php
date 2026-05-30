@@ -10,6 +10,7 @@ use App\Services\AuthResult;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use App\Services\Notification\FirebaseNotificationService;
 
 class BookingService
 {
@@ -78,6 +79,12 @@ class BookingService
 
                 $appointment->status = 'confirmed';
                 $appointment->save();
+                try {
+                    $notificationService = app(FirebaseNotificationService::class);
+                    $notificationService->notifyAppointmentApprovedToCustomer($appointment);
+                } catch (\Exception $e) {
+                    Log::error('Failed to send approval notification: ' . $e->getMessage());
+                }
 
                 return AuthResult::success('تم تأكيد الحجز بنجاح', $this->formatAppointment($appointment));
 
@@ -111,10 +118,17 @@ class BookingService
                 $appointment->status = 'cancelled';
                 $appointment->cancellation_reason = $reason ?? 'تم الرفض من قبل الحلاق';
                 $appointment->save();
+                try {
+                    $notificationService = app(FirebaseNotificationService::class);
+                    $notificationService->notifyAppointmentRejectedToCustomer($appointment, $reason);
+                } catch (\Exception $e) {
+                    Log::error('Failed to send rejection notification: ' . $e->getMessage());
+                }
 
                 return AuthResult::success('تم رفض الحجز بنجاح', $this->formatAppointment($appointment));
 
             });
+
         } catch (\Exception $e) {
             Log::error('Reject appointment error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء رفض الحجز', null, 500);
@@ -181,7 +195,7 @@ class BookingService
             if ($search && !empty(trim($search))) {
                 $query->whereHas('customer', function ($q) use ($search) {
                     $q->where('name', 'like', '%' . $search . '%')
-                      ->orWhere('phone', 'like', '%' . $search . '%');
+                        ->orWhere('phone', 'like', '%' . $search . '%');
                 });
             }
 
@@ -263,7 +277,7 @@ class BookingService
             }
 
             if (is_array($services) && !empty($services)) {
-                return array_map(function($service) {
+                return array_map(function ($service) {
                     return [
                         'id' => $service['id'] ?? null,
                         'name' => $service['name'] ?? null,
@@ -283,7 +297,7 @@ class BookingService
 
             if (is_array($serviceIds) && !empty($serviceIds)) {
                 $services = BarberService::whereIn('id', $serviceIds)->get();
-                return $services->map(function($service) {
+                return $services->map(function ($service) {
                     return [
                         'id' => $service->id,
                         'name' => $service->name,
@@ -295,12 +309,14 @@ class BookingService
         }
 
         if ($appointment->service) {
-            return [[
-                'id' => $appointment->service->id,
-                'name' => $appointment->service->name,
-                'price' => $appointment->service->price,
-                'duration_minutes' => $appointment->service->duration_minutes,
-            ]];
+            return [
+                [
+                    'id' => $appointment->service->id,
+                    'name' => $appointment->service->name,
+                    'price' => $appointment->service->price,
+                    'duration_minutes' => $appointment->service->duration_minutes,
+                ]
+            ];
         }
 
         return [];
@@ -333,7 +349,8 @@ class BookingService
      */
     private function formatDate($date): ?string
     {
-        if (!$date) return null;
+        if (!$date)
+            return null;
         if ($date instanceof Carbon) {
             return $date->format('Y-m-d');
         }
@@ -345,7 +362,8 @@ class BookingService
      */
     private function formatTime($time): ?string
     {
-        if (!$time) return null;
+        if (!$time)
+            return null;
         if ($time instanceof Carbon) {
             return $time->format('H:i');
         }
@@ -357,7 +375,8 @@ class BookingService
      */
     private function formatDateTime($datetime): ?string
     {
-        if (!$datetime) return null;
+        if (!$datetime)
+            return null;
         if ($datetime instanceof Carbon) {
             return $datetime->format('Y-m-d H:i:s');
         }

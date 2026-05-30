@@ -14,6 +14,7 @@ use App\Http\Controllers\API\Customer\FavoriteSalonController;
 use App\Http\Controllers\API\Customer\SalonDetailsController;
 use App\Http\Controllers\API\Notification\DeviceTokenController;
 use App\Http\Controllers\API\Notification\FcmTokenController;
+use App\Http\Controllers\API\NotificationSettingsController;
 use App\Http\Controllers\API\ProfileController;
 use App\Http\Controllers\API\RatingController;
 use App\Http\Controllers\API\Salon\AppointmentSalonController;
@@ -53,6 +54,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // FCM Token
     Route::post('/fcm-token', [FcmTokenController::class, 'update']);
     Route::delete('/fcm-token', [FcmTokenController::class, 'destroy']);
+     Route::prefix('notifications/settings')->name('notifications.settings.')->group(function () {
+        Route::get('/', [NotificationSettingsController::class, 'getStatus'])->name('status');
+        Route::post('/enable', [NotificationSettingsController::class, 'enable'])->name('enable');
+        Route::post('/disable', [NotificationSettingsController::class, 'disable'])->name('disable');
+        Route::post('/toggle', [NotificationSettingsController::class, 'toggle'])->name('toggle');
+        Route::put('/', [NotificationSettingsController::class, 'update'])->name('update');
+    });
 
 });
 Route::middleware(['auth:sanctum'])->group(function () {

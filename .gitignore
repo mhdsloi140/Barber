@@ -17,3 +17,33 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
+echo "" >> .gitignore
+echo "# Firebase credentials" >> .gitignore
+echo "storage/firebase/*.json" >> .gitignore
+echo "storage/firebase/*.key" >> .gitignore
+echo "" >> .gitignore
+echo "# Local files" >> .gitignore
+echo ".env.local" >> .gitignore
+echo ".env.testing" >> .gitignore
+echo "*.log" >> .gitignore
+echo "" >> .gitignore
+echo "# IDE files" >> .gitignore
+echo ".idea/" >> .gitignore
+echo ".vscode/" >> .gitignore
+echo "*.swp" >> .gitignore
+echo "*.swo" >> .gitignore
+
+# Firebase credentials
+storage/firebase/*.json
+storage/firebase/*.key
+
+# Local files
+.env.local
+.env.testing
+*.log
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
