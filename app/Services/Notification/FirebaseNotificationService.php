@@ -523,4 +523,34 @@ private function storeNotification(User $user, string $title, string $body, arra
             'salon_id' => $salon->id,
         ]);
     }
+    /**
+ * إرسال إشعار للحلاق عند تعديل موعد
+ */
+public function notifyAppointmentUpdatedToBarber(Appointment $appointment): void
+{
+    $barber = $appointment->barber;
+    $customer = $appointment->customer;
+
+    if (!$barber) {
+        return;
+    }
+
+    $newTime = $this->formatTime($appointment->appointment_time);
+    $newDate = $this->formatDate($appointment->appointment_date);
+
+    $title = ' تم تعديل موعد';
+    $body = "تم تعديل موعد {$customer->name} إلى {$newTime} بتاريخ {$newDate}";
+
+    $data = [
+        'type' => 'appointment_updated',
+        'appointment_id' => (string) $appointment->id,
+        'customer_name' => $customer->name,
+        'new_time' => $newTime,
+        'new_date' => $newDate,
+        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+        'screen' => 'appointment_details',
+    ];
+
+    $this->sendPushNotification($barber, $title, $body, $data);
+}
 }

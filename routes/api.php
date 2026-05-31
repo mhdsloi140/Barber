@@ -41,9 +41,9 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login'])->name('login');
     Route::post('register', [AuthController::class, 'register'])->name('register');
-     Route::post('/verify-otp', [AuthController::class, 'verifyOTP']);
-     Route::post('/resend-otp', [AuthController::class, 'resendOTP']);
-     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/verify-otp', [AuthController::class, 'verifyOTP']);
+    Route::post('/resend-otp', [AuthController::class, 'resendOTP']);
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
     Route::post('/check-reset-otp', [AuthController::class, 'checkResetOTPStatus']);
     Route::post('register/salon-owner', [App\Http\Controllers\API\Salon\AuthController::class, 'registerSalonOwner']);
@@ -54,7 +54,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // FCM Token
     Route::post('/fcm-token', [FcmTokenController::class, 'update']);
     Route::delete('/fcm-token', [FcmTokenController::class, 'destroy']);
-     Route::prefix('notifications/settings')->name('notifications.settings.')->group(function () {
+    Route::prefix('notifications/settings')->name('notifications.settings.')->group(function () {
         Route::get('/', [NotificationSettingsController::class, 'getStatus'])->name('status');
         Route::post('/enable', [NotificationSettingsController::class, 'enable'])->name('enable');
         Route::post('/disable', [NotificationSettingsController::class, 'disable'])->name('disable');
@@ -77,21 +77,21 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
 
-Route::prefix('auth')->name('auth.')->group(function () {
+    Route::prefix('auth')->name('auth.')->group(function () {
 
-    //  نقل Routes الـ profile إلى داخل auth
-    Route::prefix('profile')->name('profile.')->group(function () {
-        Route::get('/', [ProfileController::class, 'index'])->name('index');
-        Route::match(['put', 'patch'], '/', [ProfileController::class, 'update'])->name('update');
-        Route::post('/avatar', [ProfileController::class, 'updateAvatar'])->name('avatar');
-        Route::delete('/avatar', [ProfileController::class, 'deleteAvatar'])->name('avatar.delete');
+        //  نقل Routes الـ profile إلى داخل auth
+        Route::prefix('profile')->name('profile.')->group(function () {
+            Route::get('/', [ProfileController::class, 'index'])->name('index');
+            Route::post('/', [ProfileController::class, 'update'])->name('update');
+            Route::post('/avatar', [ProfileController::class, 'updateAvatar'])->name('avatar');
+            Route::delete('/avatar', [ProfileController::class, 'deleteAvatar'])->name('avatar.delete');
+        });
+
+        Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+        Route::post('/logout-all', [AuthController::class, 'logoutFromAllDevices'])->name('logout-all');
+        Route::post('/refresh', [AuthController::class, 'refresh'])->name('refresh');
+        Route::get('/me', [AuthController::class, 'me'])->name('me');
     });
-
-    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
-    Route::post('/logout-all', [AuthController::class, 'logoutFromAllDevices'])->name('logout-all');
-    Route::post('/refresh', [AuthController::class, 'refresh'])->name('refresh');
-    Route::get('/me', [AuthController::class, 'me'])->name('me');
-});
 
 
     Route::post('/change-password', [ProfileController::class, 'changePassword'])->name('password.change');
@@ -165,7 +165,7 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
     Route::get('salons/{id}', [SalonController::class, 'show']);
     Route::get('salons/{id}/details', [SalonDetailsController::class, 'show']);
 
-  Route::prefix('appointments')->group(function () {
+    Route::prefix('appointments')->group(function () {
 
         Route::get('/', [BookingController::class, 'index']);           // جميع الحجوزات
         Route::get('active', [BookingController::class, 'active']);     // النشطة (pending + confirmed + مستقبلية)

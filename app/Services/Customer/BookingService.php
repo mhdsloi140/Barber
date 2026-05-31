@@ -877,46 +877,88 @@ class BookingService
     /**
      * تحديث حجز
      */
-    public function updateAppointment(User $customer, int $appointmentId, array $data): AuthResult
-    {
-        try {
-            return DB::transaction(function () use ($customer, $appointmentId, $data) {
-                $appointment = Appointment::where('customer_id', $customer->id)
-                    ->where('id', $appointmentId)
-                    ->first();
+   public function updateAppointment(User $customer, int $appointmentId, array $data): AuthResult
+{
+    try {
+        return DB::transaction(function () use ($customer, $appointmentId, $data) {
+            $appointment = Appointment::where('customer_id', $customer->id)
+                ->where('id', $appointmentId)
+                ->first();
 
-                if (!$appointment) {
-                    return AuthResult::error('الحجز غير موجود', null, 404);
-                }
+            if (!$appointment) {
+                return AuthResult::error('الحجز غير موجود', null, 404);
+            }
 
-                if (!in_array($appointment->status, ['pending', 'confirmed'])) {
-                    return AuthResult::error('لا يمكن تعديل هذا الحجز', null, 400);
-                }
+            if (!in_array($appointment->status, ['pending', 'confirmed'])) {
+                return AuthResult::error('لا يمكن تعديل هذا الحجز', null, 400);
+            }
 
-                if (isset($data['time'])) {
-                    $appointment->appointment_time = Carbon::parse($data['time'])->format('H:i:s');
-                }
+            // تحديد الوقت والتاريخ الجديد (إذا وجد)
+            $newTime = $data['time'] ?? ($appointment->appointment_time instanceof Carbon
+                ? $appointment->appointment_time->format('H:i')
+                : substr($appointment->appointment_time, 0, 5));
 
-                if (isset($data['appointment_date'])) {
-                    $appointment->appointment_date = $data['appointment_date'];
-                }
+            $newDate = $data['appointment_date'] ?? ($appointment->appointment_date instanceof Carbon
+                ? $appointment->appointment_date->format('Y-m-d')
+                : $appointment->appointment_date);
 
-                if (isset($data['notes'])) {
-                    $appointment->notes = $data['notes'];
-                }
+            // حساب وقت الانتهاء (نفس المدة)
+            $duration = $appointment->duration_minutes;
+            $newTimeFormatted = Carbon::parse($newTime)->format('H:i:s');
+            $newEndTime = Carbon::parse($newTime)->addMinutes($duration)->format('H:i:s');
 
-                $appointment->save();
+            //  التحقق من تعارض المواعيد (باستثناء الحجز الحالي نفسه)
+            $conflictingBooking = Appointment::where('barber_id', $appointment->barber_id)
+                ->where('id', '!=', $appointment->id) // استثناء الحجز الحالي
+                ->whereDate('appointment_date', $newDate)
+                ->whereIn('status', ['pending', 'confirmed']) // فقط الحجوزات النشطة
+                ->where(function ($query) use ($newTimeFormatted, $newEndTime) {
+                    $query->where('appointment_time', '<', $newEndTime)
+                        ->where('end_time', '>', $newTimeFormatted);
+                })
+                ->exists();
 
-                return AuthResult::success('تم تعديل الحجز بنجاح', [
-                    'id' => $appointment->id,
-                    'status' => $appointment->status,
-                ]);
-            });
-        } catch (\Exception $e) {
-            Log::error('Update appointment error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء تعديل الحجز: ' . $e->getMessage(), null, 500);
-        }
+            if ($conflictingBooking) {
+                return AuthResult::error('الوقت المحدد غير متاح، يوجد حجز آخر في نفس الوقت', null, 400);
+            }
+
+            // تحديث البيانات
+            if (isset($data['time'])) {
+                $appointment->appointment_time = $newTimeFormatted;
+                $appointment->end_time = $newEndTime;
+            }
+
+            if (isset($data['appointment_date'])) {
+                $appointment->appointment_date = $newDate;
+            }
+
+            if (isset($data['notes'])) {
+                $appointment->notes = $data['notes'];
+            }
+
+            $appointment->save();
+
+
+            try {
+                $notificationService = app(FirebaseNotificationService::class);
+                $notificationService->notifyAppointmentUpdatedToBarber($appointment);
+            } catch (\Exception $e) {
+                Log::error('Failed to send update notification: ' . $e->getMessage());
+            }
+
+            return AuthResult::success('تم تعديل الحجز بنجاح', [
+                'id' => $appointment->id,
+                'status' => $appointment->status,
+                'appointment_date' => $appointment->appointment_date,
+                'appointment_time' => $appointment->appointment_time,
+                'end_time' => $appointment->end_time,
+            ]);
+        });
+    } catch (\Exception $e) {
+        Log::error('Update appointment error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء تعديل الحجز: ' . $e->getMessage(), null, 500);
     }
+}
     /**
      * جلب الحجوزات قيد الانتظار فقط
      */
