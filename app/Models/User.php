@@ -177,16 +177,7 @@ public function hasAvatar(): bool
     /**
      * الحصول على رابط الصورة المصغرة
      */
-    public function getAvatarThumbUrlAttribute(): ?string
-    {
-        $media = $this->getFirstMedia('avatar');
-
-        if ($media) {
-            return $media->getUrl('thumb');
-        }
-
-        return $this->getAvatarUrlAttribute();
-    }
+ 
 
     /**
      * حذف الصورة الشخصية
@@ -257,7 +248,7 @@ public function hasAvatar(): bool
             ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/jpg', 'image/webp']);
     }
 
-  
+
     public function getProfileImageUrlAttribute()
     {
         $media = $this->getFirstMedia('profile_image');
@@ -267,7 +258,17 @@ public function hasAvatar(): bool
         return null;
     }
 
+public function getAvatarThumbUrlAttribute(): ?string
+{
+    $media = $this->getFirstMedia('avatar');
 
+    if ($media) {
+        // إرجاع الصورة الأصلية بدلاً من thumb
+        return $media->getUrl();
+    }
+
+    return $this->getAvatarUrlAttribute();
+}
     public function activeDeviceTokens()
     {
         return $this->hasMany(DeviceToken::class)->where('is_active', true);
