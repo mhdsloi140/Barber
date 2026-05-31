@@ -148,7 +148,53 @@ class User extends Authenticatable implements HasMedia
     {
         return $this->favoriteSalons()->count();
     }
+public function hasAvatar(): bool
+    {
+        return $this->getFirstMedia('avatar') !== null;
+    }
 
+    /**
+     * الحصول على رابط الصورة الشخصية
+     */
+    public function getAvatarUrlAttribute(): ?string
+    {
+        $media = $this->getFirstMedia('avatar');
+
+        if ($media) {
+            return $media->getUrl();
+        }
+
+        // صورة افتراضية حسب نوع المستخدم
+        if ($this->hasRole('salon_owner')) {
+            return asset('images/default-salon.png');
+        } elseif ($this->hasRole('barber')) {
+            return asset('images/default-barber.png');
+        }
+
+        return asset('images/default-avatar.png');
+    }
+
+    /**
+     * الحصول على رابط الصورة المصغرة
+     */
+    public function getAvatarThumbUrlAttribute(): ?string
+    {
+        $media = $this->getFirstMedia('avatar');
+
+        if ($media) {
+            return $media->getUrl('thumb');
+        }
+
+        return $this->getAvatarUrlAttribute();
+    }
+
+    /**
+     * حذف الصورة الشخصية
+     */
+    public function deleteAvatar(): void
+    {
+        $this->clearMediaCollection('avatar');
+    }
 
   public function canReceiveNotifications(): bool
     {
@@ -211,10 +257,7 @@ class User extends Authenticatable implements HasMedia
             ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/jpg', 'image/webp']);
     }
 
-    public function getAvatarUrlAttribute(): ?string
-    {
-        return $this->getFirstMediaUrl('avatar');
-    }
+  
     public function getProfileImageUrlAttribute()
     {
         $media = $this->getFirstMedia('profile_image');
