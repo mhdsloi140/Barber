@@ -64,7 +64,8 @@ class Salon extends Model implements HasMedia
     {
         return $this->favoritedByCustomers()->where('customer_id', $customerId)->exists();
     }
-    // 
+    //
+
 
     public function registerMediaCollections(): void
     {
