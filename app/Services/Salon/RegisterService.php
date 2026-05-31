@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Salon;
 use App\Models\WorkingHour;
 use App\Services\AuthResult;
+use App\Services\Notification\FirebaseNotificationService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -17,94 +18,97 @@ class RegisterService
     /**
      * تسجيل صاحب صالون جديد مع صور متعددة وصورة شخصية
      */
-    public function registerSalonOwner(array $data, ?array $images = null, ?UploadedFile $avatar = null): AuthResult
-    {
-        try {
-            return DB::transaction(function () use ($data, $images, $avatar) {
+   public function registerSalonOwner(array $data, ?array $images = null, ?UploadedFile $avatar = null): AuthResult
+{
+    try {
+        return DB::transaction(function () use ($data, $images, $avatar) {
 
-                // 1. إنشاء المستخدم
-                $user = User::create([
-                    'name' => $data['name'],
-                    'phone' => $data['phone'],
-                    'password' => Hash::make($data['password']),
-                    'role' => 'salon_owner',
-                    'is_active' => true,
-                ]);
+            // 1. إنشاء المستخدم
+            $user = User::create([
+                'name' => $data['name'],
+                'phone' => $data['phone'],
+                'password' => Hash::make($data['password']),
+                'role' => 'salon_owner',
+                'is_active' => true,
+            ]);
 
-                // رفع الصورة الشخصية إذا وجدت
-                if ($avatar) {
-                    $this->uploadAvatar($user, $avatar);
-                }
+            // رفع الصورة الشخصية إذا وجدت
+            if ($avatar) {
+                $this->uploadAvatar($user, $avatar);
+            }
 
-                // 2. تعيين الأدوار
-                $this->assignRoles($user, $data);
+            // 2. تعيين الأدوار
+            $this->assignRoles($user, $data);
 
-                // 3. إنشاء الصالون
-                $salon = Salon::create([
-                    'name' => $data['salon_name'],
-                    'owner_id' => $user->id,
-                    'address' => $data['salon_address'],
-                    'phone' => $data['salon_phone'] ?? $data['phone'],
-                    'latitude' => $data['latitude'] ?? null,
-                    'longitude' => $data['longitude'] ?? null,
-                    'is_active' => true,
-                ]);
+            // 3. إنشاء الصالون
+            $salon = Salon::create([
+                'name' => $data['salon_name'],
+                'owner_id' => $user->id,
+                'address' => $data['salon_address'],
+                'phone' => $data['salon_phone'] ?? $data['phone'],
+                'latitude' => $data['latitude'] ?? null,
+                'longitude' => $data['longitude'] ?? null,
+                'is_active' => true,
+            ]);
 
-                // 4. رفع صور الصالون
-                if ($images && is_array($images)) {
-                    $this->uploadMultipleImages($salon, $images);
-                }
+            // 4. رفع صور الصالون
+            if ($images && is_array($images)) {
+                $this->uploadMultipleImages($salon, $images);
+            }
 
-                // 5. إضافة أوقات العمل للصالون (فترة واحدة فقط)
-                if (isset($data['working_hours']) && !empty($data['working_hours'])) {
-                    $this->saveWorkingHours($salon, $data['working_hours']);
-                }
+            // 5. إضافة أوقات العمل للصالون
+            if (isset($data['working_hours']) && !empty($data['working_hours'])) {
+                $this->saveWorkingHours($salon, $data['working_hours']);
+            }
 
-                // 6. إذا كان يعمل كحلاق، أضفه للصالون
-                if (!empty($data['works_as_barber'])) {
-                    $this->addBarberToSalon($user, $salon, $data);
-                }
+            // 6. إذا كان يعمل كحلاق، أضفه للصالون
+            if (!empty($data['works_as_barber'])) {
+                $this->addBarberToSalon($user, $salon, $data);
+            }
 
-                $result = [
-                    'user' => [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'phone' => $user->phone,
-                        'role' => $user->role,
-                        'roles' => $user->getRoleNames(),
-                        'works_as_barber' => !empty($data['works_as_barber']),
-                        'avatar' => $user->getAvatarUrlAttribute(),
-                    ],
-                    'salon' => [
-                        'id' => $salon->id,
-                        'name' => $salon->name,
-                        'address' => $salon->address,
-                        'phone' => $salon->phone,
-                        'latitude' => $salon->latitude,
-                        'longitude' => $salon->longitude,
-                        'images' => $salon->getImagesUrlsAttribute(),
-                        'working_hours' => $this->getWorkingHoursFormatted($salon),
-                    ],
-                ];
-                try {
-                    $notificationService = app(SalonNotificationService::class);
-                    $notificationService->notifyAdminsNewSalon($salon);
-                } catch (\Exception $e) {
-                    Log::error('Failed to send Firebase notification: ' . $e->getMessage());
-                }
-                return AuthResult::success('تم إنشاء حساب الصالون بنجاح', $result, 201);
+            //  7. إرسال إشعار Firebase للمديرين
+            try {
+                $notificationService = app(FirebaseNotificationService::class);
+                $notificationService->notifyAdminsAboutNewSalon($salon, $user);
+            } catch (\Exception $e) {
+                Log::error('Failed to send Firebase notification to admins: ' . $e->getMessage());
+            }
 
-            });
-        } catch (\Exception $e) {
-            Log::error('Register salon owner error: ' . $e->getMessage());
+            $result = [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'phone' => $user->phone,
+                    'role' => $user->role,
+                    'roles' => $user->getRoleNames(),
+                    'works_as_barber' => !empty($data['works_as_barber']),
+                    'avatar' => $user->getAvatarUrlAttribute(),
+                ],
+                'salon' => [
+                    'id' => $salon->id,
+                    'name' => $salon->name,
+                    'address' => $salon->address,
+                    'phone' => $salon->phone,
+                    'latitude' => $salon->latitude,
+                    'longitude' => $salon->longitude,
+                    'images' => $salon->getImagesUrlsAttribute(),
+                    'working_hours' => $this->getWorkingHoursFormatted($salon),
+                ],
+            ];
 
-            return AuthResult::error(
-                'حدث خطأ أثناء إنشاء الحساب: ' . $e->getMessage(),
-                null,
-                500
-            );
-        }
+            return AuthResult::success('تم إنشاء حساب الصالون بنجاح', $result, 201);
+
+        });
+    } catch (\Exception $e) {
+        Log::error('Register salon owner error: ' . $e->getMessage());
+
+        return AuthResult::error(
+            'حدث خطأ أثناء إنشاء الحساب: ' . $e->getMessage(),
+            null,
+            500
+        );
     }
+}
 
     /**
      * رفع الصورة الشخصية

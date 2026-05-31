@@ -26,6 +26,7 @@ class User extends Authenticatable implements HasMedia
         'phone_verified_at',
         'email_verified_at',
         'notifications_enabled',
+        'fcm_token',
     ];
 
     protected $hidden = [
@@ -40,6 +41,7 @@ class User extends Authenticatable implements HasMedia
         'verification_expires_at' => 'datetime',
         'is_active' => 'boolean',
         'notifications_enabled' => 'boolean',
+         'fcm_token' => 'string',
     ];
 
     // ========== العلاقات ==========
@@ -177,7 +179,7 @@ public function hasAvatar(): bool
     /**
      * الحصول على رابط الصورة المصغرة
      */
- 
+
 
     /**
      * حذف الصورة الشخصية

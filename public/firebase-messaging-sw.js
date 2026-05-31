@@ -4,12 +4,12 @@ importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
 
 const firebaseConfig = {
-    apiKey: "AIzaSyA_if2fnykQlUH5RumzFcAiday7qaxnoV0",
-    authDomain: "naemen-57c3f.firebaseapp.com",
-    projectId: "naemen-57c3f",
-    storageBucket: "naemen-57c3f.firebasestorage.app",
-    messagingSenderId: "125209052652",
-    appId: "1:125209052652:web:79e6cdc684101844ec6cc9"
+    apiKey: "",
+    authDomain: "",
+    projectId: "",
+    storageBucket: "",
+    messagingSenderId: "",
+    appId: ""
 };
 
 firebase.initializeApp(firebaseConfig);
@@ -39,12 +39,12 @@ messaging.onBackgroundMessage((payload) => {
         actions: [
             {
                 action: 'view',
-                title: '👀 عرض',
+                title: ' عرض',
                 icon: '/img/view-icon.png'
             },
             {
                 action: 'dismiss',
-                title: '❌ إغلاق',
+                title: ' إغلاق',
                 icon: '/img/close-icon.png'
             }
         ],

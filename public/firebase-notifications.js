@@ -4,14 +4,14 @@
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-analytics.js";
 
   const firebaseConfig = {
-    apiKey: "AIzaSyA_if2fnykQlUH5RumzFcAiday7qaxnoV0",
-    authDomain: "naemen-57c3f.firebaseapp.com",
-    databaseURL: "https://naemen-57c3f-default-rtdb.firebaseio.com",
-    projectId: "naemen-57c3f",
-    storageBucket: "naemen-57c3f.firebasestorage.app",
-    messagingSenderId: "125209052652",
-    appId: "1:125209052652:web:79e6cdc684101844ec6cc9",
-    measurementId: "G-0V53HENYD4"
+    apiKey: "",
+    authDomain: "",
+    databaseURL: "",
+    projectId: "",
+    storageBucket: "",
+    messagingSenderId: "",
+    appId: "",
+    measurementId: ""
   };
 
 // تهيئة Firebase

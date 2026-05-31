@@ -470,6 +470,53 @@ class FirebaseNotificationService
 
         $this->sendPushNotification($barber, $title, $body, $data);
     }
+    /**
+ * إرسال إشعار لجميع المديرين (Admin) عند إنشاء صالون جديد
+ */
+public function notifyAdminsAboutNewSalon(Salon $salon, User $owner): void
+{
+    // جلب جميع المستخدمين الذين لديهم دور admin أو super_admin
+    $admins = User::role(['admin'])
+        ->whereNotNull('fcm_token') // فقط الذين لديهم توكن
+        ->get();
+
+    if ($admins->isEmpty()) {
+        Log::info('No admins found with FCM token to notify about new salon');
+        return;
+    }
+
+    $title = ' صالون جديد';
+    $body = "تم إنشاء صالون جديد: {$salon->name} بواسطة {$owner->name}";
+
+    $data = [
+        'type' => 'new_salon',
+        'salon_id' => (string) $salon->id,
+        'salon_name' => $salon->name,
+        'salon_phone' => $salon->phone,
+        'salon_address' => $salon->address,
+        'owner_id' => (string) $owner->id,
+        'owner_name' => $owner->name,
+        'owner_phone' => $owner->phone,
+        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+        'screen' => 'admin_salon_details',
+    ];
+
+    $sentCount = 0;
+
+    foreach ($admins as $admin) {
+        if ($this->sendPushNotification($admin, $title, $body, $data)) {
+            $sentCount++;
+        }
+        usleep(50000); // تأخير بسيط لتجنب تجاوز الحدود
+    }
+
+    Log::info('Admin notifications sent for new salon', [
+        'salon_id' => $salon->id,
+        'salon_name' => $salon->name,
+        'admins_count' => $admins->count(),
+        'sent_count' => $sentCount,
+    ]);
+}
 
     /**
      * إرسال أمر للتطبيق بالاشتراك في Topic معين

@@ -206,7 +206,7 @@ public function updateProfile(User $barber, array $data): AuthResult
                 $this->updateWorkingHours($barber, $data['working_hours']);
             }
 
-            // 🔴 تحديث الاختصاصات
+            //  تحديث الاختصاصات
             if (isset($data['specialization_ids']) && is_array($data['specialization_ids'])) {
                 $this->updateSpecializations($barber, $data['specialization_ids']);
             }
