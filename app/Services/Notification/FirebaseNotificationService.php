@@ -27,82 +27,110 @@ class FirebaseNotificationService
     /**
      * إرسال إشعار Push وتخزينه في قاعدة البيانات
      */
-    public function sendPushNotification(User $user, string $title, string $body, array $data = [], ?string $imageUrl = null): bool
-    {
-        // التحقق من تفعيل الإشعارات للمستخدم
-        if (!$user->notifications_enabled) {
-            Log::info('User has notifications disabled', ['user_id' => $user->id]);
-            return false;
-        }
-
-        // 1. تخزين الإشعار في قاعدة البيانات (حتى لو كان معطل، نخزن للإشعارات داخل التطبيق)
-        $this->storeNotification($user, $title, $body, $data, $imageUrl);
-
-        // 2. إرسال Push Notification فقط إذا كان الإشعارات مفعلة ولديه توكن
-        if (!$this->messaging) {
-            Log::warning('Firebase messaging not available');
-            return false;
-        }
-
-        $token = $user->fcm_token;
-
-        if (empty($token)) {
-            Log::info('No FCM token found for user', ['user_id' => $user->id]);
-            return false;
-        }
-
-        try {
-            $notification = Notification::create($title, $body);
-
-            $message = CloudMessage::withTarget('token', $token)
-                ->withNotification($notification)
-                ->withData($data)
-                ->withAndroidConfig([
-                    'priority' => 'high',
-                    'notification' => [
-                        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-                    ],
-                ])
-                ->withApnsConfig([
-                    'headers' => [
-                        'apns-priority' => '10',
-                    ],
-                    'payload' => [
-                        'aps' => [
-                            'sound' => 'default',
-                            'badge' => 1,
-                        ],
-                    ],
-                ]);
-
-            $this->messaging->send($message);
-
-            Log::info('Push notification sent', [
-                'user_id' => $user->id,
-                'notifications_enabled' => $user->notifications_enabled,
-            ]);
-
-            return true;
-
-        } catch (\Exception $e) {
-            Log::error('Failed to send push notification', [
-                'user_id' => $user->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            if (
-                str_contains($e->getMessage(), 'NOT_FOUND') ||
-                str_contains($e->getMessage(), 'UNREGISTERED') ||
-                str_contains($e->getMessage(), 'Invalid argument')
-            ) {
-
-                $user->update(['fcm_token' => null]);
-                Log::info('Invalid FCM token removed', ['user_id' => $user->id]);
-            }
-
-            return false;
-        }
+   public function sendPushNotification(User $user, $title, $body, array $data = [], ?string $imageUrl = null): bool
+{
+    // ✅ التحقق من وجود المستخدم
+    if (!$user) {
+        Log::error('User is null in sendPushNotification');
+        return false;
     }
+
+    // ✅ تأكد من أن title و body نص وليس مصفوفة
+    if (is_array($title)) {
+        $title = $title['title'] ?? $title[0] ?? 'إشعار';
+        Log::warning('Title was array, converted to string', ['user_id' => $user->id]);
+    }
+
+    if (is_array($body)) {
+        $body = $body['body'] ?? $body[0] ?? 'لديك إشعار جديد';
+        Log::warning('Body was array, converted to string', ['user_id' => $user->id]);
+    }
+
+    // ✅ تأكد من أنهما string
+    $title = (string) $title;
+    $body = (string) $body;
+
+    // ✅ التحقق من تفعيل الإشعارات للمستخدم
+    if (isset($user->notifications_enabled) && !$user->notifications_enabled) {
+        Log::info('User has notifications disabled', ['user_id' => $user->id]);
+        return false;
+    }
+
+    // ✅ 1. تخزين الإشعار في قاعدة البيانات
+    try {
+        $this->storeNotification($user, $title, $body, $data, $imageUrl);
+    } catch (\Exception $e) {
+        Log::error('Failed to store notification in database', [
+            'user_id' => $user->id,
+            'error' => $e->getMessage()
+        ]);
+    }
+
+    // ✅ 2. التحقق من وجود Firebase Messaging
+    if (!$this->messaging) {
+        Log::warning('Firebase messaging not available', ['user_id' => $user->id]);
+        return false;
+    }
+
+    // ✅ 3. التحقق من وجود FCM Token
+    $token = $user->fcm_token;
+    if (empty($token)) {
+        Log::info('No FCM token found for user', ['user_id' => $user->id]);
+        return false;
+    }
+
+    try {
+        // ✅ إنشاء الإشعار
+        $notification = Notification::create($title, $body);
+
+        $message = CloudMessage::withTarget('token', $token)
+            ->withNotification($notification)
+            ->withData($data)
+            ->withAndroidConfig([
+                'priority' => 'high',
+                'notification' => [
+                    'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                ],
+            ])
+            ->withApnsConfig([
+                'headers' => [
+                    'apns-priority' => '10',
+                ],
+                'payload' => [
+                    'aps' => [
+                        'sound' => 'default',
+                        'badge' => 1,
+                    ],
+                ],
+            ]);
+
+        $this->messaging->send($message);
+
+        Log::info('Push notification sent', [
+            'user_id' => $user->id,
+            'title' => $title,
+            'notifications_enabled' => $user->notifications_enabled ?? true,
+        ]);
+
+        return true;
+
+    } catch (\Exception $e) {
+        Log::error('Failed to send push notification', [
+            'user_id' => $user->id,
+            'error' => $e->getMessage(),
+        ]);
+
+        if (str_contains($e->getMessage(), 'NOT_FOUND') ||
+            str_contains($e->getMessage(), 'UNREGISTERED') ||
+            str_contains($e->getMessage(), 'Invalid argument')) {
+
+            $user->update(['fcm_token' => null]);
+            Log::info('Invalid FCM token removed', ['user_id' => $user->id]);
+        }
+
+        return false;
+    }
+}
 
     private function storeNotification(User $user, string $title, string $body, array $data = [], ?string $imageUrl = null): void
     {
@@ -132,37 +160,39 @@ class FirebaseNotificationService
     /**
      * إرسال إشعار للحلاق عند إنشاء حجز جديد
      */
-    public function notifyNewAppointmentToBarber(Salon $salon, Appointment $appointment): void
-    {
-        $barber = $appointment->barber;
-        $customer = $appointment->customer;
+   public function notifyNewAppointmentToBarber(Salon $salon, Appointment $appointment): void
+{
+    $barber = $appointment->barber;
+    $customer = $appointment->customer;
 
-        if (!$barber) {
-            Log::error('Barber not found', ['appointment_id' => $appointment->id]);
-            return;
-        }
-
-        $appointmentTime = $this->formatTime($appointment->appointment_time);
-        $services = $this->getServicesNames($appointment);
-
-        $title = 'حجز جديد';
-        $body = "لديك حجز جديد من {$customer->name} في {$appointmentTime}";
-
-        $data = [
-            'type' => 'new_appointment',
-            'appointment_id' => (string) $appointment->id,
-            'customer_name' => $customer->name,
-            'customer_phone' => $customer->phone,
-            'appointment_time' => $appointmentTime,
-            'appointment_date' => $this->formatDate($appointment->appointment_date),
-            'services' => $services,
-            'total_price' => (string) $appointment->total_price,
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'appointment_details',
-        ];
-
-        $this->sendPushNotification($barber, $title, $body, $data);
+    if (!$barber) {
+        Log::error('Barber not found', ['appointment_id' => $appointment->id]);
+        return;
     }
+
+    $appointmentTime = $this->formatTime($appointment->appointment_time);
+    $services = $this->getServicesNames($appointment);
+
+    //  تأكد من أن title و body من النوع string
+    $title = ' حجز جديد';
+    $body = "لديك حجز جديد من {$customer->name} في {$appointmentTime}";
+
+    $data = [
+        'type' => 'new_appointment',
+        'appointment_id' => (string) $appointment->id,
+        'customer_name' => $customer->name,
+        'customer_phone' => $customer->phone,
+        'appointment_time' => $appointmentTime,
+        'appointment_date' => $this->formatDate($appointment->appointment_date),
+        'services' => $services,
+        'total_price' => (string) $appointment->total_price,
+        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+        'screen' => 'appointment_details',
+    ];
+
+    //  تمرير string مباشرة
+    $this->sendPushNotification($barber, $title, $body, $data);
+}
 
     /**
      * إرسال إشعار لمدير الصالون عند إنشاء حجز جديد

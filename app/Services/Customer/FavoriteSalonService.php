@@ -108,12 +108,35 @@ public function getFavorites(User $customer): AuthResult
             ->withCount('ratings as reviews_count')
             ->get()
             ->map(function ($salon) {
+
                 $images = $salon->getMedia('salon_images')->map(function ($image) {
                     return [
                         'id' => $image->id,
-                        'url' => $image->getUrl(),
+                        'original' => $image->getUrl(),
+                        'thumb' => $image->hasGeneratedConversion('thumb')
+                            ? $image->getUrl('thumb')
+                            : $image->getUrl(),
+                        'medium' => $image->hasGeneratedConversion('medium')
+                            ? $image->getUrl('medium')
+                            : $image->getUrl(),
                     ];
                 });
+
+
+                $coverImage = $salon->getFirstMedia('salon_cover');
+                $coverImageData = null;
+                if ($coverImage) {
+                    $coverImageData = [
+                        'id' => $coverImage->id,
+                        'original' => $coverImage->getUrl(),
+                        'thumb' => $coverImage->hasGeneratedConversion('thumb')
+                            ? $coverImage->getUrl('thumb')
+                            : $coverImage->getUrl(),
+                        'medium' => $coverImage->hasGeneratedConversion('medium')
+                            ? $coverImage->getUrl('medium')
+                            : $coverImage->getUrl(),
+                    ];
+                }
 
                 // حساب توزيع التقييمات
                 $ratingDistribution = [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0];
@@ -146,8 +169,9 @@ public function getFavorites(User $customer): AuthResult
                     'latitude' => $salon->latitude,
                     'longitude' => $salon->longitude,
                     'description' => $salon->description,
+
                     'images' => $images,
-                    'cover_image' => $salon->getFirstMediaUrl('salon_cover'),
+                    'cover_image' => $coverImageData, 
                     'owner' => $salon->owner ? [
                         'id' => $salon->owner->id,
                         'name' => $salon->owner->name,
