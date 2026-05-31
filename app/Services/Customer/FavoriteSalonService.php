@@ -86,49 +86,57 @@ class FavoriteSalonService
         }
     }
 
-public function getFavorites(User $customer): AuthResult
-{
-    try {
-        if (!$customer->hasRole('customer')) {
-            return AuthResult::error('هذه الخدمة متاحة للعملاء فقط', null, 403);
-        }
+    public function getFavorites(User $customer): AuthResult
+    {
+        try {
+            if (!$customer->hasRole('customer')) {
+                return AuthResult::error('هذه الخدمة متاحة للعملاء فقط', null, 403);
+            }
 
-        $favorites = $customer->favoriteSalons()
-            ->select('salons.*')
-            ->with(['owner' => function ($q) {
-                $q->select('id', 'name', 'phone');
-            }])
-            ->with(['ratings' => function ($q) {
-                $q->select('id', 'salon_id', 'rating', 'comment',  'created_at')
-                    ->with('user:id,name,phone'); // جلب بيانات المستخدم الذي قيم
-            }])
-            ->withAvg('ratings', 'rating')
-            ->withCount('ratings as reviews_count')
-            ->get()
-            ->map(function ($salon) {
-                $images = $salon->getMedia('salon_images')->map(function ($image) {
-                    return [
-                        'id' => $image->id,
-                        'url' => $image->getUrl(),
+            $favorites = $customer->favoriteSalons()
+                ->select('salons.*')
+                ->with([
+                    'owner' => function ($q) {
+                        $q->select('id', 'name', 'phone');
+                    }
+                ])
+                ->with([
+                    'ratings' => function ($q) {
+                        $q->select('id', 'salon_id', 'rating', 'comment', 'created_at', 'customer_id')
+                            ->with('customer:id,name,phone');
+                    }
+                ])
+                ->withAvg('ratings', 'rating')
+                ->withCount('ratings as reviews_count')
+                ->get()
+                ->map(function ($salon) {
+                    $images = $salon->getMedia('salon_images')->map(function ($image) {
+                        return [
+                            'id' => $image->id,
+                            'url' => $image->getUrl(),
+                        ];
+                    });
+
+                    // حساب توزيع التقييمات (كم مرة تم التقييم بـ 1,2,3,4,5)
+                    $ratingDistribution = [
+                        1 => 0,
+                        2 => 0,
+                        3 => 0,
+                        4 => 0,
+                        5 => 0
                     ];
-                });
 
-                // حساب توزيع التقييمات (كم مرة تم التقييم بـ 1,2,3,4,5)
-                $ratingDistribution = [
-                    1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0
-                ];
+                    foreach ($salon->ratings as $rating) {
+                        $ratingDistribution[(int) $rating->rating]++;
+                    }
 
-                foreach ($salon->ratings as $rating) {
-                    $ratingDistribution[(int)$rating->rating]++;
-                }
-
-                // آخر 3 تقييمات
-                $latestRatings = $salon->ratings()
-                    ->with('user:id,name,phone')
-                    ->latest()
-                    ->take(3)
-                    ->get()
-                    ->map(function ($rating) {
+                    // آخر 3 تقييمات
+                    $latestRatings = $salon->ratings()
+                        ->with('user:id,name,phone')
+                        ->latest()
+                        ->take(3)
+                        ->get()
+                        ->map(function ($rating) {
                         return [
                             'id' => $rating->id,
                             'rating' => $rating->rating,
@@ -138,88 +146,88 @@ public function getFavorites(User $customer): AuthResult
                         ];
                     });
 
-                return [
-                    'id' => $salon->id,
-                    'name' => $salon->name,
-                    'address' => $salon->address,
-                    'phone' => $salon->phone,
-                    'latitude' => $salon->latitude,
-                    'longitude' => $salon->longitude,
-                    'description' => $salon->description,
-                   // 'email' => $salon->email,
-                    'images' => $images,
-                    'cover_image' => $salon->getFirstMediaUrl('salon_cover'),
-                    'owner' => $salon->owner ? [
-                        'id' => $salon->owner->id,
-                        'name' => $salon->owner->name,
-                        'phone' => $salon->owner->phone,
-                    ] : null,
-                    'is_favorite' => true,
-                    'working_hours' => $salon->working_hours,
-                    'is_active' => $salon->is_active,
-                    'barbers_count' => $salon->barbers()->count(),
+                    return [
+                        'id' => $salon->id,
+                        'name' => $salon->name,
+                        'address' => $salon->address,
+                        'phone' => $salon->phone,
+                        'latitude' => $salon->latitude,
+                        'longitude' => $salon->longitude,
+                        'description' => $salon->description,
+                        // 'email' => $salon->email,
+                        'images' => $images,
+                        'cover_image' => $salon->getFirstMediaUrl('salon_cover'),
+                        'owner' => $salon->owner ? [
+                            'id' => $salon->owner->id,
+                            'name' => $salon->owner->name,
+                            'phone' => $salon->owner->phone,
+                        ] : null,
+                        'is_favorite' => true,
+                        'working_hours' => $salon->working_hours,
+                        'is_active' => $salon->is_active,
+                        'barbers_count' => $salon->barbers()->count(),
 
-                    //  كائن التقييم الكامل
-                    'rating' => [
-                        'average' => round($salon->ratings_avg_rating ?? 0, 1),
-                        'total_count' => $salon->reviews_count ?? 0,
-                        'distribution' => $ratingDistribution,
-                        // 'latest_reviews' => $latestRatings,
-                    ],
-                ];
-            });
+                        //  كائن التقييم الكامل
+                        'rating' => [
+                            'average' => round($salon->ratings_avg_rating ?? 0, 1),
+                            'total_count' => $salon->reviews_count ?? 0,
+                            'distribution' => $ratingDistribution,
+                            // 'latest_reviews' => $latestRatings,
+                        ],
+                    ];
+                });
 
-        return AuthResult::success('تم جلب قائمة الصالونات المفضلة بنجاح', [
-            'count' => $favorites->count(),
-            'salons' => $favorites
-        ]);
+            return AuthResult::success('تم جلب قائمة الصالونات المفضلة بنجاح', [
+                'count' => $favorites->count(),
+                'salons' => $favorites
+            ]);
 
-    } catch (\Exception $e) {
-        Log::error('Get favorite salons error: ' . $e->getMessage());
-        return AuthResult::error('حدث خطأ أثناء جلب قائمة الصالونات المفضلة', null, 500);
-    }
-}
-
-/**
- * التحقق إذا كان الصالون مفتوحاً الآن
- */
-private function isSalonOpen($salon): bool
-{
-    if (!$salon->working_hours) {
-        return true; // افتراضي
+        } catch (\Exception $e) {
+            Log::error('Get favorite salons error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء جلب قائمة الصالونات المفضلة', null, 500);
+        }
     }
 
-    $now = now();
-    $day = strtolower($now->format('l')); // monday, tuesday, etc.
-    $currentTime = $now->format('H:i');
+    /**
+     * التحقق إذا كان الصالون مفتوحاً الآن
+     */
+    private function isSalonOpen($salon): bool
+    {
+        if (!$salon->working_hours) {
+            return true; // افتراضي
+        }
 
-    $hours = json_decode($salon->working_hours, true);
+        $now = now();
+        $day = strtolower($now->format('l')); // monday, tuesday, etc.
+        $currentTime = $now->format('H:i');
 
-    if (!isset($hours[$day]) || !$hours[$day]['is_open']) {
-        return false;
+        $hours = json_decode($salon->working_hours, true);
+
+        if (!isset($hours[$day]) || !$hours[$day]['is_open']) {
+            return false;
+        }
+
+        return $currentTime >= $hours[$day]['open'] && $currentTime <= $hours[$day]['close'];
     }
 
-    return $currentTime >= $hours[$day]['open'] && $currentTime <= $hours[$day]['close'];
-}
+    /**
+     * الحصول على أوقات العمل الافتراضية
+     */
+    private function getDefaultWorkingHours(): array
+    {
+        $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        $default = [];
 
-/**
- * الحصول على أوقات العمل الافتراضية
- */
-private function getDefaultWorkingHours(): array
-{
-    $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-    $default = [];
+        foreach ($days as $day) {
+            $default[$day] = [
+                'is_open' => true,
+                'open' => '09:00',
+                'close' => '21:00',
+            ];
+        }
 
-    foreach ($days as $day) {
-        $default[$day] = [
-            'is_open' => true,
-            'open' => '09:00',
-            'close' => '21:00',
-        ];
+        return $default;
     }
-
-    return $default;
-}
     /**
      * التحقق مما إذا كان الصالون مفضلاً
      */
