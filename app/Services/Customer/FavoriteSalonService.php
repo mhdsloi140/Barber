@@ -86,7 +86,7 @@ class FavoriteSalonService
         }
     }
 
- public function getFavorites(User $customer): AuthResult
+public function getFavorites(User $customer): AuthResult
 {
     try {
         if (!$customer->hasRole('customer')) {
@@ -100,12 +100,10 @@ class FavoriteSalonService
                     $q->select('id', 'name', 'phone');
                 }
             ])
-            ->with([
-                'ratings' => function ($q) {
-                    $q->select('id', 'salon_id', 'rating', 'comment', 'created_at', 'customer_id')
-                        ->with('customer:id,name,phone');
-                }
-            ])
+            ->with(['ratings' => function ($q) {
+                $q->select('id', 'salon_id', 'rating', 'comment', 'created_at', 'customer_id')
+                    ->with('customer:id,name,phone');
+            }])
             ->withAvg('ratings', 'rating')
             ->withCount('ratings as reviews_count')
             ->get()
@@ -124,7 +122,7 @@ class FavoriteSalonService
                     $ratingDistribution[(int) $rating->rating]++;
                 }
 
-
+                // آخر 3 تقييمات
                 $latestRatings = $salon->ratings()
                     ->with('customer:id,name,phone')
                     ->latest()
@@ -163,7 +161,7 @@ class FavoriteSalonService
                         'average' => round($salon->ratings_avg_rating ?? 0, 1),
                         'total_count' => $salon->reviews_count ?? 0,
                         'distribution' => $ratingDistribution,
-                        // 'latest_reviews' => $latestRatings,
+                        'latest_reviews' => $latestRatings,
                     ],
                 ];
             });
@@ -178,7 +176,6 @@ class FavoriteSalonService
         return AuthResult::error('حدث خطأ أثناء جلب قائمة الصالونات المفضلة: ' . $e->getMessage(), null, 500);
     }
 }
-
     /**
      * التحقق إذا كان الصالون مفتوحاً الآن
      */

@@ -3,15 +3,23 @@
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
 
+// const firebaseConfig = {
+//     apiKey: "",
+//     authDomain: "",
+//     projectId: "",
+//     storageBucket: "",
+//     messagingSenderId: "",
+//     appId: ""
+// };
 const firebaseConfig = {
-    apiKey: "",
-    authDomain: "",
-    projectId: "",
-    storageBucket: "",
-    messagingSenderId: "",
-    appId: ""
+  apiKey: "AIzaSyDGuYSHmd8X3ZT5JGZXHHFYD-h-zBaUZuw",
+  authDomain: "ne3imen.firebaseapp.com",
+  projectId: "ne3imen",
+  storageBucket: "ne3imen.firebasestorage.app",
+  messagingSenderId: "1088928548925",
+  appId: "1:1088928548925:web:17f0c3787ede4cb2510254",
+  measurementId: "G-Y9JDXPEBM7"
 };
-
 firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 

@@ -3,16 +3,25 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-analytics.js";
 
+//   const firebaseConfig = {
+//     // apiKey: "AIzaSyDGuYSHmd8X3ZT5JGZXHHFYD-h-zBaUZuw",
+//     // authDomain: "ne3imen.firebaseapp.com",
+//     // databaseURL: "ne3imen",
+//     // projectId: "ne3imen.firebasestorage.app",
+//     // storageBucket: "1088928548925",
+//     // messagingSenderId: "1088928548925",
+//     // appId: "1:1088928548925:web:17f0c3787ede4cb2510254",
+//     // measurementId: ""
+//   };
   const firebaseConfig = {
-    apiKey: "",
-    authDomain: "",
-    databaseURL: "",
-    projectId: "",
-    storageBucket: "",
-    messagingSenderId: "",
-    appId: "",
-    measurementId: ""
-  };
+  apiKey: "AIzaSyDGuYSHmd8X3ZT5JGZXHHFYD-h-zBaUZuw",
+  authDomain: "ne3imen.firebaseapp.com",
+  projectId: "ne3imen",
+  storageBucket: "ne3imen.firebasestorage.app",
+  messagingSenderId: "1088928548925",
+  appId: "1:1088928548925:web:17f0c3787ede4cb2510254",
+  measurementId: "G-Y9JDXPEBM7"
+};
 
 // تهيئة Firebase
 const app = initializeApp(firebaseConfig);
