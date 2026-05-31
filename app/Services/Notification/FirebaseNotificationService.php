@@ -319,41 +319,74 @@ private function storeNotification(User $user, string $title, string $body, arra
         $this->sendPushNotification($user, $title, $body, $data);
     }
 
-    /**
-     *  إرسال إشعار لجميع الزبائن عند إضافة خدمة جديدة
-     */
-    public function notifyAllCustomersAboutNewService(BarberService $service, User $barber): void
-    {
-        $customers = User::role('customer')
-            ->where('is_active', true)
-            ->whereNotNull('fcm_token')
-            ->get();
+   /**
+ *  إرسال إشعار لجميع الزبائن عند إضافة خدمة جديدة (باستخدام Topic)
+ */
+public function notifyAllCustomersAboutNewService(BarberService $service, User $barber): void
+{
+    $title = ' خدمة جديدة متاحة';
+    $body = "{$barber->name} أضاف خدمة جديدة: {$service->name} بسعر {$service->price} ";
 
-        if ($customers->isEmpty()) {
-            return;
-        }
+    $data = [
+        'type' => 'new_service',
+        'service_id' => (string) $service->id,
+        'barber_id' => (string) $barber->id,
+        'barber_name' => $barber->name,
+        'service_name' => $service->name,
+        'service_price' => (string) $service->price,
+        'duration_minutes' => (string) $service->duration_minutes,
+        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+        'screen' => 'services_list',
+    ];
 
-        $title = ' خدمة جديدة متاحة';
-        $body = "{$barber->name} أضاف خدمة جديدة: {$service->name} بسعر {$service->price} ";
+    //  إرسال رسالة واحدة إلى topic جميع الزبائن بدلاً من foreach
+    $this->sendToTopic($this->getAllCustomersTopic(), $title, $body, $data);
+}
+/**
+ * إرسال أمر للتطبيق بالاشتراك في Topic معين
+ */
+public function sendSubscribeCommand(User $user, string $topic): bool
+{
+    $data = [
+        'type' => 'subscribe_topic',      // نوع الإشعار الخاص
+        'topic' => $topic,                 // اسم الـ topic للاشتراك فيه
+        'action' => 'subscribe',           // subscribe أو unsubscribe
+        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+    ];
 
-        $data = [
-            'type' => 'new_service',
-            'service_id' => (string) $service->id,
-            'barber_id' => (string) $barber->id,
-            'barber_name' => $barber->name,
-            'service_name' => $service->name,
-            'service_price' => (string) $service->price,
-            'duration_minutes' => (string) $service->duration_minutes,
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'services_list',
-        ];
+    // استخدام الإرسال المباشر إلى التوكن (لشخص محدد)
+    return $this->sendPushNotification($user, 'تحديث الإشعارات', 'جاري تحديث إعدادات الإشعارات...', $data);
+}
 
-        foreach ($customers as $customer) {
-            $this->sendPushNotification($customer, $title, $body, $data);
-            usleep(50000);
-        }
-    }
+/**
+ * إرسال أمر بإلغاء الاشتراك من Topic
+ */
+public function sendUnsubscribeCommand(User $user, string $topic): bool
+{
+    $data = [
+        'type' => 'subscribe_topic',
+        'topic' => $topic,
+        'action' => 'unsubscribe',
+        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+    ];
 
+    return $this->sendPushNotification($user, 'تحديث الإشعارات', 'جاري تحديث إعدادات الإشعارات...', $data);
+}
+
+/**
+ * إرسال أمر لاشتراك الزبون في Topic صالونه المفضل
+ */
+public function subscribeCustomerToSalonTopic(User $customer, Salon $salon): void
+{
+    $topic = $this->getSalonTopic($salon->id);
+    $this->sendSubscribeCommand($customer, $topic);
+
+    Log::info('Sent subscribe command to customer', [
+        'customer_id' => $customer->id,
+        'salon_id' => $salon->id,
+        'topic' => $topic,
+    ]);
+}
     /**
      * الحصول على أسماء الخدمات كنص
      */
@@ -552,5 +585,84 @@ public function notifyAppointmentUpdatedToBarber(Appointment $appointment): void
     ];
 
     $this->sendPushNotification($barber, $title, $body, $data);
+}
+
+/**
+ * إرسال إشعار إلى موضوع (Topic) - لجميع المشتركين
+ */
+public function sendToTopic(string $topic, string $title, string $body, array $data = [], ?string $imageUrl = null): bool
+{
+    if (!$this->messaging) {
+        Log::warning('Firebase messaging not available');
+        return false;
+    }
+
+    try {
+        $notification = Notification::create($title, $body);
+
+        $message = CloudMessage::withTarget('topic', $topic)
+            ->withNotification($notification)
+            ->withData($data)
+            ->withAndroidConfig([
+                'priority' => 'high',
+                'notification' => [
+                    'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                ],
+            ])
+            ->withApnsConfig([
+                'headers' => [
+                    'apns-priority' => '10',
+                ],
+                'payload' => [
+                    'aps' => [
+                        'sound' => 'default',
+                        'badge' => 1,
+                    ],
+                ],
+            ]);
+
+        $this->messaging->send($message);
+
+        Log::info('Notification sent to topic', [
+            'topic' => $topic,
+            'title' => $title,
+        ]);
+
+        return true;
+
+    } catch (\Exception $e) {
+        Log::error('Failed to send notification to topic', [
+            'topic' => $topic,
+            'error' => $e->getMessage(),
+        ]);
+        return false;
+    }
+}
+
+/**
+ * إرسال إشعار إلى مواضيع متعددة
+ */
+public function sendToTopics(array $topics, string $title, string $body, array $data = []): void
+{
+    foreach ($topics as $topic) {
+        $this->sendToTopic($topic, $title, $body, $data);
+        usleep(50000); // تأخير بسيط بين الإرسال
+    }
+}
+
+/**
+ * الحصول على اسم topic الخاص بالصالون
+ */
+private function getSalonTopic(int $salonId): string
+{
+    return "salon_{$salonId}_customers";
+}
+
+/**
+ * الحصول على topic جميع الزبائن
+ */
+private function getAllCustomersTopic(): string
+{
+    return "all_customers";
 }
 }
