@@ -18,6 +18,9 @@ class UltraMsgService
         $this->apiToken = config('services.ultramsg.api_token', env('ULTRAMSG_API_TOKEN', ''));
         $this->baseUrl = config('services.ultramsg.base_url', env('ULTRAMSG_BASE_URL', 'https://api.ultramsg.com'));
         $this->enabled = (bool) config('services.ultramsg.enabled', env('WHATSAPP_ENABLED', false));
+         if (empty($this->instanceId) || empty($this->apiToken)) {
+            Log::warning('UltraMsg credentials not configured properly');
+        }
     }
 
     /**
@@ -130,11 +133,11 @@ class UltraMsgService
     public function sendOTP(string $phone, string $otpCode, int $expiresInMinutes = 10): array
     {
         $message = " *رمز التحقق الخاص بك*\n\n" .
-                   "مرحباً بك في تطبيقنا!\n\n" .
-                   "رمز التحقق الخاص بحسابك هو:\n\n" .
-                   "*{$otpCode}*\n\n" .
-                   " هذا الرمز صالح لمدة {$expiresInMinutes} دقائق فقط.\n" .
-                   "لا تشارك هذا الرمز مع أي شخص.";
+            "مرحباً بك في تطبيقنا!\n\n" .
+            "رمز التحقق الخاص بحسابك هو:\n\n" .
+            "*{$otpCode}*\n\n" .
+            " هذا الرمز صالح لمدة {$expiresInMinutes} دقائق فقط.\n" .
+            "لا تشارك هذا الرمز مع أي شخص.";
 
         return $this->sendMessage($phone, $message, 1);
     }
