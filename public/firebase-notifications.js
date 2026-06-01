@@ -1,18 +1,7 @@
 // public/js/firebase-notifications.js
 
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-analytics.js";
-
-//   const firebaseConfig = {
-//     // apiKey: "AIzaSyDGuYSHmd8X3ZT5JGZXHHFYD-h-zBaUZuw",
-//     // authDomain: "ne3imen.firebaseapp.com",
-//     // databaseURL: "ne3imen",
-//     // projectId: "ne3imen.firebasestorage.app",
-//     // storageBucket: "1088928548925",
-//     // messagingSenderId: "1088928548925",
-//     // appId: "1:1088928548925:web:17f0c3787ede4cb2510254",
-//     // measurementId: ""
-//   };
+ importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js');
   const firebaseConfig = {
   apiKey: "AIzaSyDGuYSHmd8X3ZT5JGZXHHFYD-h-zBaUZuw",
   authDomain: "ne3imen.firebaseapp.com",
