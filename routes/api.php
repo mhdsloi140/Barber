@@ -25,7 +25,8 @@ use App\Http\Controllers\API\Salon\SalonServiceController;
 use App\Http\Controllers\API\Customer\SalonController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-
+//  use App\Services\Notification\FirebaseNotificationService;
+use App\Services\Notification\FirebaseNotificationService;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -217,4 +218,143 @@ Route::prefix('ratings')->group(function () {
         Route::post('/', [RatingController::class, 'store']);
         Route::get('my-ratings', [RatingController::class, 'myRatings']);
     });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // test
+
+
+// Route لاختبار إرسال إشعار لمستخدم محدد
+
+
+// Route لإرسال إشعار لزبون محدد
+Route::middleware(['auth:sanctum'])->post('/test/send-to-customer', function (Request $request) {
+    $request->validate([
+        'customer_id' => 'required|exists:users,id',
+        'title' => 'required|string',
+        'body' => 'required|string',
+    ]);
+
+    $customer = App\Models\User::find($request->customer_id);
+
+    // تأكد من أن المستخدم زبون
+    if (!$customer->hasRole('customer')) {
+        return response()->json([
+            'success' => false,
+            'message' => 'المستخدم ليس زبوناً'
+        ], 400);
+    }
+
+    $notificationService = app(FirebaseNotificationService::class);
+
+    $data = [
+        'type' => 'test_notification',
+        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+        'screen' => 'home',
+    ];
+
+    $result = $notificationService->sendPushNotification($customer, $request->title, $request->body, $data);
+
+    return response()->json([
+        'success' => $result,
+        'message' => $result ? 'تم إرسال الإشعار للزبون' : 'فشل إرسال الإشعار',
+        'customer_id' => $customer->id,
+        'customer_name' => $customer->name,
+        'has_token' => !empty($customer->fcm_token),
+    ]);
+});
+
+// Route لإرسال إشعار لجميع الزبائن
+Route::middleware(['auth:sanctum'])->post('/test/notify-all-customers', function (Request $request) {
+    $request->validate([
+        'title' => 'required|string',
+        'body' => 'required|string',
+    ]);
+
+    $notificationService = app(FirebaseNotificationService::class);
+
+    $customers = App\Models\User::role('customer')
+        ->whereNotNull('fcm_token')
+        ->get();
+
+    $sentCount = 0;
+
+    foreach ($customers as $customer) {
+        $data = [
+            'type' => 'broadcast',
+            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+            'screen' => 'home',
+        ];
+
+        if ($notificationService->sendPushNotification($customer, $request->title, $request->body, $data)) {
+            $sentCount++;
+        }
+    }
+
+    return response()->json([
+        'success' => true,
+        'sent_count' => $sentCount,
+        'total_customers' => $customers->count(),
+        'message' => "تم إرسال الإشعار إلى {$sentCount} من أصل {$customers->count()} زبون",
+    ]);
+});
+
+// Route لجلب إشعارات الزبون (من قاعدة البيانات)
+Route::middleware(['auth:sanctum'])->get('/my-notifications', function (Request $request) {
+    $user = $request->user();
+
+    $notifications = App\Models\Notification::where('user_id', $user->id)
+        ->orderBy('created_at', 'desc')
+        ->paginate(15);
+
+    $unreadCount = App\Models\Notification::where('user_id', $user->id)
+        ->where('is_read', false)
+        ->count();
+
+    return response()->json([
+        'success' => true,
+        'unread_count' => $unreadCount,
+        'notifications' => $notifications,
+    ]);
+});
+
+// Route لتحديد إشعار كمقروء
+Route::middleware(['auth:sanctum'])->post('/notifications/{id}/read', function (Request $request, $id) {
+    $notification = App\Models\Notification::where('user_id', $request->user()->id)
+        ->where('id', $id)
+        ->first();
+
+    if (!$notification) {
+        return response()->json(['success' => false, 'message' => 'الإشعار غير موجود'], 404);
+    }
+
+    $notification->update(['is_read' => true, 'read_at' => now()]);
+
+    return response()->json(['success' => true, 'message' => 'تم تحديد الإشعار كمقروء']);
+});
 });
