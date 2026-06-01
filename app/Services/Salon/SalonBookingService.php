@@ -106,105 +106,105 @@ class SalonBookingService
     }
 
 
-    public function getSalonAppointments(User $salonOwner, ?string $search = null): AuthResult
-    {
-        try {
-            if (!$salonOwner->hasRole('salon_owner')) {
-                return AuthResult::error('هذه الخدمة متاحة لأصحاب الصالونات فقط', null, 403);
-            }
-
-            $salon = $salonOwner->ownedSalon;
-
-            if (!$salon) {
-                return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
-            }
-
-            $query = Appointment::where('salon_id', $salon->id)
-                ->with(['customer', 'barber', 'service']);
-
-            if ($search && !empty(trim($search))) {
-                $query->whereHas('barber', function ($q) use ($search) {
-                    $q->where('name', 'like', '%' . $search . '%');
-                });
-            }
-
-            $appointments = $query->orderBy('appointment_date', 'desc')
-                ->orderBy('appointment_time', 'desc')
-                ->get();
-
-
-            $formattedAppointments = $appointments->map(function ($appointment) {
-                $services = $this->getAppointmentServices($appointment);
-                $totalPrice = $this->calculateTotalPrice($appointment, $services);
-                $totalDuration = $this->calculateTotalDuration($appointment, $services);
-                $serviceNames = collect($services)->pluck('name')->implode(' + ');
-
-                return [
-                    'id' => $appointment->id,
-                    'customer_name' => $appointment->customer->name,
-                    'customer_phone' => $appointment->customer->phone,
-                    'barber_name' => $appointment->barber->name,
-                    'barber_id' => $appointment->barber->id,
-
-
-                    'services' => $services,
-                    'services_summary' => $serviceNames,
-                    'total_price' => $totalPrice,
-                    'total_duration' => $totalDuration,
-
-
-                    'service_name' => $services[0]['name'] ?? null,
-                    'service_price' => $services[0]['price'] ?? null,
-
-
-                    'date' => $this->formatDate($appointment->appointment_date),
-                    'time' => $this->formatTime($appointment->appointment_time),
-                    'end_time' => $this->formatTime($appointment->end_time),
-                    'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
-
-                    'status' => $appointment->status,
-                    'created_at' => $this->formatDateTime($appointment->created_at),
-                ];
-            });
-
-            $stats = [
-                'total' => $appointments->count(),
-                'pending' => $appointments->where('status', 'pending')->count(),
-                'confirmed' => $appointments->where('status', 'confirmed')->count(),
-                'completed' => $appointments->where('status', 'completed')->count(),
-                'cancelled' => $appointments->where('status', 'cancelled')->count(),
-                'today' => $appointments->where('appointment_date', now()->toDateString())->count(),
-            ];
-
-            $response = [
-                'statistics' => $stats,
-                'appointments' => $formattedAppointments,
-            ];
-
-            if ($search && !empty(trim($search))) {
-                $barber = User::role('barber')
-                    ->whereHas('salons', function($q) use ($salon) {
-                        $q->where('salon_id', $salon->id);
-                    })
-                    ->where('name', 'like', '%' . $search . '%')
-                    ->first();
-
-                if ($barber) {
-                    $response['searched_barber'] = [
-                        'id' => $barber->id,
-                        'name' => $barber->name,
-                        'phone' => $barber->phone,
-                    ];
-                }
-            }
-
-            return AuthResult::success('تم جلب حجوزات الصالون بنجاح', $response);
-
-        } catch (\Exception $e) {
-            Log::error('Get salon appointments error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
+   public function getSalonAppointments(User $salonOwner, ?string $search = null): AuthResult
+{
+    try {
+        if (!$salonOwner->hasRole('salon_owner')) {
+            return AuthResult::error('هذه الخدمة متاحة لأصحاب الصالونات فقط', null, 403);
         }
+
+        $salon = $salonOwner->ownedSalon;
+
+        if (!$salon) {
+            return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
+        }
+
+        $query = Appointment::where('salon_id', $salon->id)
+            ->with(['customer', 'barber', 'service']);
+
+        if ($search && !empty(trim($search))) {
+            $query->whereHas('barber', function ($q) use ($search) {
+                $q->where('name', 'like', '%' . $search . '%');
+            });
+        }
+
+
+        $appointments = $query->orderBy('appointment_date', 'desc')
+            ->orderBy('appointment_time', 'desc')
+            ->paginate(10);
+
+
+        $formattedAppointments = $appointments->getCollection()->map(function ($appointment) {
+            $services = $this->getAppointmentServices($appointment);
+            $totalPrice = $this->calculateTotalPrice($appointment, $services);
+            $totalDuration = $this->calculateTotalDuration($appointment, $services);
+            $serviceNames = collect($services)->pluck('name')->implode(' + ');
+
+            return [
+                'id' => $appointment->id,
+                'customer_name' => $appointment->customer->name ?? 'غير معروف',
+                'customer_phone' => $appointment->customer->phone ?? 'غير معروف',
+                'barber_name' => $appointment->barber->name ?? 'غير معروف',
+                'barber_id' => $appointment->barber->id,
+                'services' => $services,
+                'services_summary' => $serviceNames,
+                'total_price' => $totalPrice,
+                'total_duration' => $totalDuration,
+                'service_name' => $services[0]['name'] ?? null,
+                'service_price' => $services[0]['price'] ?? null,
+                'date' => $this->formatDate($appointment->appointment_date),
+                'time' => $this->formatTime($appointment->appointment_time),
+                'end_time' => $this->formatTime($appointment->end_time),
+                'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
+                'status' => $appointment->status,
+                'created_at' => $this->formatDateTime($appointment->created_at),
+            ];
+        });
+
+
+        $appointments->setCollection($formattedAppointments);
+
+
+        $currentPageAppointments = $appointments->getCollection();
+        $stats = [
+            'total' => $appointments->total(), // العدد الإجمالي في قاعدة البيانات
+            'current_page_total' => $currentPageAppointments->count(), // عدد العناصر في الصفحة الحالية
+            'pending' => $currentPageAppointments->where('status', 'pending')->count(),
+            'confirmed' => $currentPageAppointments->where('status', 'confirmed')->count(),
+            'completed' => $currentPageAppointments->where('status', 'completed')->count(),
+            'cancelled' => $currentPageAppointments->where('status', 'cancelled')->count(),
+            'today' => $currentPageAppointments->where('date', now()->toDateString())->count(),
+        ];
+
+        $response = [
+            'statistics' => $stats,
+            'appointments' => $appointments, 
+        ];
+
+        if ($search && !empty(trim($search))) {
+            $barber = User::role('barber')
+                ->whereHas('salons', function($q) use ($salon) {
+                    $q->where('salon_id', $salon->id);
+                })
+                ->where('name', 'like', '%' . $search . '%')
+                ->first();
+
+            if ($barber) {
+                $response['searched_barber'] = [
+                    'id' => $barber->id,
+                    'name' => $barber->name,
+                    'phone' => $barber->phone,
+                ];
+            }
+        }
+
+        return AuthResult::success('تم جلب حجوزات الصالون بنجاح', $response);
+
+    } catch (\Exception $e) {
+        Log::error('Get salon appointments error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
     }
+}
 
 
     private function formatDateTime($datetime): ?string

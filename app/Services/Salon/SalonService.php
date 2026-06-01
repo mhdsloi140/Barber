@@ -71,12 +71,6 @@ class SalonService
 
                 // تحديث البيانات
                 $salon->update($data);
-
-                Log::info('Salon updated', [
-                    'salon_id' => $salon->id,
-                    'updated_by' => $owner->id
-                ]);
-
                 // تجهيز البيانات بعد التحديث
                 $result = [
                     'id' => $salon->id,

@@ -5,6 +5,7 @@ namespace App\Services\Customer;
 
 use App\Models\Salon;
 use App\Models\Rating;
+use App\Models\User;
 use App\Models\WorkingHour;
 use App\Models\Appointment;
 use App\Models\BarberService;
@@ -69,67 +70,109 @@ class SalonService
     /**
      * عرض جميع الصالونات للزبون مع الصور والتقييمات
      */
-    public function getSalons(array $filters): AuthResult
-    {
-        try {
-            $query = Salon::where('salons.is_active', true)
-                ->with(['barbers' => function($q) {
-                    $q->where('users.is_active', true);
-                }]);
+ public function getSalons(array $filters): AuthResult
+{
+    try {
+        $query = Salon::where('salons.is_active', true)
+            ->with(['barbers' => function($q) {
+                $q->where('users.is_active', true);
+            }]);
 
-            if (!empty($filters['search'])) {
-                $query->where(function($q) use ($filters) {
-                    $q->where('salons.name', 'like', '%' . $filters['search'] . '%')
-                      ->orWhere('salons.address', 'like', '%' . $filters['search'] . '%');
-                });
-            }
-
-            $latitude = $filters['latitude'] ?? null;
-            $longitude = $filters['longitude'] ?? null;
-
-            if ($latitude && $longitude) {
-                $query->selectRaw("salons.*, (
-                    6371 * acos(
-                        cos(radians(?)) * cos(radians(salons.latitude)) *
-                        cos(radians(salons.longitude) - radians(?)) +
-                        sin(radians(?)) * sin(radians(salons.latitude))
-                    )
-                ) AS distance", [$latitude, $longitude, $latitude])
-                ->orderBy('distance', 'asc');
-            } else {
-                $query->orderBy('salons.name', 'asc');
-            }
-
-            $perPage = $filters['per_page'] ?? 10;
-            $salons = $query->paginate($perPage);
-
-            $salons->getCollection()->transform(function ($salon) use ($latitude, $longitude) {
-                return $this->formatSalonDataWithImagesAndRatings($salon, $latitude, $longitude);
+        //  البحث
+        if (!empty($filters['search'])) {
+            $query->where(function($q) use ($filters) {
+                $q->where('salons.name', 'like', '%' . $filters['search'] . '%')
+                  ->orWhere('salons.address', 'like', '%' . $filters['search'] . '%');
             });
-
-            return AuthResult::success('تم جلب الصالونات بنجاح', [
-                'salons' => $salons->items(),
-                'pagination' => [
-                    'current_page' => $salons->currentPage(),
-                    'last_page' => $salons->lastPage(),
-                    'total' => $salons->total(),
-                    'per_page' => $salons->perPage(),
-                    'has_more_pages' => $salons->hasMorePages(),
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Get salons error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب الصالونات', config('app.debug') ? $e->getMessage() : null, 500);
         }
-    }
 
-    /**
-     * عرض صالون محدد
-     * - إذا تم إرسال barber_id يعيد أوقات الفراغ لهذا الحلاق فقط
-     * - إذا لم يتم إرسال barber_id لا يعيد أي أوقات فراغ
-     * - إذا لم يتم إرسال تاريخ، يستخدم تاريخ اليوم تلقائياً
-     */
+        //  التصفية حسب المدينة (اختياري)
+        if (!empty($filters['city'])) {
+            $query->where('salons.city', 'like', '%' . $filters['city'] . '%');
+        }
+
+        //  التصفية حسب الخدمات (اختياري)
+        if (!empty($filters['service_ids'])) {
+            $serviceIds = is_array($filters['service_ids'])
+                ? $filters['service_ids']
+                : explode(',', $filters['service_ids']);
+
+            $query->whereHas('barbers.services', function($q) use ($serviceIds) {
+                $q->whereIn('barber_services.id', $serviceIds);
+            });
+        }
+
+        //  حساب المسافة والترتيب حسب القرب
+        $latitude = $filters['latitude'] ?? null;
+        $longitude = $filters['longitude'] ?? null;
+
+        if ($latitude && $longitude) {
+            $query->selectRaw("salons.*, (
+                6371 * acos(
+                    cos(radians(?)) * cos(radians(salons.latitude)) *
+                    cos(radians(salons.longitude) - radians(?)) +
+                    sin(radians(?)) * sin(radians(salons.latitude))
+                )
+            ) AS distance", [$latitude, $longitude, $latitude])
+            ->having('distance', '<', $filters['radius'] ?? 50) // نصف قطر البحث (50 كم افتراضياً)
+            ->orderBy('distance', 'asc');
+        } else {
+            $query->orderBy('salons.name', 'asc');
+        }
+
+        //  إضافة التقييمات
+        $query->withAvg('ratings', 'rating')
+            ->withCount('ratings as reviews_count');
+
+        //  التصفية حسب التقييم (اختياري)
+        if (!empty($filters['min_rating'])) {
+            $query->havingRaw('COALESCE(ratings_avg_rating, 0) >= ?', [$filters['min_rating']]);
+        }
+
+        //  Pagination
+        $perPage = $filters['per_page'] ?? 10;
+        $salons = $query->paginate($perPage);
+
+        //  تنسيق البيانات
+        $salons->getCollection()->transform(function ($salon) use ($latitude, $longitude) {
+            return $this->formatSalonDataWithImagesAndRatings($salon, $latitude, $longitude);
+        });
+
+        //  إحصائيات إضافية
+        $statistics = [
+            'total_salons' => Salon::where('is_active', true)->count(),
+            'avg_rating' => round(Salon::where('is_active', true)->withAvg('ratings', 'rating')->get()->avg('ratings_avg_rating') ?? 0, 1),
+            'total_barbers' => User::role('barber')->where('is_active', true)->count(),
+        ];
+
+        return AuthResult::success('تم جلب الصالونات بنجاح', [
+            'salons' => $salons->items(),
+            'pagination' => [
+                'current_page' => $salons->currentPage(),
+                'last_page' => $salons->lastPage(),
+                'total' => $salons->total(),
+                'per_page' => $salons->perPage(),
+                'has_more_pages' => $salons->hasMorePages(),
+                'from' => $salons->firstItem(),
+                'to' => $salons->lastItem(),
+            ],
+            'filters_applied' => [
+                'search' => $filters['search'] ?? null,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'radius' => $filters['radius'] ?? 50,
+                'min_rating' => $filters['min_rating'] ?? null,
+            ],
+            'statistics' => $statistics,
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Get salons error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب الصالونات', config('app.debug') ? $e->getMessage() : null, 500);
+    }
+}
+
+
     public function getSalon($id, ?float $latitude = null, ?float $longitude = null, ?string $date = null, ?int $barberId = null, ?int $serviceId = null): AuthResult
     {
         try {
@@ -162,7 +205,7 @@ class SalonService
             $data['working_hours'] = $this->getWorkingHoursFormatted($salon);
             $data['services'] = $this->getSalonServices($salon);
 
-            // 🔴 فقط إذا تم إرسال barber_id، نعيد أوقات الفراغ
+
             if ($barberId) {
                 // إذا لم يتم إرسال تاريخ، استخدم تاريخ اليوم
                 $parsedDate = $this->parseDate($date);

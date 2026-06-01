@@ -155,6 +155,42 @@ class FirebaseNotificationService
     }
 }
 
+/**
+ * إرسال إشعار للحلاق عند تعديل موعد
+ */
+public function notifyAppointmentUpdatedToBarber(Appointment $appointment): void
+{
+    $barber = $appointment->barber;
+    $customer = $appointment->customer;
+
+    if (!$barber) {
+        Log::error('Barber not found for appointment update', ['appointment_id' => $appointment->id]);
+        return;
+    }
+
+    $newTime = $this->formatTime($appointment->appointment_time);
+    $newDate = $this->formatDate($appointment->appointment_date);
+    $oldTime = $appointment->getOriginal('appointment_time');
+    $oldDate = $appointment->getOriginal('appointment_date');
+
+    $title = ' تم تعديل موعد';
+    $body = "تم تعديل موعد {$customer->name} إلى {$newTime} بتاريخ {$newDate}";
+
+    $data = [
+        'type' => 'appointment_updated',
+        'appointment_id' => (string) $appointment->id,
+        'customer_name' => $customer->name,
+        'customer_phone' => $customer->phone,
+        'new_time' => $newTime,
+        'new_date' => $newDate,
+        'old_time' => $this->formatTime($oldTime),
+        'old_date' => $this->formatDate($oldDate),
+        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+        'screen' => 'appointment_details',
+    ];
+
+    $this->sendPushNotification($barber, $title, $body, $data);
+}
     /**
      * تخزين الإشعار في قاعدة البيانات
      */

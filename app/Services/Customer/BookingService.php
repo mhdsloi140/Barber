@@ -458,12 +458,12 @@ class BookingService
         ];
     }
 
-    // ===================== دوال جلب الحجوزات =====================
+    // ===================== دوال جلب الحجوزات مع Pagination =====================
 
     /**
      * جلب الحجوزات النشطة (قيد الانتظار + مؤكدة - القادمة فقط)
      */
-    public function getActiveAppointments(User $customer): AuthResult
+    public function getActiveAppointments(User $customer, int $perPage = 5): AuthResult
     {
         try {
             if (!$customer->hasRole('customer')) {
@@ -478,37 +478,40 @@ class BookingService
                 ->with(['barber', 'salon'])
                 ->orderBy('appointment_date', 'asc')
                 ->orderBy('appointment_time', 'asc')
-                ->get();
+                ->paginate($perPage);
 
-            $formattedAppointments = $appointments->map(fn($appointment) => [
-                'id' => $appointment->id,
-                'barber' => [
-                    'id' => $appointment->barber->id,
-                    'name' => $appointment->barber->name,
-                    'phone' => $appointment->barber->phone,
-                    'avatar' => $appointment->barber->getAvatarUrlAttribute(),
-                    'is_active' => $appointment->barber->is_active,
-                    'rating' => $this->getBarberRatingData($appointment->barber),
-                ],
-                'salon' => $this->formatSalonData($appointment->salon),
-                'services' => $this->getAppointmentServices($appointment),
-                'total_price' => (float) $appointment->total_price,
-                'date' => $appointment->appointment_date instanceof Carbon
-                    ? $appointment->appointment_date->format('Y-m-d')
-                    : date('Y-m-d', strtotime($appointment->appointment_date)),
-                'time' => $appointment->appointment_time instanceof Carbon
-                    ? $appointment->appointment_time->format('H:i')
-                    : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
-                'end_time' => $appointment->end_time instanceof Carbon
-                    ? $appointment->end_time->format('H:i')
-                    : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
-                'status' => $appointment->status,
-                'status_text' => $this->getStatusText($appointment->status),
-                'can_cancel' => $this->canCancelAppointment($appointment),
-                'created_at' => $appointment->created_at,
-            ]);
+            
+            $appointments->getCollection()->transform(function ($appointment) {
+                return [
+                    'id' => $appointment->id,
+                    'barber' => [
+                        'id' => $appointment->barber->id,
+                        'name' => $appointment->barber->name,
+                        'phone' => $appointment->barber->phone,
+                        'avatar' => $appointment->barber->getAvatarUrlAttribute(),
+                        'is_active' => $appointment->barber->is_active,
+                        'rating' => $this->getBarberRatingData($appointment->barber),
+                    ],
+                    'salon' => $this->formatSalonData($appointment->salon),
+                    'services' => $this->getAppointmentServices($appointment),
+                    'total_price' => (float) $appointment->total_price,
+                    'date' => $appointment->appointment_date instanceof Carbon
+                        ? $appointment->appointment_date->format('Y-m-d')
+                        : date('Y-m-d', strtotime($appointment->appointment_date)),
+                    'time' => $appointment->appointment_time instanceof Carbon
+                        ? $appointment->appointment_time->format('H:i')
+                        : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
+                    'end_time' => $appointment->end_time instanceof Carbon
+                        ? $appointment->end_time->format('H:i')
+                        : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
+                    'status' => $appointment->status,
+                    'status_text' => $this->getStatusText($appointment->status),
+                    'can_cancel' => $this->canCancelAppointment($appointment),
+                    'created_at' => $appointment->created_at,
+                ];
+            });
 
-            return AuthResult::success('تم جلب الحجوزات النشطة بنجاح', $formattedAppointments);
+            return AuthResult::success('تم جلب الحجوزات النشطة بنجاح', $appointments);
         } catch (\Exception $e) {
             Log::error('Get active appointments error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء جلب الحجوزات النشطة', $e->getMessage(), 500);
@@ -518,7 +521,7 @@ class BookingService
     /**
      * جلب الحجوزات قيد الانتظار فقط
      */
-    public function getPendingAppointments(User $customer): AuthResult
+    public function getPendingAppointments(User $customer, int $perPage = 5): AuthResult
     {
         try {
             if (!$customer->hasRole('customer')) {
@@ -530,37 +533,39 @@ class BookingService
                 ->with(['barber', 'salon'])
                 ->orderBy('appointment_date', 'asc')
                 ->orderBy('appointment_time', 'asc')
-                ->get();
+                ->paginate($perPage);
 
-            $formattedAppointments = $appointments->map(fn($appointment) => [
-                'id' => $appointment->id,
-                'barber' => [
-                    'id' => $appointment->barber->id,
-                    'name' => $appointment->barber->name,
-                    'phone' => $appointment->barber->phone,
-                    'avatar' => $appointment->barber->getAvatarUrlAttribute(),
-                    'is_active' => $appointment->barber->is_active,
-                    'rating' => $this->getBarberRatingData($appointment->barber),
-                ],
-                'salon' => $this->formatSalonData($appointment->salon),
-                'services' => $this->getAppointmentServices($appointment),
-                'total_price' => (float) $appointment->total_price,
-                'date' => $appointment->appointment_date instanceof Carbon
-                    ? $appointment->appointment_date->format('Y-m-d')
-                    : date('Y-m-d', strtotime($appointment->appointment_date)),
-                'time' => $appointment->appointment_time instanceof Carbon
-                    ? $appointment->appointment_time->format('H:i')
-                    : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
-                'end_time' => $appointment->end_time instanceof Carbon
-                    ? $appointment->end_time->format('H:i')
-                    : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
-                'status' => $appointment->status,
-                'status_text' => $this->getStatusText($appointment->status),
-                'can_cancel' => $this->canCancelAppointment($appointment),
-                'created_at' => $appointment->created_at,
-            ]);
+            $appointments->getCollection()->transform(function ($appointment) {
+                return [
+                    'id' => $appointment->id,
+                    'barber' => [
+                        'id' => $appointment->barber->id,
+                        'name' => $appointment->barber->name,
+                        'phone' => $appointment->barber->phone,
+                        'avatar' => $appointment->barber->getAvatarUrlAttribute(),
+                        'is_active' => $appointment->barber->is_active,
+                        'rating' => $this->getBarberRatingData($appointment->barber),
+                    ],
+                    'salon' => $this->formatSalonData($appointment->salon),
+                    'services' => $this->getAppointmentServices($appointment),
+                    'total_price' => (float) $appointment->total_price,
+                    'date' => $appointment->appointment_date instanceof Carbon
+                        ? $appointment->appointment_date->format('Y-m-d')
+                        : date('Y-m-d', strtotime($appointment->appointment_date)),
+                    'time' => $appointment->appointment_time instanceof Carbon
+                        ? $appointment->appointment_time->format('H:i')
+                        : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
+                    'end_time' => $appointment->end_time instanceof Carbon
+                        ? $appointment->end_time->format('H:i')
+                        : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
+                    'status' => $appointment->status,
+                    'status_text' => $this->getStatusText($appointment->status),
+                    'can_cancel' => $this->canCancelAppointment($appointment),
+                    'created_at' => $appointment->created_at,
+                ];
+            });
 
-            return AuthResult::success('تم جلب الحجوزات قيد الانتظار بنجاح', $formattedAppointments);
+            return AuthResult::success('تم جلب الحجوزات قيد الانتظار بنجاح', $appointments);
         } catch (\Exception $e) {
             Log::error('Get pending appointments error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء جلب الحجوزات قيد الانتظار', $e->getMessage(), 500);
@@ -570,7 +575,7 @@ class BookingService
     /**
      * جلب الحجوزات المؤكدة فقط
      */
-    public function getConfirmedAppointments(User $customer): AuthResult
+    public function getConfirmedAppointments(User $customer, int $perPage = 5): AuthResult
     {
         try {
             if (!$customer->hasRole('customer')) {
@@ -582,37 +587,39 @@ class BookingService
                 ->with(['barber', 'salon'])
                 ->orderBy('appointment_date', 'asc')
                 ->orderBy('appointment_time', 'asc')
-                ->get();
+                ->paginate($perPage);
 
-            $formattedAppointments = $appointments->map(fn($appointment) => [
-                'id' => $appointment->id,
-                'barber' => [
-                    'id' => $appointment->barber->id,
-                    'name' => $appointment->barber->name,
-                    'phone' => $appointment->barber->phone,
-                    'avatar' => $appointment->barber->getAvatarUrlAttribute(),
-                    'is_active' => $appointment->barber->is_active,
-                    'rating' => $this->getBarberRatingData($appointment->barber),
-                ],
-                'salon' => $this->formatSalonData($appointment->salon),
-                'services' => $this->getAppointmentServices($appointment),
-                'total_price' => (float) $appointment->total_price,
-                'date' => $appointment->appointment_date instanceof Carbon
-                    ? $appointment->appointment_date->format('Y-m-d')
-                    : date('Y-m-d', strtotime($appointment->appointment_date)),
-                'time' => $appointment->appointment_time instanceof Carbon
-                    ? $appointment->appointment_time->format('H:i')
-                    : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
-                'end_time' => $appointment->end_time instanceof Carbon
-                    ? $appointment->end_time->format('H:i')
-                    : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
-                'status' => $appointment->status,
-                'status_text' => $this->getStatusText($appointment->status),
-                'can_cancel' => $this->canCancelAppointment($appointment),
-                'created_at' => $appointment->created_at,
-            ]);
+            $appointments->getCollection()->transform(function ($appointment) {
+                return [
+                    'id' => $appointment->id,
+                    'barber' => [
+                        'id' => $appointment->barber->id,
+                        'name' => $appointment->barber->name,
+                        'phone' => $appointment->barber->phone,
+                        'avatar' => $appointment->barber->getAvatarUrlAttribute(),
+                        'is_active' => $appointment->barber->is_active,
+                        'rating' => $this->getBarberRatingData($appointment->barber),
+                    ],
+                    'salon' => $this->formatSalonData($appointment->salon),
+                    'services' => $this->getAppointmentServices($appointment),
+                    'total_price' => (float) $appointment->total_price,
+                    'date' => $appointment->appointment_date instanceof Carbon
+                        ? $appointment->appointment_date->format('Y-m-d')
+                        : date('Y-m-d', strtotime($appointment->appointment_date)),
+                    'time' => $appointment->appointment_time instanceof Carbon
+                        ? $appointment->appointment_time->format('H:i')
+                        : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
+                    'end_time' => $appointment->end_time instanceof Carbon
+                        ? $appointment->end_time->format('H:i')
+                        : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
+                    'status' => $appointment->status,
+                    'status_text' => $this->getStatusText($appointment->status),
+                    'can_cancel' => $this->canCancelAppointment($appointment),
+                    'created_at' => $appointment->created_at,
+                ];
+            });
 
-            return AuthResult::success('تم جلب الحجوزات المؤكدة بنجاح', $formattedAppointments);
+            return AuthResult::success('تم جلب الحجوزات المؤكدة بنجاح', $appointments);
         } catch (\Exception $e) {
             Log::error('Get confirmed appointments error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء جلب الحجوزات المؤكدة', $e->getMessage(), 500);
@@ -622,7 +629,7 @@ class BookingService
     /**
      * جلب الحجوزات المكتملة فقط
      */
-    public function getCompletedAppointments(User $customer): AuthResult
+    public function getCompletedAppointments(User $customer, int $perPage = 5): AuthResult
     {
         try {
             if (!$customer->hasRole('customer')) {
@@ -634,38 +641,40 @@ class BookingService
                 ->with(['barber', 'salon'])
                 ->orderBy('appointment_date', 'desc')
                 ->orderBy('appointment_time', 'desc')
-                ->get();
+                ->paginate($perPage);
 
-            $formattedAppointments = $appointments->map(fn($appointment) => [
-                'id' => $appointment->id,
-                'barber' => [
-                    'id' => $appointment->barber->id,
-                    'name' => $appointment->barber->name,
-                    'phone' => $appointment->barber->phone,
-                    'avatar' => $appointment->barber->getAvatarUrlAttribute(),
-                    'is_active' => $appointment->barber->is_active,
-                    'rating' => $this->getBarberRatingData($appointment->barber),
-                ],
-                'salon' => $this->formatSalonData($appointment->salon),
-                'services' => $this->getAppointmentServices($appointment),
-                'total_price' => (float) $appointment->total_price,
-                'date' => $appointment->appointment_date instanceof Carbon
-                    ? $appointment->appointment_date->format('Y-m-d')
-                    : date('Y-m-d', strtotime($appointment->appointment_date)),
-                'time' => $appointment->appointment_time instanceof Carbon
-                    ? $appointment->appointment_time->format('H:i')
-                    : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
-                'end_time' => $appointment->end_time instanceof Carbon
-                    ? $appointment->end_time->format('H:i')
-                    : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
-                'status' => $appointment->status,
-                'status_text' => $this->getStatusText($appointment->status),
-                'can_rate' => $this->canRateAppointment($appointment),
-                'created_at' => $appointment->created_at,
-                'completed_at' => $appointment->completed_at,
-            ]);
+            $appointments->getCollection()->transform(function ($appointment) {
+                return [
+                    'id' => $appointment->id,
+                    'barber' => [
+                        'id' => $appointment->barber->id,
+                        'name' => $appointment->barber->name,
+                        'phone' => $appointment->barber->phone,
+                        'avatar' => $appointment->barber->getAvatarUrlAttribute(),
+                        'is_active' => $appointment->barber->is_active,
+                        'rating' => $this->getBarberRatingData($appointment->barber),
+                    ],
+                    'salon' => $this->formatSalonData($appointment->salon),
+                    'services' => $this->getAppointmentServices($appointment),
+                    'total_price' => (float) $appointment->total_price,
+                    'date' => $appointment->appointment_date instanceof Carbon
+                        ? $appointment->appointment_date->format('Y-m-d')
+                        : date('Y-m-d', strtotime($appointment->appointment_date)),
+                    'time' => $appointment->appointment_time instanceof Carbon
+                        ? $appointment->appointment_time->format('H:i')
+                        : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
+                    'end_time' => $appointment->end_time instanceof Carbon
+                        ? $appointment->end_time->format('H:i')
+                        : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
+                    'status' => $appointment->status,
+                    'status_text' => $this->getStatusText($appointment->status),
+                    'can_rate' => $this->canRateAppointment($appointment),
+                    'created_at' => $appointment->created_at,
+                    'completed_at' => $appointment->completed_at,
+                ];
+            });
 
-            return AuthResult::success('تم جلب الحجوزات المكتملة بنجاح', $formattedAppointments);
+            return AuthResult::success('تم جلب الحجوزات المكتملة بنجاح', $appointments);
         } catch (\Exception $e) {
             Log::error('Get completed appointments error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء جلب الحجوزات المكتملة', $e->getMessage(), 500);
@@ -675,7 +684,7 @@ class BookingService
     /**
      * جلب الحجوزات الملغية فقط
      */
-    public function getCancelledAppointments(User $customer): AuthResult
+    public function getCancelledAppointments(User $customer, int $perPage = 5): AuthResult
     {
         try {
             if (!$customer->hasRole('customer')) {
@@ -687,38 +696,40 @@ class BookingService
                 ->with(['barber', 'salon'])
                 ->orderBy('appointment_date', 'desc')
                 ->orderBy('appointment_time', 'desc')
-                ->get();
+                ->paginate($perPage);
 
-            $formattedAppointments = $appointments->map(fn($appointment) => [
-                'id' => $appointment->id,
-                'barber' => [
-                    'id' => $appointment->barber->id,
-                    'name' => $appointment->barber->name,
-                    'phone' => $appointment->barber->phone,
-                    'avatar' => $appointment->barber->getAvatarUrlAttribute(),
-                    'is_active' => $appointment->barber->is_active,
-                    'rating' => $this->getBarberRatingData($appointment->barber),
-                ],
-                'salon' => $this->formatSalonData($appointment->salon),
-                'services' => $this->getAppointmentServices($appointment),
-                'total_price' => (float) $appointment->total_price,
-                'date' => $appointment->appointment_date instanceof Carbon
-                    ? $appointment->appointment_date->format('Y-m-d')
-                    : date('Y-m-d', strtotime($appointment->appointment_date)),
-                'time' => $appointment->appointment_time instanceof Carbon
-                    ? $appointment->appointment_time->format('H:i')
-                    : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
-                'end_time' => $appointment->end_time instanceof Carbon
-                    ? $appointment->end_time->format('H:i')
-                    : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
-                'status' => $appointment->status,
-                'status_text' => $this->getStatusText($appointment->status),
-                'cancelled_at' => $appointment->cancelled_at,
-                'cancellation_reason' => $appointment->cancellation_reason,
-                'created_at' => $appointment->created_at,
-            ]);
+            $appointments->getCollection()->transform(function ($appointment) {
+                return [
+                    'id' => $appointment->id,
+                    'barber' => [
+                        'id' => $appointment->barber->id,
+                        'name' => $appointment->barber->name,
+                        'phone' => $appointment->barber->phone,
+                        'avatar' => $appointment->barber->getAvatarUrlAttribute(),
+                        'is_active' => $appointment->barber->is_active,
+                        'rating' => $this->getBarberRatingData($appointment->barber),
+                    ],
+                    'salon' => $this->formatSalonData($appointment->salon),
+                    'services' => $this->getAppointmentServices($appointment),
+                    'total_price' => (float) $appointment->total_price,
+                    'date' => $appointment->appointment_date instanceof Carbon
+                        ? $appointment->appointment_date->format('Y-m-d')
+                        : date('Y-m-d', strtotime($appointment->appointment_date)),
+                    'time' => $appointment->appointment_time instanceof Carbon
+                        ? $appointment->appointment_time->format('H:i')
+                        : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
+                    'end_time' => $appointment->end_time instanceof Carbon
+                        ? $appointment->end_time->format('H:i')
+                        : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
+                    'status' => $appointment->status,
+                    'status_text' => $this->getStatusText($appointment->status),
+                    'cancelled_at' => $appointment->cancelled_at,
+                    'cancellation_reason' => $appointment->cancellation_reason,
+                    'created_at' => $appointment->created_at,
+                ];
+            });
 
-            return AuthResult::success('تم جلب الحجوزات الملغية بنجاح', $formattedAppointments);
+            return AuthResult::success('تم جلب الحجوزات الملغية بنجاح', $appointments);
         } catch (\Exception $e) {
             Log::error('Get cancelled appointments error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء جلب الحجوزات الملغية', $e->getMessage(), 500);
@@ -728,7 +739,7 @@ class BookingService
     /**
      * جلب جميع حجوزات الزبون (مع فلترة حسب الحالة)
      */
-    public function getCustomerAppointments(User $customer, ?string $status = null): AuthResult
+    public function getCustomerAppointments(User $customer, ?string $status = null, int $perPage = 5): AuthResult
     {
         try {
             if (!$customer->hasRole('customer')) {
@@ -744,37 +755,39 @@ class BookingService
 
             $appointments = $query->orderBy('appointment_date', 'desc')
                 ->orderBy('appointment_time', 'desc')
-                ->get();
+                ->paginate($perPage);
 
-            $formattedAppointments = $appointments->map(fn($appointment) => [
-                'id' => $appointment->id,
-                'barber' => [
-                    'id' => $appointment->barber->id,
-                    'name' => $appointment->barber->name,
-                    'phone' => $appointment->barber->phone,
-                    'avatar' => $appointment->barber->getAvatarUrlAttribute(),
-                    'rating' => $this->getBarberRatingData($appointment->barber),
-                ],
-                'salon' => $this->formatSalonData($appointment->salon),
-                'services' => $this->getAppointmentServices($appointment),
-                'total_price' => (float) $appointment->total_price,
-                'date' => $appointment->appointment_date instanceof Carbon
-                    ? $appointment->appointment_date->format('Y-m-d')
-                    : date('Y-m-d', strtotime($appointment->appointment_date)),
-                'time' => $appointment->appointment_time instanceof Carbon
-                    ? $appointment->appointment_time->format('H:i')
-                    : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
-                'end_time' => $appointment->end_time instanceof Carbon
-                    ? $appointment->end_time->format('H:i')
-                    : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
-                'status' => $appointment->status,
-                'status_text' => $this->getStatusText($appointment->status),
-                'can_cancel' => $this->canCancelAppointment($appointment),
-                'can_rate' => $this->canRateAppointment($appointment),
-                'created_at' => $appointment->created_at,
-            ]);
+            $appointments->getCollection()->transform(function ($appointment) {
+                return [
+                    'id' => $appointment->id,
+                    'barber' => [
+                        'id' => $appointment->barber->id,
+                        'name' => $appointment->barber->name,
+                        'phone' => $appointment->barber->phone,
+                        'avatar' => $appointment->barber->getAvatarUrlAttribute(),
+                        'rating' => $this->getBarberRatingData($appointment->barber),
+                    ],
+                    'salon' => $this->formatSalonData($appointment->salon),
+                    'services' => $this->getAppointmentServices($appointment),
+                    'total_price' => (float) $appointment->total_price,
+                    'date' => $appointment->appointment_date instanceof Carbon
+                        ? $appointment->appointment_date->format('Y-m-d')
+                        : date('Y-m-d', strtotime($appointment->appointment_date)),
+                    'time' => $appointment->appointment_time instanceof Carbon
+                        ? $appointment->appointment_time->format('H:i')
+                        : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
+                    'end_time' => $appointment->end_time instanceof Carbon
+                        ? $appointment->end_time->format('H:i')
+                        : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
+                    'status' => $appointment->status,
+                    'status_text' => $this->getStatusText($appointment->status),
+                    'can_cancel' => $this->canCancelAppointment($appointment),
+                    'can_rate' => $this->canRateAppointment($appointment),
+                    'created_at' => $appointment->created_at,
+                ];
+            });
 
-            return AuthResult::success('تم جلب الحجوزات بنجاح', $formattedAppointments);
+            return AuthResult::success('تم جلب الحجوزات بنجاح', $appointments);
         } catch (\Exception $e) {
             Log::error('Get customer appointments error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
