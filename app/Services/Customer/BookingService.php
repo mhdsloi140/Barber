@@ -463,169 +463,218 @@ class BookingService
     /**
      * جلب الحجوزات النشطة (قيد الانتظار + مؤكدة - القادمة فقط)
      */
-    public function getActiveAppointments(User $customer, int $perPage = 5): AuthResult
-    {
-        try {
-            if (!$customer->hasRole('customer')) {
-                return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
-            }
-
-            $today = Carbon::today()->format('Y-m-d');
-
-            $appointments = Appointment::where('customer_id', $customer->id)
-                ->whereIn('status', ['pending', 'confirmed'])
-                ->whereDate('appointment_date', '>=', $today)
-                ->with(['barber', 'salon'])
-                ->orderBy('appointment_date', 'asc')
-                ->orderBy('appointment_time', 'asc')
-                ->paginate($perPage);
-
-            
-            $appointments->getCollection()->transform(function ($appointment) {
-                return [
-                    'id' => $appointment->id,
-                    'barber' => [
-                        'id' => $appointment->barber->id,
-                        'name' => $appointment->barber->name,
-                        'phone' => $appointment->barber->phone,
-                        'avatar' => $appointment->barber->getAvatarUrlAttribute(),
-                        'is_active' => $appointment->barber->is_active,
-                        'rating' => $this->getBarberRatingData($appointment->barber),
-                    ],
-                    'salon' => $this->formatSalonData($appointment->salon),
-                    'services' => $this->getAppointmentServices($appointment),
-                    'total_price' => (float) $appointment->total_price,
-                    'date' => $appointment->appointment_date instanceof Carbon
-                        ? $appointment->appointment_date->format('Y-m-d')
-                        : date('Y-m-d', strtotime($appointment->appointment_date)),
-                    'time' => $appointment->appointment_time instanceof Carbon
-                        ? $appointment->appointment_time->format('H:i')
-                        : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
-                    'end_time' => $appointment->end_time instanceof Carbon
-                        ? $appointment->end_time->format('H:i')
-                        : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
-                    'status' => $appointment->status,
-                    'status_text' => $this->getStatusText($appointment->status),
-                    'can_cancel' => $this->canCancelAppointment($appointment),
-                    'created_at' => $appointment->created_at,
-                ];
-            });
-
-            return AuthResult::success('تم جلب الحجوزات النشطة بنجاح', $appointments);
-        } catch (\Exception $e) {
-            Log::error('Get active appointments error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب الحجوزات النشطة', $e->getMessage(), 500);
+public function getActiveAppointments(User $customer, int $perPage = 2): AuthResult
+{
+    // dd(auth()->user()->id);
+    try {
+        if (!$customer->hasRole('customer')) {
+            return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
         }
-    }
 
+        // dd($customer);
+        $appointments = Appointment::where('customer_id', $customer->id)
+            ->where('status', 'confirmed')  // أو whereIn('status', ['pending', 'confirmed'])
+            ->with(['barber', 'salon'])
+            ->orderBy('appointment_date', 'asc')
+            ->orderBy('appointment_time', 'asc')
+            ->paginate($perPage);
+
+        // تنسيق البيانات (نفس طريقة getPendingAppointments)
+        $formattedData = collect($appointments->items())->map(function ($appointment) {
+            return [
+                'id' => $appointment->id,
+                'barber' => [
+                    'id' => $appointment->barber->id,
+                    'name' => $appointment->barber->name,
+                    'phone' => $appointment->barber->phone,
+                    'avatar' => $appointment->barber->getAvatarUrlAttribute(),
+                    'is_active' => $appointment->barber->is_active,
+                    'rating' => $this->getBarberRatingData($appointment->barber),
+                ],
+                'salon' => $this->formatSalonData($appointment->salon),
+                'services' => $this->getAppointmentServices($appointment),
+                'total_price' => (float) $appointment->total_price,
+                'date' => $appointment->appointment_date instanceof Carbon
+                    ? $appointment->appointment_date->format('Y-m-d')
+                    : date('Y-m-d', strtotime($appointment->appointment_date)),
+                'time' => $appointment->appointment_time instanceof Carbon
+                    ? $appointment->appointment_time->format('H:i')
+                    : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
+                'end_time' => $appointment->end_time instanceof Carbon
+                    ? $appointment->end_time->format('H:i')
+                    : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
+                'status' => $appointment->status,
+                'status_text' => $this->getStatusText($appointment->status),
+                'can_cancel' => $this->canCancelAppointment($appointment),
+                'created_at' => $appointment->created_at,
+            ];
+        });
+
+        // بناء هيكل Pagination (نفس getPendingAppointments)
+        $paginationData = [
+            'current_page' => $appointments->currentPage(),
+            'data' => $formattedData,
+            'first_page_url' => $appointments->url(1),
+            'from' => $appointments->firstItem(),
+            'last_page' => $appointments->lastPage(),
+            'last_page_url' => $appointments->url($appointments->lastPage()),
+            'next_page_url' => $appointments->nextPageUrl(),
+            'path' => $appointments->path(),
+            'per_page' => $appointments->perPage(),
+            'prev_page_url' => $appointments->previousPageUrl(),
+            'to' => $appointments->lastItem(),
+            'total' => $appointments->total(),
+        ];
+
+        return AuthResult::success('تم جلب الحجوزات النشطة بنجاح', $paginationData);
+
+    } catch (\Exception $e) {
+        Log::error('Get active appointments error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب الحجوزات النشطة', $e->getMessage(), 500);
+    }
+}
     /**
      * جلب الحجوزات قيد الانتظار فقط
      */
-    public function getPendingAppointments(User $customer, int $perPage = 5): AuthResult
-    {
-        try {
-            if (!$customer->hasRole('customer')) {
-                return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
-            }
-
-            $appointments = Appointment::where('customer_id', $customer->id)
-                ->where('status', 'pending')
-                ->with(['barber', 'salon'])
-                ->orderBy('appointment_date', 'asc')
-                ->orderBy('appointment_time', 'asc')
-                ->paginate($perPage);
-
-            $appointments->getCollection()->transform(function ($appointment) {
-                return [
-                    'id' => $appointment->id,
-                    'barber' => [
-                        'id' => $appointment->barber->id,
-                        'name' => $appointment->barber->name,
-                        'phone' => $appointment->barber->phone,
-                        'avatar' => $appointment->barber->getAvatarUrlAttribute(),
-                        'is_active' => $appointment->barber->is_active,
-                        'rating' => $this->getBarberRatingData($appointment->barber),
-                    ],
-                    'salon' => $this->formatSalonData($appointment->salon),
-                    'services' => $this->getAppointmentServices($appointment),
-                    'total_price' => (float) $appointment->total_price,
-                    'date' => $appointment->appointment_date instanceof Carbon
-                        ? $appointment->appointment_date->format('Y-m-d')
-                        : date('Y-m-d', strtotime($appointment->appointment_date)),
-                    'time' => $appointment->appointment_time instanceof Carbon
-                        ? $appointment->appointment_time->format('H:i')
-                        : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
-                    'end_time' => $appointment->end_time instanceof Carbon
-                        ? $appointment->end_time->format('H:i')
-                        : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
-                    'status' => $appointment->status,
-                    'status_text' => $this->getStatusText($appointment->status),
-                    'can_cancel' => $this->canCancelAppointment($appointment),
-                    'created_at' => $appointment->created_at,
-                ];
-            });
-
-            return AuthResult::success('تم جلب الحجوزات قيد الانتظار بنجاح', $appointments);
-        } catch (\Exception $e) {
-            Log::error('Get pending appointments error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب الحجوزات قيد الانتظار', $e->getMessage(), 500);
+   public function getPendingAppointments(User $customer, int $perPage = 2): AuthResult
+{
+    // dd($customer);
+    try {
+        if (!$customer->hasRole('customer')) {
+            return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
         }
+
+        $appointments = Appointment::where('customer_id', $customer->id)
+            ->where('status', 'pending')
+            ->with(['barber', 'salon'])
+            ->orderBy('appointment_date', 'asc')
+            ->orderBy('appointment_time', 'asc')
+            ->paginate($perPage);
+
+        // تنسيق البيانات
+        $formattedData = $appointments->getCollection()->map(function ($appointment) {
+            return [
+                'id' => $appointment->id,
+                'barber' => [
+                    'id' => $appointment->barber->id,
+                    'name' => $appointment->barber->name,
+                    'phone' => $appointment->barber->phone,
+                    'avatar' => $appointment->barber->getAvatarUrlAttribute(),
+                    'is_active' => $appointment->barber->is_active,
+                    'rating' => $this->getBarberRatingData($appointment->barber),
+                ],
+                'salon' => $this->formatSalonData($appointment->salon),
+                'services' => $this->getAppointmentServices($appointment),
+                'total_price' => (float) $appointment->total_price,
+                'date' => $appointment->appointment_date instanceof Carbon
+                    ? $appointment->appointment_date->format('Y-m-d')
+                    : date('Y-m-d', strtotime($appointment->appointment_date)),
+                'time' => $appointment->appointment_time instanceof Carbon
+                    ? $appointment->appointment_time->format('H:i')
+                    : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
+                'end_time' => $appointment->end_time instanceof Carbon
+                    ? $appointment->end_time->format('H:i')
+                    : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
+                'status' => $appointment->status,
+                'status_text' => $this->getStatusText($appointment->status),
+                'can_cancel' => $this->canCancelAppointment($appointment),
+                'created_at' => $appointment->created_at,
+            ];
+        });
+
+        // بناء هيكل Pagination موحد
+        $paginationData = [
+            'current_page' => $appointments->currentPage(),
+            'data' => $formattedData,
+            'first_page_url' => $appointments->url(1),
+            'from' => $appointments->firstItem(),
+            'last_page' => $appointments->lastPage(),
+            'last_page_url' => $appointments->url($appointments->lastPage()),
+            'next_page_url' => $appointments->nextPageUrl(),
+            'path' => $appointments->path(),
+            'per_page' => $appointments->perPage(),
+            'prev_page_url' => $appointments->previousPageUrl(),
+            'to' => $appointments->lastItem(),
+            'total' => $appointments->total(),
+        ];
+
+        return AuthResult::success('تم جلب الحجوزات قيد الانتظار بنجاح', $paginationData);
+
+    } catch (\Exception $e) {
+        Log::error('Get pending appointments error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب الحجوزات قيد الانتظار', $e->getMessage(), 500);
     }
+}
 
     /**
      * جلب الحجوزات المؤكدة فقط
      */
-    public function getConfirmedAppointments(User $customer, int $perPage = 5): AuthResult
-    {
-        try {
-            if (!$customer->hasRole('customer')) {
-                return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
-            }
-
-            $appointments = Appointment::where('customer_id', $customer->id)
-                ->where('status', 'confirmed')
-                ->with(['barber', 'salon'])
-                ->orderBy('appointment_date', 'asc')
-                ->orderBy('appointment_time', 'asc')
-                ->paginate($perPage);
-
-            $appointments->getCollection()->transform(function ($appointment) {
-                return [
-                    'id' => $appointment->id,
-                    'barber' => [
-                        'id' => $appointment->barber->id,
-                        'name' => $appointment->barber->name,
-                        'phone' => $appointment->barber->phone,
-                        'avatar' => $appointment->barber->getAvatarUrlAttribute(),
-                        'is_active' => $appointment->barber->is_active,
-                        'rating' => $this->getBarberRatingData($appointment->barber),
-                    ],
-                    'salon' => $this->formatSalonData($appointment->salon),
-                    'services' => $this->getAppointmentServices($appointment),
-                    'total_price' => (float) $appointment->total_price,
-                    'date' => $appointment->appointment_date instanceof Carbon
-                        ? $appointment->appointment_date->format('Y-m-d')
-                        : date('Y-m-d', strtotime($appointment->appointment_date)),
-                    'time' => $appointment->appointment_time instanceof Carbon
-                        ? $appointment->appointment_time->format('H:i')
-                        : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
-                    'end_time' => $appointment->end_time instanceof Carbon
-                        ? $appointment->end_time->format('H:i')
-                        : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
-                    'status' => $appointment->status,
-                    'status_text' => $this->getStatusText($appointment->status),
-                    'can_cancel' => $this->canCancelAppointment($appointment),
-                    'created_at' => $appointment->created_at,
-                ];
-            });
-
-            return AuthResult::success('تم جلب الحجوزات المؤكدة بنجاح', $appointments);
-        } catch (\Exception $e) {
-            Log::error('Get confirmed appointments error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب الحجوزات المؤكدة', $e->getMessage(), 500);
+ public function getConfirmedAppointments(User $customer, int $perPage = 5): AuthResult
+{
+    try {
+        if (!$customer->hasRole('customer')) {
+            return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
         }
-    }
 
+        $appointments = Appointment::where('customer_id', $customer->id)
+            ->where('status', 'confirmed')
+            ->with(['barber', 'salon'])
+            ->orderBy('appointment_date', 'asc')
+            ->orderBy('appointment_time', 'asc')
+            ->paginate($perPage);
+
+
+        $formattedData = collect($appointments->items())->map(function ($appointment) {
+            return [
+                'id' => $appointment->id,
+                'barber' => [
+                    'id' => $appointment->barber->id,
+                    'name' => $appointment->barber->name,
+                    'phone' => $appointment->barber->phone,
+                    'avatar' => $appointment->barber->getAvatarUrlAttribute(),
+                    'is_active' => $appointment->barber->is_active,
+                    'rating' => $this->getBarberRatingData($appointment->barber),
+                ],
+                'salon' => $this->formatSalonData($appointment->salon),
+                'services' => $this->getAppointmentServices($appointment),
+                'total_price' => (float) $appointment->total_price,
+                'date' => $appointment->appointment_date instanceof Carbon
+                    ? $appointment->appointment_date->format('Y-m-d')
+                    : date('Y-m-d', strtotime($appointment->appointment_date)),
+                'time' => $appointment->appointment_time instanceof Carbon
+                    ? $appointment->appointment_time->format('H:i')
+                    : (is_string($appointment->appointment_time) ? substr($appointment->appointment_time, 0, 5) : '00:00'),
+                'end_time' => $appointment->end_time instanceof Carbon
+                    ? $appointment->end_time->format('H:i')
+                    : (is_string($appointment->end_time) ? substr($appointment->end_time, 0, 5) : '00:00'),
+                'status' => $appointment->status,
+                'status_text' => $this->getStatusText($appointment->status),
+                'can_cancel' => $this->canCancelAppointment($appointment),
+                'created_at' => $appointment->created_at,
+            ];
+        });
+
+       
+        return AuthResult::success('تم جلب الحجوزات المؤكدة بنجاح', [
+            'current_page' => $appointments->currentPage(),
+            'data' => $formattedData,
+            'first_page_url' => $appointments->url(1),
+            'from' => $appointments->firstItem(),
+            'last_page' => $appointments->lastPage(),
+            'last_page_url' => $appointments->url($appointments->lastPage()),
+            'next_page_url' => $appointments->nextPageUrl(),
+            'path' => $appointments->path(),
+            'per_page' => $appointments->perPage(),
+            'prev_page_url' => $appointments->previousPageUrl(),
+            'to' => $appointments->lastItem(),
+            'total' => $appointments->total(),
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Get confirmed appointments error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب الحجوزات المؤكدة', $e->getMessage(), 500);
+    }
+}
     /**
      * جلب الحجوزات المكتملة فقط
      */

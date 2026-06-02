@@ -106,7 +106,7 @@ class SalonBookingService
     }
 
 
-   public function getSalonAppointments(User $salonOwner, ?string $search = null): AuthResult
+public function getSalonAppointments(User $salonOwner, ?string $search = null, int $perPage = 10): AuthResult
 {
     try {
         if (!$salonOwner->hasRole('salon_owner')) {
@@ -128,13 +128,12 @@ class SalonBookingService
             });
         }
 
-
         $appointments = $query->orderBy('appointment_date', 'desc')
             ->orderBy('appointment_time', 'desc')
-            ->paginate(10);
+            ->paginate($perPage);
 
 
-        $formattedAppointments = $appointments->getCollection()->map(function ($appointment) {
+        $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
             $services = $this->getAppointmentServices($appointment);
             $totalPrice = $this->calculateTotalPrice($appointment, $services);
             $totalDuration = $this->calculateTotalDuration($appointment, $services);
@@ -162,23 +161,34 @@ class SalonBookingService
         });
 
 
-        $appointments->setCollection($formattedAppointments);
-
-
-        $currentPageAppointments = $appointments->getCollection();
         $stats = [
-            'total' => $appointments->total(), // العدد الإجمالي في قاعدة البيانات
-            'current_page_total' => $currentPageAppointments->count(), // عدد العناصر في الصفحة الحالية
-            'pending' => $currentPageAppointments->where('status', 'pending')->count(),
-            'confirmed' => $currentPageAppointments->where('status', 'confirmed')->count(),
-            'completed' => $currentPageAppointments->where('status', 'completed')->count(),
-            'cancelled' => $currentPageAppointments->where('status', 'cancelled')->count(),
-            'today' => $currentPageAppointments->where('date', now()->toDateString())->count(),
+            'total' => $appointments->total(),
+            'pending' => Appointment::where('salon_id', $salon->id)->where('status', 'pending')->count(),
+            'confirmed' => Appointment::where('salon_id', $salon->id)->where('status', 'confirmed')->count(),
+            'completed' => Appointment::where('salon_id', $salon->id)->where('status', 'completed')->count(),
+            'cancelled' => Appointment::where('salon_id', $salon->id)->where('status', 'cancelled')->count(),
+            'today' => Appointment::where('salon_id', $salon->id)->whereDate('appointment_date', now()->toDateString())->count(),
+        ];
+
+       
+        $paginationData = [
+            'current_page' => $appointments->currentPage(),
+            'data' => $formattedAppointments,
+            'first_page_url' => $appointments->url(1),
+            'from' => $appointments->firstItem(),
+            'last_page' => $appointments->lastPage(),
+            'last_page_url' => $appointments->url($appointments->lastPage()),
+            'next_page_url' => $appointments->nextPageUrl(),
+            'path' => $appointments->path(),
+            'per_page' => $appointments->perPage(),
+            'prev_page_url' => $appointments->previousPageUrl(),
+            'to' => $appointments->lastItem(),
+            'total' => $appointments->total(),
         ];
 
         $response = [
             'statistics' => $stats,
-            'appointments' => $appointments, 
+            'appointments' => $paginationData,
         ];
 
         if ($search && !empty(trim($search))) {

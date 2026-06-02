@@ -138,46 +138,76 @@ class BookingService
     /**
      * جلب جميع حجوزات الحلاق مع الإحصائيات
      */
-    public function getBarberAppointments(User $barber): AuthResult
-    {
-        try {
-            if (!$barber->hasRole('barber')) {
-                return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
-            }
-
-            $salon = $barber->salons()->first();
-
-            $appointments = Appointment::where('barber_id', $barber->id)
-                ->with(['customer', 'salon'])
-                ->orderBy('appointment_date', 'desc')
-                ->orderBy('appointment_time', 'desc')
-                ->get();
-
-            $formattedAppointments = $appointments->map(function ($appointment) {
-                return $this->formatAppointment($appointment);
-            });
-
-            $stats = [
-                'total' => $appointments->count(),
-                'pending' => $appointments->where('status', 'pending')->count(),
-                'confirmed' => $appointments->where('status', 'confirmed')->count(),
-                'completed' => $appointments->where('status', 'completed')->count(),
-                'cancelled' => $appointments->where('status', 'cancelled')->count(),
-                'today' => $appointments->where('appointment_date', now()->toDateString())->count(),
-            ];
-
-            $response = [
-                'statistics' => $stats,
-                'appointments' => $formattedAppointments,
-            ];
-
-            return AuthResult::success('تم جلب الحجوزات بنجاح', $response);
-
-        } catch (\Exception $e) {
-            Log::error('Get barber appointments error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', null, 500);
+  public function getBarberAppointments(User $barber, int $perPage = 10): AuthResult
+{
+    try {
+        if (!$barber->hasRole('barber')) {
+            return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
         }
+
+        $salon = $barber->salons()->first();
+
+        $appointments = Appointment::where('barber_id', $barber->id)
+            ->with(['customer', 'salon'])
+            ->orderBy('appointment_date', 'desc')
+            ->orderBy('appointment_time', 'desc')
+            ->paginate($perPage);
+
+
+        $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
+            return $this->formatAppointment($appointment);
+        });
+
+
+        $statsFromCurrentPage = [
+            'total' => $appointments->total(),  // الإجمالي الكلي من قاعدة البيانات
+            'current_page_total' => $formattedAppointments->count(),  // عدد العناصر في الصفحة الحالية
+            'pending' => $formattedAppointments->where('status', 'pending')->count(),
+            'confirmed' => $formattedAppointments->where('status', 'confirmed')->count(),
+            'completed' => $formattedAppointments->where('status', 'completed')->count(),
+            'cancelled' => $formattedAppointments->where('status', 'cancelled')->count(),
+            'today' => $formattedAppointments->where('appointment_date', now()->toDateString())->count(),
+        ];
+
+
+        $statsFromDatabase = [
+            'total' => Appointment::where('barber_id', $barber->id)->count(),
+            'pending' => Appointment::where('barber_id', $barber->id)->where('status', 'pending')->count(),
+            'confirmed' => Appointment::where('barber_id', $barber->id)->where('status', 'confirmed')->count(),
+            'completed' => Appointment::where('barber_id', $barber->id)->where('status', 'completed')->count(),
+            'cancelled' => Appointment::where('barber_id', $barber->id)->where('status', 'cancelled')->count(),
+            'today' => Appointment::where('barber_id', $barber->id)->whereDate('appointment_date', now()->toDateString())->count(),
+        ];
+
+
+        $paginationData = [
+            'current_page' => $appointments->currentPage(),
+            'data' => $formattedAppointments,
+            'first_page_url' => $appointments->url(1),
+            'from' => $appointments->firstItem(),
+            'last_page' => $appointments->lastPage(),
+            'last_page_url' => $appointments->url($appointments->lastPage()),
+            'next_page_url' => $appointments->nextPageUrl(),
+            'path' => $appointments->path(),
+            'per_page' => $appointments->perPage(),
+            'prev_page_url' => $appointments->previousPageUrl(),
+            'to' => $appointments->lastItem(),
+            'total' => $appointments->total(),
+        ];
+
+        $response = [
+            'statistics' => $statsFromDatabase,
+            'appointments' => $paginationData,
+            // 'statsFromCurrentPage' => $statsFromCurrentPage
+        ];
+
+        return AuthResult::success('تم جلب الحجوزات بنجاح', $response);
+
+    } catch (\Exception $e) {
+        Log::error('Get barber appointments error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
     }
+}
 
     /**
      * جلب جميع حجوزات الحلاق مع البحث

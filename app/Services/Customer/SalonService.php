@@ -70,7 +70,7 @@ class SalonService
     /**
      * عرض جميع الصالونات للزبون مع الصور والتقييمات
      */
- public function getSalons(array $filters): AuthResult
+public function getSalons(array $filters): AuthResult
 {
     try {
         $query = Salon::where('salons.is_active', true)
@@ -78,7 +78,7 @@ class SalonService
                 $q->where('users.is_active', true);
             }]);
 
-        //  البحث
+        // البحث
         if (!empty($filters['search'])) {
             $query->where(function($q) use ($filters) {
                 $q->where('salons.name', 'like', '%' . $filters['search'] . '%')
@@ -86,12 +86,12 @@ class SalonService
             });
         }
 
-        //  التصفية حسب المدينة (اختياري)
+        // التصفية حسب المدينة
         if (!empty($filters['city'])) {
             $query->where('salons.city', 'like', '%' . $filters['city'] . '%');
         }
 
-        //  التصفية حسب الخدمات (اختياري)
+        // التصفية حسب الخدمات
         if (!empty($filters['service_ids'])) {
             $serviceIds = is_array($filters['service_ids'])
                 ? $filters['service_ids']
@@ -102,7 +102,7 @@ class SalonService
             });
         }
 
-        //  حساب المسافة والترتيب حسب القرب
+        // حساب المسافة والترتيب حسب القرب
         $latitude = $filters['latitude'] ?? null;
         $longitude = $filters['longitude'] ?? null;
 
@@ -114,31 +114,47 @@ class SalonService
                     sin(radians(?)) * sin(radians(salons.latitude))
                 )
             ) AS distance", [$latitude, $longitude, $latitude])
-            ->having('distance', '<', $filters['radius'] ?? 50) // نصف قطر البحث (50 كم افتراضياً)
+            ->having('distance', '<', $filters['radius'] ?? 50)
             ->orderBy('distance', 'asc');
         } else {
             $query->orderBy('salons.name', 'asc');
         }
 
-        //  إضافة التقييمات
+        // إضافة التقييمات
         $query->withAvg('ratings', 'rating')
             ->withCount('ratings as reviews_count');
 
-        //  التصفية حسب التقييم (اختياري)
+        // التصفية حسب التقييم
         if (!empty($filters['min_rating'])) {
             $query->havingRaw('COALESCE(ratings_avg_rating, 0) >= ?', [$filters['min_rating']]);
         }
 
-        //  Pagination
+        // Pagination
         $perPage = $filters['per_page'] ?? 10;
         $salons = $query->paginate($perPage);
 
-        //  تنسيق البيانات
-        $salons->getCollection()->transform(function ($salon) use ($latitude, $longitude) {
+
+        $formattedSalons = collect($salons->items())->map(function ($salon) use ($latitude, $longitude) {
             return $this->formatSalonDataWithImagesAndRatings($salon, $latitude, $longitude);
         });
 
-        //  إحصائيات إضافية
+
+        $paginationData = [
+            'current_page' => $salons->currentPage(),
+            'data' => $formattedSalons,
+            'first_page_url' => $salons->url(1),
+            'from' => $salons->firstItem(),
+            'last_page' => $salons->lastPage(),
+            'last_page_url' => $salons->url($salons->lastPage()),
+            'next_page_url' => $salons->nextPageUrl(),
+            'path' => $salons->path(),
+            'per_page' => $salons->perPage(),
+            'prev_page_url' => $salons->previousPageUrl(),
+            'to' => $salons->lastItem(),
+            'total' => $salons->total(),
+        ];
+
+        // إحصائيات إضافية
         $statistics = [
             'total_salons' => Salon::where('is_active', true)->count(),
             'avg_rating' => round(Salon::where('is_active', true)->withAvg('ratings', 'rating')->get()->avg('ratings_avg_rating') ?? 0, 1),
@@ -146,18 +162,11 @@ class SalonService
         ];
 
         return AuthResult::success('تم جلب الصالونات بنجاح', [
-            'salons' => $salons->items(),
-            'pagination' => [
-                'current_page' => $salons->currentPage(),
-                'last_page' => $salons->lastPage(),
-                'total' => $salons->total(),
-                'per_page' => $salons->perPage(),
-                'has_more_pages' => $salons->hasMorePages(),
-                'from' => $salons->firstItem(),
-                'to' => $salons->lastItem(),
-            ],
+            'salons' => $paginationData,
             'filters_applied' => [
                 'search' => $filters['search'] ?? null,
+                'city' => $filters['city'] ?? null,
+                'service_ids' => $filters['service_ids'] ?? null,
                 'latitude' => $latitude,
                 'longitude' => $longitude,
                 'radius' => $filters['radius'] ?? 50,
@@ -171,7 +180,6 @@ class SalonService
         return AuthResult::error('حدث خطأ أثناء جلب الصالونات', config('app.debug') ? $e->getMessage() : null, 500);
     }
 }
-
 
     public function getSalon($id, ?float $latitude = null, ?float $longitude = null, ?string $date = null, ?int $barberId = null, ?int $serviceId = null): AuthResult
     {
@@ -336,36 +344,7 @@ private function getBarberFreeSlots($barber, string $date, ?int $serviceId = nul
     }
 }
 
-/**
- * توليد فترات زمنية بين وقت البدء ووقت النهاية
- */
-// private function generateTimeSlots(string $startTime, string $endTime, int $slotDuration): array
-// {
-//     $slots = [];
-//     $current = Carbon::parse($startTime);
-//     $end = Carbon::parse($endTime);
 
-//     while ($current->lt($end)) {
-//         $slotEnd = (clone $current)->addMinutes($slotDuration);
-
-//         if ($slotEnd->lte($end)) {
-//             $slots[] = [
-//                 'start' => $current->format('H:i'),
-//                 'end' => $slotEnd->format('H:i'),
-//                 'start_minutes' => ($current->hour * 60) + $current->minute,
-//                 'end_minutes' => ($slotEnd->hour * 60) + $slotEnd->minute,
-//             ];
-//         }
-
-//         $current->addMinutes($slotDuration);
-//     }
-
-//     return $slots;
-// }
-
-/**
- * إزالة الفترات المحجوزة من قائمة الفترات المتاحة (محسنة)
- */
 private function filterBookedSlots(array $allSlots, $bookedAppointments): array
 {
     $availableSlots = [];
@@ -432,47 +411,6 @@ private function generateTimeSlots(string $startTime, string $endTime, int $slot
     return $slots;
 }
 
-    /**
-     * إزالة الفترات المحجوزة من قائمة الفترات المتاحة (محسنة)
-     */
-    // private function filterBookedSlots(array $allSlots, $bookedAppointments): array
-    // {
-    //     $availableSlots = [];
-
-    //     foreach ($allSlots as $slot) {
-    //         $isBooked = false;
-    //         $slotStart = $slot['start_minutes'];
-    //         $slotEnd = $slot['end_minutes'];
-
-    //         foreach ($bookedAppointments as $appointment) {
-    //             // تحويل وقت الحجز إلى دقائق
-    //             $appointmentStart = Carbon::parse($appointment->appointment_time);
-    //             $appointmentEnd = Carbon::parse($appointment->end_time);
-
-    //             $appointmentStartMinutes = $appointmentStart->hours * 60 + $appointmentStart->minutes;
-    //             $appointmentEndMinutes = $appointmentEnd->hours * 60 + $appointmentEnd->minutes;
-
-    //             // التحقق من التداخل: إذا كان الفترة تتداخل مع الحجز
-    //             if (
-    //                 ($slotStart >= $appointmentStartMinutes && $slotStart < $appointmentEndMinutes) ||
-    //                 ($slotEnd > $appointmentStartMinutes && $slotEnd <= $appointmentEndMinutes) ||
-    //                 ($slotStart <= $appointmentStartMinutes && $slotEnd >= $appointmentEndMinutes)
-    //             ) {
-    //                 $isBooked = true;
-    //                 break;
-    //             }
-    //         }
-
-    //         if (!$isBooked) {
-    //             $availableSlots[] = [
-    //                 'start' => $slot['start'],
-    //                 'end' => $slot['end'],
-    //             ];
-    //         }
-    //     }
-
-    //     return $availableSlots;
-    // }
 
     /**
      * تنسيق بيانات الصالون مع جميع الصور والتقييمات
