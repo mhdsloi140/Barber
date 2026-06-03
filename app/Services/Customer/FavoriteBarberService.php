@@ -101,45 +101,50 @@ class FavoriteBarberService
     /**
      * جلب قائمة الحلاقين المفضلين لدى العميل
      */
-    public function getFavorites(User $customer): AuthResult
-    {
-        try {
-            if (!$customer->hasRole('customer')) {
-                return AuthResult::error('هذه الخدمة متاحة للعملاء فقط', null, 403);
-            }
-
-            $favorites = $customer->favoriteBarbers()
-                ->select('users.id', 'users.name', 'users.phone')
-                ->with(['salons' => function ($q) {
-                    $q->select('salons.id', 'salons.name', 'salons.address');
-                }])
-                ->get()
-                ->map(function ($barber) {
-                    return [
-                        'id' => $barber->id,
-                        'name' => $barber->name,
-                        'phone' => $barber->phone,
-
-                        'avatar' => $barber->getAvatarUrlAttribute(),
-                        'salon' => $barber->salons->first() ? [
-                            'id' => $barber->salons->first()->id,
-                            'name' => $barber->salons->first()->name,
-                            'address' => $barber->salons->first()->address,
-                        ] : null,
-                        'is_favorite' => true,
-                    ];
-                });
-
-            return AuthResult::success('تم جلب قائمة المفضلين بنجاح', [
-                'count' => $favorites->count(),
-                'barbers' => $favorites
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Get favorites error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب قائمة المفضلين', null, 500);
+public function getFavorites(User $customer, int $perPage = 10): AuthResult
+{
+    try {
+        if (!$customer->hasRole('customer')) {
+            return AuthResult::error('هذه الخدمة متاحة للعملاء فقط', null, 403);
         }
+
+        $favorites = $customer->favoriteSalons()
+            ->select('salons.*')
+            ->with([
+                'owner' => function ($q) {
+                    $q->select('id', 'name', 'phone');
+                }
+            ])
+            ->with(['ratings' => function ($q) {
+                $q->select('id', 'salon_id', 'rating', 'comment', 'created_at', 'customer_id')
+                    ->with('customer:id,name,phone');
+            }])
+            ->withAvg('ratings', 'rating')
+            ->withCount('ratings as reviews_count')
+            ->paginate($perPage);
+
+        $salons = collect($favorites->items())->map(function ($salon) {
+            // ... تنسيق بيانات الصالون ...
+            return [ /* بيانات الصالون */ ];
+        });
+
+        return AuthResult::success('تم جلب قائمة الصالونات المفضلة بنجاح', [
+            'salons' => $salons,
+            'pagination' => [
+                'current_page' => $favorites->currentPage(),
+                'last_page' => $favorites->lastPage(),
+                'per_page' => $favorites->perPage(),
+                'total' => $favorites->total(),
+                'next_page_url' => $favorites->nextPageUrl(),
+                'prev_page_url' => $favorites->previousPageUrl(),
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Get favorite salons error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب قائمة الصالونات المفضلة', $e->getMessage(), 500);
     }
+}
 
     /**
      * التحقق مما إذا كان الحلاق مفضلاً

@@ -86,7 +86,7 @@ class FavoriteSalonService
         }
     }
 
-public function getFavorites(User $customer): AuthResult
+public function getFavorites(User $customer, int $perPage = 10): AuthResult
 {
     try {
         if (!$customer->hasRole('customer')) {
@@ -106,93 +106,109 @@ public function getFavorites(User $customer): AuthResult
             }])
             ->withAvg('ratings', 'rating')
             ->withCount('ratings as reviews_count')
-            ->get()
-            ->map(function ($salon) {
-
-                $images = $salon->getMedia('salon_images')->map(function ($image) {
-                    return [
-                        'id' => $image->id,
-                        'original' => $image->getUrl(),
-                        'thumb' => $image->hasGeneratedConversion('thumb')
-                            ? $image->getUrl('thumb')
-                            : $image->getUrl(),
-                        'medium' => $image->hasGeneratedConversion('medium')
-                            ? $image->getUrl('medium')
-                            : $image->getUrl(),
-                    ];
-                });
+            ->paginate($perPage);
 
 
-                $coverImage = $salon->getFirstMedia('salon_cover');
-                $coverImageData = null;
-                if ($coverImage) {
-                    $coverImageData = [
-                        'id' => $coverImage->id,
-                        'original' => $coverImage->getUrl(),
-                        'thumb' => $coverImage->hasGeneratedConversion('thumb')
-                            ? $coverImage->getUrl('thumb')
-                            : $coverImage->getUrl(),
-                        'medium' => $coverImage->hasGeneratedConversion('medium')
-                            ? $coverImage->getUrl('medium')
-                            : $coverImage->getUrl(),
-                    ];
-                }
-
-                // حساب توزيع التقييمات
-                $ratingDistribution = [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0];
-
-                foreach ($salon->ratings as $rating) {
-                    $ratingDistribution[(int) $rating->rating]++;
-                }
-
-                // آخر 3 تقييمات
-                $latestRatings = $salon->ratings()
-                    ->with('customer:id,name,phone')
-                    ->latest()
-                    ->take(3)
-                    ->get()
-                    ->map(function ($rating) {
-                        return [
-                            'id' => $rating->id,
-                            'rating' => $rating->rating,
-                            'comment' => $rating->comment,
-                            'user_name' => $rating->customer->name ?? 'مستخدم',
-                            'created_at' => $rating->created_at->diffForHumans(),
-                        ];
-                    });
-
+        $formattedFavorites = collect($favorites->items())->map(function ($salon) {
+            $images = $salon->getMedia('salon_images')->map(function ($image) {
                 return [
-                    'id' => $salon->id,
-                    'name' => $salon->name,
-                    'address' => $salon->address,
-                    'phone' => $salon->phone,
-                    'latitude' => $salon->latitude,
-                    'longitude' => $salon->longitude,
-                    'description' => $salon->description,
-
-                    'images' => $images,
-                    'cover_image' => $coverImageData, 
-                    'owner' => $salon->owner ? [
-                        'id' => $salon->owner->id,
-                        'name' => $salon->owner->name,
-                        'phone' => $salon->owner->phone,
-                    ] : null,
-                    'is_favorite' => true,
-                    'working_hours' => $salon->working_hours,
-                    'is_active' => $salon->is_active,
-                    'barbers_count' => $salon->barbers()->count(),
-                    'rating' => [
-                        'average' => round($salon->ratings_avg_rating ?? 0, 1),
-                        'total_count' => $salon->reviews_count ?? 0,
-                        'distribution' => $ratingDistribution,
-                        'latest_reviews' => $latestRatings,
-                    ],
+                    'id' => $image->id,
+                    'original' => $image->getUrl(),
+                    'thumb' => $image->hasGeneratedConversion('thumb')
+                        ? $image->getUrl('thumb')
+                        : $image->getUrl(),
+                    'medium' => $image->hasGeneratedConversion('medium')
+                        ? $image->getUrl('medium')
+                        : $image->getUrl(),
                 ];
             });
 
+            $coverImage = $salon->getFirstMedia('salon_cover');
+            $coverImageData = null;
+            if ($coverImage) {
+                $coverImageData = [
+                    'id' => $coverImage->id,
+                    'original' => $coverImage->getUrl(),
+                    'thumb' => $coverImage->hasGeneratedConversion('thumb')
+                        ? $coverImage->getUrl('thumb')
+                        : $coverImage->getUrl(),
+                    'medium' => $coverImage->hasGeneratedConversion('medium')
+                        ? $coverImage->getUrl('medium')
+                        : $coverImage->getUrl(),
+                ];
+            }
+
+            // حساب توزيع التقييمات
+            $ratingDistribution = [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0];
+
+            foreach ($salon->ratings as $rating) {
+                $ratingDistribution[(int) $rating->rating]++;
+            }
+
+            // آخر 3 تقييمات
+            $latestRatings = $salon->ratings()
+                ->with('customer:id,name,phone')
+                ->latest()
+                ->take(3)
+                ->get()
+                ->map(function ($rating) {
+                    return [
+                        'id' => $rating->id,
+                        'rating' => $rating->rating,
+                        'comment' => $rating->comment,
+                        'user_name' => $rating->customer->name ?? 'مستخدم',
+                        'created_at' => $rating->created_at->diffForHumans(),
+                    ];
+                });
+
+            return [
+                'id' => $salon->id,
+                'name' => $salon->name,
+                'address' => $salon->address,
+                'phone' => $salon->phone,
+                'latitude' => $salon->latitude,
+                'longitude' => $salon->longitude,
+                'description' => $salon->description,
+                'images' => $images,
+                'cover_image' => $coverImageData,
+                'owner' => $salon->owner ? [
+                    'id' => $salon->owner->id,
+                    'name' => $salon->owner->name,
+                    'phone' => $salon->owner->phone,
+                ] : null,
+                'is_favorite' => true,
+                'working_hours' => $salon->working_hours,
+                'is_active' => $salon->is_active,
+                'barbers_count' => $salon->barbers()->count(),
+                'rating' => [
+                    'average' => round($salon->ratings_avg_rating ?? 0, 1),
+                    'total_count' => $salon->reviews_count ?? 0,
+                    'distribution' => $ratingDistribution,
+                    'latest_reviews' => $latestRatings,
+                ],
+            ];
+        });
+
+
+        $paginationData = [
+            'current_page' => $favorites->currentPage(),
+            'data' => $formattedFavorites,
+            'first_page_url' => $favorites->url(1),
+            'from' => $favorites->firstItem(),
+            'last_page' => $favorites->lastPage(),
+            'last_page_url' => $favorites->url($favorites->lastPage()),
+            'next_page_url' => $favorites->nextPageUrl(),
+            'path' => $favorites->path(),
+            'per_page' => $favorites->perPage(),
+            'prev_page_url' => $favorites->previousPageUrl(),
+            'to' => $favorites->lastItem(),
+            'total' => $favorites->total(),
+            'has_more_pages' => $favorites->hasMorePages(),
+        ];
+
         return AuthResult::success('تم جلب قائمة الصالونات المفضلة بنجاح', [
-            'count' => $favorites->count(),
-            'salons' => $favorites
+            'count' => $favorites->total(),  
+            'salons' => $paginationData,
         ]);
 
     } catch (\Exception $e) {

@@ -76,8 +76,7 @@ class BarberServiceService
     /**
      * جلب جميع خدمات الحلاق
      */
-
-    public function getServices(User $barber): AuthResult
+    public function getServices(User $barber, int $perPage = 10): AuthResult
     {
         try {
             if (!$barber->hasRole('barber')) {
@@ -86,17 +85,10 @@ class BarberServiceService
 
             $services = BarberService::where('barber_id', $barber->id)
                 ->orderBy('created_at', 'desc')
-                ->get();
+                ->paginate($perPage);
 
-            // إحصائيات الخدمات
-            $statistics = [
-                'total' => $services->count(),                           // إجمالي الخدمات
-                'active' => $services->where('is_active', true)->count(),   // الخدمات النشطة
-                'inactive' => $services->where('is_active', false)->count(), // الخدمات الموقفة
-            ];
 
-            // تنسيق البيانات
-            $formattedServices = $services->map(function ($service) {
+            $items = collect($services->items())->map(function ($service) {
                 return [
                     'id' => $service->id,
                     'name' => $service->name,
@@ -110,12 +102,26 @@ class BarberServiceService
                 ];
             });
 
-            $response = [
-                'statistics' => $statistics,
-                'services' => $formattedServices,
+          
+            $statistics = [
+                'total' => BarberService::where('barber_id', $barber->id)->count(),
+                'active' => BarberService::where('barber_id', $barber->id)->where('is_active', true)->count(),
+                'inactive' => BarberService::where('barber_id', $barber->id)->where('is_active', false)->count(),
             ];
 
-            return AuthResult::success('تم جلب الخدمات بنجاح', $response);
+            return AuthResult::success('تم جلب الخدمات بنجاح', [
+                'statistics' => $statistics,
+                'services' => $items,
+                'pagination' => [
+                    'current_page' => $services->currentPage(),
+                    'last_page' => $services->lastPage(),
+                    'per_page' => $services->perPage(),
+                    'total' => $services->total(),
+                    'next_page_url' => $services->nextPageUrl(),
+                    'prev_page_url' => $services->previousPageUrl(),
+                    'has_more_pages' => $services->hasMorePages(),
+                ]
+            ]);
 
         } catch (\Exception $e) {
             Log::error('Get barber services error: ' . $e->getMessage());

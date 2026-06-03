@@ -15,7 +15,7 @@ class SalonServiceController extends Controller
      * عرض جميع خدمات الصالون (لصاحب الصالون)
      * GET /api/salon/services
      */
- public function index()
+public function index()
 {
     try {
         $salon = auth()->user()->ownedSalon;
@@ -47,18 +47,17 @@ class SalonServiceController extends Controller
             ]);
         }
 
-
-        $perPage = request()->input('per_page', 10); // عدد العناصر في الصفحة (افتراضي 10)
+        $perPage = request()->input('per_page', 10);
         $allServices = BarberService::whereIn('barber_id', $barberIds)
             ->orderBy('name')
             ->paginate($perPage);
 
-
+        // إحصائيات من قاعدة البيانات
         $totalServices = BarberService::whereIn('barber_id', $barberIds)->count();
         $activeServices = BarberService::whereIn('barber_id', $barberIds)->where('is_active', true)->count();
         $inactiveServices = BarberService::whereIn('barber_id', $barberIds)->where('is_active', false)->count();
 
-
+        // تنسيق البيانات
         $services = collect($allServices->items())->map(function ($service) {
             return [
                 'id' => $service->id,
@@ -87,6 +86,7 @@ class SalonServiceController extends Controller
             'prev_page_url' => $allServices->previousPageUrl(),
             'to' => $allServices->lastItem(),
             'total' => $allServices->total(),
+            'has_more_pages' => $allServices->hasMorePages(),
         ];
 
         return response()->json([
