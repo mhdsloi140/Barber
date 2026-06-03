@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\API\AuthController;
-
 use App\Http\Controllers\API\Barber\AppointmentController;
 use App\Http\Controllers\API\Barber\BarberProfileController;
 use App\Http\Controllers\API\Barber\WorkingHourController;
@@ -23,23 +22,19 @@ use App\Http\Controllers\API\Salon\DashboardController;
 use App\Http\Controllers\API\Salon\ProfileSalonController;
 use App\Http\Controllers\API\Salon\SalonServiceController;
 use App\Http\Controllers\API\Customer\SalonController;
+use App\Http\Controllers\API\TestTopicsController;
+use App\Http\Controllers\API\NotificationTestController;
+use App\Services\Notification\FirebaseNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\API\NotificationTestController;
-//  use App\Services\Notification\FirebaseNotificationService;
-use App\Services\Notification\FirebaseNotificationService;
+
 /*
 |--------------------------------------------------------------------------
 | API Routes
 |--------------------------------------------------------------------------
-|
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "api" middleware group. Make something great!
-|
 */
 
-
+// ===================== Routes المصادقة =====================
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login'])->name('login');
     Route::post('register', [AuthController::class, 'register'])->name('register');
@@ -51,11 +46,14 @@ Route::prefix('auth')->group(function () {
     Route::post('register/salon-owner', [App\Http\Controllers\API\Salon\AuthController::class, 'registerSalonOwner']);
 });
 
+// ===================== Routes محمية (تتطلب مصادقة) =====================
 Route::middleware(['auth:sanctum'])->group(function () {
 
     // FCM Token
     Route::post('/fcm-token', [FcmTokenController::class, 'update']);
     Route::delete('/fcm-token', [FcmTokenController::class, 'destroy']);
+
+    // إعدادات الإشعارات
     Route::prefix('notifications/settings')->name('notifications.settings.')->group(function () {
         Route::get('/', [NotificationSettingsController::class, 'getStatus'])->name('status');
         Route::post('/enable', [NotificationSettingsController::class, 'enable'])->name('enable');
@@ -64,24 +62,17 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::put('/', [NotificationSettingsController::class, 'update'])->name('update');
     });
 
-});
-Route::middleware(['auth:sanctum'])->group(function () {
-
     // Device Tokens
     Route::post('/device-token', [DeviceTokenController::class, 'store']);
     Route::delete('/device-token', [DeviceTokenController::class, 'destroy']);
 
-});
-Route::middleware('auth:sanctum')->group(function () {
-
-
+    // معلومات المستخدم
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
 
+    // Routes المصادقة
     Route::prefix('auth')->name('auth.')->group(function () {
-
-        //  نقل Routes الـ profile إلى داخل auth
         Route::prefix('profile')->name('profile.')->group(function () {
             Route::get('/', [ProfileController::class, 'index'])->name('index');
             Route::post('/', [ProfileController::class, 'update'])->name('update');
@@ -95,23 +86,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [AuthController::class, 'me'])->name('me');
     });
 
-
     Route::post('/change-password', [ProfileController::class, 'changePassword'])->name('password.change');
 });
-/////     الصالونات او مدير الصالون
-Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salon-owner')->group(function () {
 
-    // FCM Token
+// ===================== Routes صاحب الصالون =====================
+Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salon-owner')->group(function () {
     Route::post('/fcm-token', [FcmTokenController::class, 'update']);
     Route::delete('/fcm-token', [FcmTokenController::class, 'destroy']);
-
 });
-Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group(function () {
 
+Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group(function () {
     Route::get('profile', [ProfileSalonController::class, 'show']);
     Route::post('profile', [ProfileSalonController::class, 'update']);
     Route::apiResource('barbers', BarberController::class);
-    // عرض خدمات حلاق معين في الصالون
     Route::get('barbers/{barber_id}/services', [SalonServiceController::class, 'getBarberServices']);
     Route::get('barbers-count', [DashboardController::class, 'getBarbersCount']);
     Route::get('services', [SalonServiceController::class, 'index']);
@@ -125,13 +112,10 @@ Route::middleware(['auth:sanctum', 'role:salon_owner'])->prefix('salons')->group
     Route::get('appointments/status/{status}', [AppointmentSalonController::class, 'getByStatus']);
 });
 
-
-//////////الحلاقين
+// ===================== Routes الحلاق =====================
 Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(function () {
-
     Route::get('/profile', [BarberProfileController::class, 'show']);
     Route::post('/profile', [BarberProfileController::class, 'update']);
-
     Route::apiResource('services', ServicesController::class);
     Route::post('services/{id}/toggle', [ServicesController::class, 'toggleStatus']);
     Route::delete('services/{id}/force', [ServicesController::class, 'forceDelete']);
@@ -140,54 +124,41 @@ Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(func
     Route::get('working-hours', [WorkingHourController::class, 'index']);
     Route::post('working-hours', [WorkingHourController::class, 'update']);
     Route::post('working-hours/reset', [WorkingHourController::class, 'reset']);
-    // Route::post('/working-hours/add-day', [WorkingHourController::class, 'addDay']);
     Route::post('/working-hours/add-days', [WorkingHourController::class, 'addMultipleDays']);
     Route::delete('/working-hours/{day}', [WorkingHourController::class, 'deleteDay']);
     Route::get('salon-working-days', [WorkingHourController::class, 'getSalonWorkingDays']);
-    // الحجوزات الموافة و عرض و رفض
+
     Route::prefix('appointments')->group(function () {
         Route::get('show', [AppointmentController::class, 'index']);
         Route::get('pending', [AppointmentController::class, 'pending']);
         Route::post('{id}/approve', [AppointmentController::class, 'approve']);
         Route::post('{id}/reject', [AppointmentController::class, 'reject']);
     });
-    /// الاحصائيات
+
     Route::get('/statistics', [BarberProfileController::class, 'index']);
     Route::get('/statistics/monthly', [BarberProfileController::class, 'monthlyCompletedServices']);
 });
 
-
-//// الزبائن
+// ===================== Routes الزبون =====================
 Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(function () {
-
     Route::get('/dashboard', [DashboardCustomerController::class, 'index']);
-
-    // الصالونات
     Route::get('salons', [SalonController::class, 'index']);
     Route::get('salons/{id}', [SalonController::class, 'show']);
     Route::get('salons/{id}/details', [SalonDetailsController::class, 'show']);
 
     Route::prefix('appointments')->group(function () {
-
-        Route::get('/', [BookingController::class, 'index']);           // جميع الحجوزات
-        Route::get('active', [BookingController::class, 'active']);     // النشطة (pending + confirmed + مستقبلية)
-        Route::get('pending', [BookingController::class, 'pending']);   // قيد الانتظار فقط
-        Route::get('confirmed', [BookingController::class, 'confirmed']); // المؤكدة فقط
-        Route::get('completed', [BookingController::class, 'completed']); // المكتملة فقط
-        Route::get('cancelled', [BookingController::class, 'cancelled']); // الملغية فقط
-
-        // Routes مع {id} (تأكد من وضعها في النهاية)
-        Route::get('{id}', [BookingController::class, 'show']);         // تفاصيل حجز محدد
+        Route::get('/', [BookingController::class, 'index']);
+        Route::get('active', [BookingController::class, 'active']);
+        Route::get('pending', [BookingController::class, 'pending']);
+        Route::get('confirmed', [BookingController::class, 'confirmed']);
+        Route::get('completed', [BookingController::class, 'completed']);
+        Route::get('cancelled', [BookingController::class, 'cancelled']);
+        Route::get('{id}', [BookingController::class, 'show']);
         Route::post('{id}/cancel', [BookingController::class, 'cancel']);
         Route::post('{id}', [BookingController::class, 'update']);
     });
 
-    // حفظ الحجز الجديد (خارج مجموعة appointments لأن له مسار مختلف)
     Route::post('booking/store', [BookingController::class, 'store']);
-    // Route::put('booking/{id}', [BookingController::class, 'update']);
-
-
-    // جدول الحلاق
     Route::get('barber/{barberId}/schedule', [BarberAvailabilityController::class, 'getBarberSchedule']);
 
     // المفضلة - حلاقين
@@ -206,172 +177,37 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
         Route::get('stats', [FavoriteSalonController::class, 'stats']);
         Route::delete('{salonId}', [FavoriteSalonController::class, 'destroy']);
     });
-
 });
-Route::prefix('ratings')->group(function () {
 
-    // مسارات عامة (عرض التقييمات)
+// ===================== Routes التقييمات =====================
+Route::prefix('ratings')->group(function () {
     Route::get('barber/{barberId}', [RatingController::class, 'barberRatings']);
     Route::get('salon/{salonId}', [RatingController::class, 'salonRatings']);
-
-    // مسارات محمية (تحتاج توثيق)
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/', [RatingController::class, 'store']);
         Route::get('my-ratings', [RatingController::class, 'myRatings']);
     });
+});
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    // test
-
+// ===================== Routes لاختبار Topics =====================
+Route::prefix('test/topics')->group(function () {
+    Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
+        Route::post('/all-customers', [TestTopicsController::class, 'sendToAllCustomers']);
+        Route::post('/all-barbers', [TestTopicsController::class, 'sendToAllBarbers']);
+        Route::post('/all-admins', [TestTopicsController::class, 'sendToAllAdmins']);
+        Route::post('/salon/{salonId}/customers', [TestTopicsController::class, 'sendToSalonCustomers']);
+        Route::post('/salon/{salonId}/barbers', [TestTopicsController::class, 'sendToSalonBarbers']);
+        Route::post('/offer', [TestTopicsController::class, 'sendOffer']);
+        Route::post('/custom', [TestTopicsController::class, 'sendToCustomTopic']);
+        Route::get('/list', [TestTopicsController::class, 'getTopicsList']);
+    });
+    Route::post('/public/all-customers', [TestTopicsController::class, 'publicSendToAllCustomers']);
+});
 
 // ===================== Routes لاختبار الإشعارات =====================
-Route::prefix('notification')->name('notification.')->group(function () {
-
-    // إرسال إشعار باستخدام التوكن مباشرة (بدون مصادقة - للاختبار)
+Route::prefix('notification/test')->group(function () {
     Route::post('/send-by-token', [NotificationTestController::class, 'sendByToken']);
-
-    // إرسال إشعار لمستخدم محدد (يتطلب مصادقة)
-    Route::middleware(['auth:sanctum'])->post('/send-to-user', [NotificationTestController::class, 'sendToUser']);
-
-    // إرسال إشعار لجميع المستخدمين (يتطلب مصادقة ودور admin)
-    Route::middleware(['auth:sanctum', 'role:admin'])->post('/broadcast', [NotificationTestController::class, 'broadcast']);
-
-    // التحقق من صحة التوكن (بدون مصادقة)
     Route::post('/validate-token', [NotificationTestController::class, 'validateToken']);
-});
-
-// Route لاختبار إرسال إشعار لمستخدم محدد
-
-
-// Route لإرسال إشعار لزبون محدد
-Route::middleware(['auth:sanctum'])->post('/test/send-to-customer', function (Request $request) {
-    $request->validate([
-        'customer_id' => 'required|exists:users,id',
-        'title' => 'required|string',
-        'body' => 'required|string',
-    ]);
-
-    $customer = App\Models\User::find($request->customer_id);
-
-    // تأكد من أن المستخدم زبون
-    if (!$customer->hasRole('customer')) {
-        return response()->json([
-            'success' => false,
-            'message' => 'المستخدم ليس زبوناً'
-        ], 400);
-    }
-
-    $notificationService = app(FirebaseNotificationService::class);
-
-    $data = [
-        'type' => 'test_notification',
-        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-        'screen' => 'home',
-    ];
-
-    $result = $notificationService->sendPushNotification($customer, $request->title, $request->body, $data);
-
-    return response()->json([
-        'success' => $result,
-        'message' => $result ? 'تم إرسال الإشعار للزبون' : 'فشل إرسال الإشعار',
-        'customer_id' => $customer->id,
-        'customer_name' => $customer->name,
-        'has_token' => !empty($customer->fcm_token),
-    ]);
-});
-
-// Route لإرسال إشعار لجميع الزبائن
-Route::middleware(['auth:sanctum'])->post('/test/notify-all-customers', function (Request $request) {
-    $request->validate([
-        'title' => 'required|string',
-        'body' => 'required|string',
-    ]);
-
-    $notificationService = app(FirebaseNotificationService::class);
-
-    $customers = App\Models\User::role('customer')
-        ->whereNotNull('fcm_token')
-        ->get();
-
-    $sentCount = 0;
-
-    foreach ($customers as $customer) {
-        $data = [
-            'type' => 'broadcast',
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'home',
-        ];
-
-        if ($notificationService->sendPushNotification($customer, $request->title, $request->body, $data)) {
-            $sentCount++;
-        }
-    }
-
-    return response()->json([
-        'success' => true,
-        'sent_count' => $sentCount,
-        'total_customers' => $customers->count(),
-        'message' => "تم إرسال الإشعار إلى {$sentCount} من أصل {$customers->count()} زبون",
-    ]);
-});
-
-// Route لجلب إشعارات الزبون (من قاعدة البيانات)
-Route::middleware(['auth:sanctum'])->get('/my-notifications', function (Request $request) {
-    $user = $request->user();
-
-    $notifications = App\Models\Notification::where('user_id', $user->id)
-        ->orderBy('created_at', 'desc')
-        ->paginate(15);
-
-    $unreadCount = App\Models\Notification::where('user_id', $user->id)
-        ->where('is_read', false)
-        ->count();
-
-    return response()->json([
-        'success' => true,
-        'unread_count' => $unreadCount,
-        'notifications' => $notifications,
-    ]);
-});
-
-// Route لتحديد إشعار كمقروء
-Route::middleware(['auth:sanctum'])->post('/notifications/{id}/read', function (Request $request, $id) {
-    $notification = App\Models\Notification::where('user_id', $request->user()->id)
-        ->where('id', $id)
-        ->first();
-
-    if (!$notification) {
-        return response()->json(['success' => false, 'message' => 'الإشعار غير موجود'], 404);
-    }
-
-    $notification->update(['is_read' => true, 'read_at' => now()]);
-
-    return response()->json(['success' => true, 'message' => 'تم تحديد الإشعار كمقروء']);
-});
+    Route::middleware(['auth:sanctum'])->post('/send-to-user', [NotificationTestController::class, 'sendToUser']);
+    Route::middleware(['auth:sanctum', 'role:admin'])->post('/broadcast', [NotificationTestController::class, 'broadcast']);
 });
