@@ -455,7 +455,7 @@ class BookingService
             }
 
             $appointments = Appointment::where('customer_id', $customer->id)
-                ->where('status', 'confirmed')
+                ->whereIn('status', ['confirmed','pending'])
                 ->with(['barber', 'salon'])
                 ->orderBy('appointment_date', 'asc')
                 ->orderBy('appointment_time', 'asc')
@@ -575,7 +575,7 @@ class BookingService
             }
 
             $appointments = Appointment::where('customer_id', $customer->id)
-                ->where('status', 'confirmed')
+                ->whereIn('status', ['confirmed','pinding'])
                 ->with(['barber', 'salon'])
                 ->orderBy('appointment_date', 'asc')
                 ->orderBy('appointment_time', 'asc')
