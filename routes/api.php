@@ -25,6 +25,7 @@ use App\Http\Controllers\API\Salon\SalonServiceController;
 use App\Http\Controllers\API\Customer\SalonController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\API\NotificationTestController;
 //  use App\Services\Notification\FirebaseNotificationService;
 use App\Services\Notification\FirebaseNotificationService;
 /*
@@ -248,6 +249,22 @@ Route::prefix('ratings')->group(function () {
 
     // test
 
+
+// ===================== Routes لاختبار الإشعارات =====================
+Route::prefix('notification')->name('notification.')->group(function () {
+
+    // إرسال إشعار باستخدام التوكن مباشرة (بدون مصادقة - للاختبار)
+    Route::post('/send-by-token', [NotificationTestController::class, 'sendByToken']);
+
+    // إرسال إشعار لمستخدم محدد (يتطلب مصادقة)
+    Route::middleware(['auth:sanctum'])->post('/send-to-user', [NotificationTestController::class, 'sendToUser']);
+
+    // إرسال إشعار لجميع المستخدمين (يتطلب مصادقة ودور admin)
+    Route::middleware(['auth:sanctum', 'role:admin'])->post('/broadcast', [NotificationTestController::class, 'broadcast']);
+
+    // التحقق من صحة التوكن (بدون مصادقة)
+    Route::post('/validate-token', [NotificationTestController::class, 'validateToken']);
+});
 
 // Route لاختبار إرسال إشعار لمستخدم محدد
 
