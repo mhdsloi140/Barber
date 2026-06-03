@@ -30,7 +30,7 @@ private function getArabicDayName(string $day): string
     ];
     return $days[$day] ?? $day;
 }
-   public function getBarbersCount(User $salonOwner): AuthResult
+public function getBarbersCount(User $salonOwner): AuthResult
 {
     try {
         $salon = $salonOwner->ownedSalon;
@@ -39,7 +39,7 @@ private function getArabicDayName(string $day): string
             return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
         }
 
-        // ===================== إحصائيات اليوم =====================
+        // ===================== التواريخ =====================
         $today = Carbon::today();
         $yesterday = Carbon::yesterday();
         $startOfWeek = Carbon::now()->startOfWeek();
@@ -47,77 +47,96 @@ private function getArabicDayName(string $day): string
         $startOfMonth = Carbon::now()->startOfMonth();
         $endOfMonth = Carbon::now()->endOfMonth();
 
-        // إيرادات اليوم (المكتملة فقط)
+        // ===================== إيرادات اليوم =====================
         $todayRevenue = Appointment::where('salon_id', $salon->id)
             ->where('status', 'completed')
             ->whereDate('appointment_date', $today)
             ->sum('total_price');
 
-        // إيرادات الأمس (للمقارنة)
         $yesterdayRevenue = Appointment::where('salon_id', $salon->id)
             ->where('status', 'completed')
             ->whereDate('appointment_date', $yesterday)
             ->sum('total_price');
 
-        // إيرادات هذا الأسبوع
         $weeklyRevenue = Appointment::where('salon_id', $salon->id)
             ->where('status', 'completed')
             ->whereBetween('appointment_date', [$startOfWeek, $endOfWeek])
             ->sum('total_price');
 
-        // إيرادات هذا الشهر
         $monthlyRevenue = Appointment::where('salon_id', $salon->id)
             ->where('status', 'completed')
             ->whereBetween('appointment_date', [$startOfMonth, $endOfMonth])
             ->sum('total_price');
 
-        // إجمالي الإيرادات الكلي
         $totalRevenue = Appointment::where('salon_id', $salon->id)
             ->where('status', 'completed')
             ->sum('total_price');
 
-        // ===================== الحجوزات اليومية =====================
-
-        // إجمالي حجوزات اليوم
+        // ===================== حجوزات اليوم =====================
         $todayTotalAppointments = Appointment::where('salon_id', $salon->id)
             ->whereDate('appointment_date', $today)
             ->count();
 
-        // الحجوزات المكتملة اليوم
         $todayCompletedAppointments = Appointment::where('salon_id', $salon->id)
             ->where('status', 'completed')
             ->whereDate('appointment_date', $today)
             ->count();
 
-        // الحجوزات الملغية اليوم
         $todayCancelledAppointments = Appointment::where('salon_id', $salon->id)
             ->where('status', 'cancelled')
             ->whereDate('appointment_date', $today)
             ->count();
 
-        // الحجوزات قيد الانتظار اليوم
         $todayPendingAppointments = Appointment::where('salon_id', $salon->id)
             ->where('status', 'pending')
             ->whereDate('appointment_date', $today)
             ->count();
 
-        // الحجوزات المؤكدة اليوم
         $todayConfirmedAppointments = Appointment::where('salon_id', $salon->id)
             ->where('status', 'confirmed')
             ->whereDate('appointment_date', $today)
             ->count();
 
-        // نسبة الإنجاز اليومية
+        // ===================== حجوزات الأمس =====================
+        $yesterdayTotalAppointments = Appointment::where('salon_id', $salon->id)
+            ->whereDate('appointment_date', $yesterday)
+            ->count();
+
+        $yesterdayCompletedAppointments = Appointment::where('salon_id', $salon->id)
+            ->where('status', 'completed')
+            ->whereDate('appointment_date', $yesterday)
+            ->count();
+
+        $yesterdayCancelledAppointments = Appointment::where('salon_id', $salon->id)
+            ->where('status', 'cancelled')
+            ->whereDate('appointment_date', $yesterday)
+            ->count();
+
+        $yesterdayPendingAppointments = Appointment::where('salon_id', $salon->id)
+            ->where('status', 'pending')
+            ->whereDate('appointment_date', $yesterday)
+            ->count();
+
+        $yesterdayConfirmedAppointments = Appointment::where('salon_id', $salon->id)
+            ->where('status', 'confirmed')
+            ->whereDate('appointment_date', $yesterday)
+            ->count();
+
+        //
         $completionRate = $todayTotalAppointments > 0
             ? round(($todayCompletedAppointments / $todayTotalAppointments) * 100, 1)
             : 0;
 
-        // نسبة التغير في الإيرادات مقارنة بالأمس
         $revenueChange = $yesterdayRevenue > 0
             ? round((($todayRevenue - $yesterdayRevenue) / $yesterdayRevenue) * 100, 1)
             : ($todayRevenue > 0 ? 100 : 0);
 
-        // معلومات الصالون
+        // نسبة تغير الحجوزات مقارنة بالأمس
+        $appointmentsChange = $yesterdayTotalAppointments > 0
+            ? round((($todayTotalAppointments - $yesterdayTotalAppointments) / $yesterdayTotalAppointments) * 100, 1)
+            : ($todayTotalAppointments > 0 ? 100 : 0);
+
+        // ===================== معلومات الصالون =====================
         $salonInfo = [
             'id' => $salon->id,
             'name' => $salon->name,
@@ -132,12 +151,11 @@ private function getArabicDayName(string $day): string
             'created_at' => $salon->created_at,
         ];
 
-        // جلب جميع الحلاقين التابعين للصالون
+        // ===================== الحلاقين =====================
         $barbers = $salon->barbers()
             ->select('users.id', 'users.name', 'users.phone', 'users.is_active', 'users.created_at')
             ->get()
             ->map(function($barber) {
-                // إحصائيات كل حلاق على حدة
                 $barberTodayCompleted = Appointment::where('barber_id', $barber->id)
                     ->where('status', 'completed')
                     ->whereDate('appointment_date', Carbon::today())
@@ -159,26 +177,18 @@ private function getArabicDayName(string $day): string
                 ];
             });
 
-        // عدد الحلاقين
         $totalBarbers = $barbers->count();
         $activeBarbers = $barbers->where('is_active', true)->count();
         $inactiveBarbers = $totalBarbers - $activeBarbers;
 
         return AuthResult::success('تم جلب بيانات الصالون بنجاح', [
-            // معلومات الصالون
             'salon' => $salonInfo,
-
-            // قائمة الحلاقين
             'barbers' => $barbers,
-
-            // إحصائيات الحلاقين
             'barbers_statistics' => [
                 'total_barbers' => $totalBarbers,
                 'active_barbers' => $activeBarbers,
                 'inactive_barbers' => $inactiveBarbers,
             ],
-
-            // إحصائيات الإيرادات
             'revenue_statistics' => [
                 'today' => (float) $todayRevenue,
                 'yesterday' => (float) $yesterdayRevenue,
@@ -186,29 +196,31 @@ private function getArabicDayName(string $day): string
                 'monthly' => (float) $monthlyRevenue,
                 'total' => (float) $totalRevenue,
                 'change_percentage' => $revenueChange,
-                // 'currency' => 'SAR',
             ],
-
-            // إحصائيات الحجوزات اليومية
             'appointments_statistics' => [
+                // إحصائيات اليوم
                 'today_total' => $todayTotalAppointments,
                 'today_completed' => $todayCompletedAppointments,
                 'today_cancelled' => $todayCancelledAppointments,
                 'today_pending' => $todayPendingAppointments,
                 'today_confirmed' => $todayConfirmedAppointments,
                 'completion_rate' => $completionRate,
-            ],
 
-            // إحصائيات عامة للـ Dashboard
-            'dashboard_stats' => [
-                'day' => $today->format('Y-m-d'),
-                'day_name' => $this->getArabicDayName($today->format('l')),
-                'reservations' => $todayTotalAppointments,
-                'completed_reservations' => $todayCompletedAppointments,
-                'cancelled_reservations' => $todayCancelledAppointments,
-                'pending_reservations' => $todayPendingAppointments,
-                'notifications' => 0, // يمكن جلب من جدول الإشعارات
+
+
+
+
+
             ],
+            'appointments_statistics_yesterday'=>
+            [
+                 'yesterday_total' => $yesterdayTotalAppointments,
+                'yesterday_completed' => $yesterdayCompletedAppointments,
+                'yesterday_cancelled' => $yesterdayCancelledAppointments,
+                'yesterday_pending' => $yesterdayPendingAppointments,
+                'yesterday_confirmed' => $yesterdayConfirmedAppointments,
+            ],
+            // 'change_percentage' => $appointmentsChange,
         ]);
 
     } catch (\Exception $e) {
@@ -220,6 +232,5 @@ private function getArabicDayName(string $day): string
             500
         );
     }
-
 }
 }
