@@ -14,64 +14,49 @@ class BarberServiceService
     /**
      * إضافة خدمة جديدة للحلاق
      */
-    public function addService(User $barber, array $data): AuthResult
-    {
-        try {
-            return DB::transaction(function () use ($barber, $data) {
+public function addService(User $barber, array $data): AuthResult
+{
+    try {
+        return DB::transaction(function () use ($barber, $data) {
 
-                if (!$barber->hasRole('barber')) {
-                    return AuthResult::error('هذا المستخدم ليس حلاقاً', null, 403);
+            if (!$barber->hasRole('barber')) {
+                return AuthResult::error('هذا المستخدم ليس حلاقاً', null, 403);
+            }
+
+            // إنشاء الخدمة
+            $service = BarberService::create([
+                'barber_id' => $barber->id,
+                'name' => $data['name'],
+                'description' => $data['description'] ?? null,
+                'price' => $data['price'],
+                'duration_minutes' => $data['duration_minutes'],
+                'is_active' => $data['is_active'] ?? true,
+            ]);
+
+            //  إرسال إشعارات لجميع الزبائن (بغض النظر عن الصالون)
+            try {
+                $notificationService = app(FirebaseNotificationService::class);
+
+                //  أرسل لجميع الزبائن مباشرة
+                $notificationService->notifyAllCustomersAboutNewService($service, $barber);
+
+                // اختياري: إرسال لمدير الصالون إذا وجد
+                $salon = $barber->salons()->first();
+                if ($salon) {
+                    $notificationService->notifySalonOwnerAboutNewService($service, $barber, $salon);
                 }
 
-                // إنشاء الخدمة
-                $service = BarberService::create([
-                    'barber_id' => $barber->id,
-                    'name' => $data['name'],
-                    'description' => $data['description'] ?? null,
-                    'price' => $data['price'],
-                    'duration_minutes' => $data['duration_minutes'],
-                    'is_active' => $data['is_active'] ?? true,
-                ]);
+            } catch (\Exception $e) {
+                Log::error('Failed to send new service notifications: ' . $e->getMessage());
+            }
 
-                //  إرسال إشعارات لجميع الزبائن عن الخدمة الجديدة
-                try {
-                    $notificationService = app(FirebaseNotificationService::class);
-
-                    // جلب الصالون الذي يعمل فيه الحلاق
-                    $salon = $barber->salons()->first();
-
-                    if ($salon) {
-                        // إرسال إشعار لجميع الزبائن
-                        $notificationService->notifySalonCustomersAboutNewService($service, $barber, $salon);
-
-                        // إرسال إشعار لمدير الصالون
-                        $notificationService->notifySalonOwnerAboutNewService($service, $barber, $salon);
-                    } else {
-                        // إذا لم يكن للحلاق صالون، أرسل للجميع
-                        $notificationService->notifyAllCustomersAboutNewService($service, $barber);
-                    }
-
-                } catch (\Exception $e) {
-                    Log::error('Failed to send new service notifications: ' . $e->getMessage());
-                }
-
-
-                return AuthResult::success(
-                    'تم إضافة الخدمة بنجاح',
-                    $service,
-                    201
-                );
-            });
-        } catch (\Exception $e) {
-            Log::error('Add barber service error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء إضافة الخدمة',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
-        }
+            return AuthResult::success('تم إضافة الخدمة بنجاح', $service, 201);
+        });
+    } catch (\Exception $e) {
+        Log::error('Add barber service error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء إضافة الخدمة', null, 500);
     }
+}
 
     /**
      * جلب جميع خدمات الحلاق
@@ -102,7 +87,7 @@ class BarberServiceService
                 ];
             });
 
-          
+
             $statistics = [
                 'total' => BarberService::where('barber_id', $barber->id)->count(),
                 'active' => BarberService::where('barber_id', $barber->id)->where('is_active', true)->count(),
