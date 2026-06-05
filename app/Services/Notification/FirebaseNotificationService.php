@@ -629,6 +629,13 @@ class FirebaseNotificationService
      */
     public function sendToTopic(string $topic, string $title, string $body, array $data = []): bool
     {
+        Log::info('🔔 [TOPIC] Attempting to send notification', [
+        'topic' => $topic,
+        'title' => $title,
+        'body' => $body,
+        'data' => $data,
+    ]);
+
         if (!$this->messaging) {
             Log::warning('Firebase messaging not available');
             return false;
