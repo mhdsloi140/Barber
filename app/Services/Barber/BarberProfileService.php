@@ -49,6 +49,7 @@ public function getProfile(User $barber): AuthResult
                 // 'icon' => $spec->icon,
                 // 'description' => $spec->description,
                 // 'is_selected' => true,
+
             ]);
 
         // 2. جميع الاختصاصات المتاحة في النظام
@@ -77,6 +78,7 @@ public function getProfile(User $barber): AuthResult
             'phone' => $barber->phone,
             'avatar' => $barber->getAvatarUrlAttribute(),
             'is_active' => $barber->is_active,
+              'notifications_enabled' => (bool) $barber->notifications_enabled,
             'working_hours' => $workingHours,
             'created_at' => $barber->created_at,
             'rating' => $ratingInfo,
@@ -125,6 +127,8 @@ public function getProfile(User $barber): AuthResult
                     'phone' => $barber->phone,
                     'avatar' => $barber->getAvatarUrlAttribute(),
                     'is_active' => $barber->is_active,
+
+                    'notifications_enabled' => (bool) $barber->notifications_enabled,
                 ],
                 'rating' => $this->getBarberRatingInfo($barber),
 

@@ -52,7 +52,7 @@ class BarberProfileController extends Controller
      * GET /api/barber/profile
      */
     public function show()
-    {
+    { 
         $result = $this->profileService->getProfile(auth()->user());
 
         return response()->json([
