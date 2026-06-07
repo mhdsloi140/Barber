@@ -239,6 +239,7 @@ class BarberProfileService
                     'phone' => $barber->phone,
                     'avatar' => $barber->getAvatarUrlAttribute(),
                     'working_hours' => $this->getFormattedWorkingHours($barber),
+                     'notifications_enabled' => (bool) $barber->notifications_enabled,
                     'specializations' => $specializations,
                     'specializations_count' => $specializations->count(),
                     'specializations_text' => $specializations->pluck('name_ar')->implode('، '),
