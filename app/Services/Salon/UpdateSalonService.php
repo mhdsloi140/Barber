@@ -116,6 +116,7 @@ class UpdateSalonService
                         'working_hours' => $this->getWorkingHoursFormatted($salon),
                         'rating' => $salonRatings['rating'],
                         'statistics' => $salonRatings['statistics'],
+                        // 'notifications_enabled' => (bool) $user->notifications_enabled,
                     ],
                 ]);
 
@@ -160,6 +161,7 @@ class UpdateSalonService
             'avatar' => $user->getAvatarUrlAttribute(),
             'created_at' => $user->created_at,
             'updated_at' => $user->updated_at,
+            'notifications_enabled' => (bool) $user->notifications_enabled,
         ];
 
         return $data;
