@@ -116,7 +116,7 @@ class BookingService
                 }
 
                 $appointment->status = 'cancelled';
-                $appointment->cancellation_reason = $reason ?? 'تم الرفض من قبل الحلاق';
+                // $appointment->cancellation_reason = $reason ?? 'تم الرفض من قبل الحلاق';
                 $appointment->save();
                 try {
                     $notificationService = app(FirebaseNotificationService::class);

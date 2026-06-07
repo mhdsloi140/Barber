@@ -468,7 +468,7 @@ class FirebaseNotificationService
     public function notifyAllCustomersAboutNewService(BarberService $service, User $barber): void
     {
         $title = ' خدمة جديدة متاحة';
-        $body = "{$barber->name} أضاف خدمة جديدة: {$service->name} بسعر {$service->price} ريال";
+        $body = "{$barber->name} أضاف خدمة جديدة: {$service->name} بسعر {$service->price}";
 
         $data = [
             'type' => 'new_service',
