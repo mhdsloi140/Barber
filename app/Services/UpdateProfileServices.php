@@ -86,8 +86,13 @@ class UpdateProfileServices
                 $updateData['phone'] = $request->phone;
             }
 
-            if ($request->filled('email')) {
-                $updateData['email'] = $request->email;
+            if ($request->has('notifications_enabled')) {
+                $user->notifications_enabled = $request->boolean('notifications_enabled');
+                $user->save();
+                Log::info('Notification settings updated', [
+                    'user_id' => $user->id,
+                    'enabled' => $request->boolean('notifications_enabled')
+                ]);
             }
 
             if (!empty($updateData)) {
@@ -145,7 +150,7 @@ class UpdateProfileServices
                 'password_changed' => $passwordChanged
             ]);
 
-            
+
             $userData = UserResource::make($user->fresh());
 
             // إضافة التوكن الجديد إذا تم تغيير كلمة المرور

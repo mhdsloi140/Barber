@@ -26,7 +26,7 @@ class UpdateProfileRequest extends FormRequest
                 'max:15',
                 Rule::unique('users')->ignore($user->id),
             ],
-            'email' => 'sometimes|email|max:255|unique:users,email,' . $user->id,
+            // 'email' => 'sometimes|email|max:255|unique:users,email,' . $user->id,
 
             // كلمة المرور
             'current_password' => 'sometimes|required_with:password|string',
