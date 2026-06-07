@@ -1079,7 +1079,7 @@ class BookingService
 
                 $appointment->status = 'cancelled';
                 $appointment->cancelled_at = now();
-                $appointment->cancellation_reason = $reason;
+           //     $appointment->cancellation_reason = $reason;
                 $appointment->save();
 
                 return AuthResult::success('تم إلغاء الحجز بنجاح', [
