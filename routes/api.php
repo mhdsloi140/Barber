@@ -13,6 +13,7 @@ use App\Http\Controllers\API\Customer\FavoriteSalonController;
 use App\Http\Controllers\API\Customer\SalonDetailsController;
 use App\Http\Controllers\API\Notification\DeviceTokenController;
 use App\Http\Controllers\API\Notification\FcmTokenController;
+use App\Http\Controllers\API\NotificationController;
 use App\Http\Controllers\API\NotificationSettingsController;
 use App\Http\Controllers\API\ProfileController;
 use App\Http\Controllers\API\RatingController;
@@ -205,9 +206,29 @@ Route::prefix('test/topics')->group(function () {
 });
 
 // ===================== Routes لاختبار الإشعارات =====================
-Route::prefix('notification/test')->group(function () {
-    Route::post('/send-by-token', [NotificationTestController::class, 'sendByToken']);
-    Route::post('/validate-token', [NotificationTestController::class, 'validateToken']);
-    Route::middleware(['auth:sanctum'])->post('/send-to-user', [NotificationTestController::class, 'sendToUser']);
-    Route::middleware(['auth:sanctum', 'role:admin'])->post('/broadcast', [NotificationTestController::class, 'broadcast']);
+
+
+// ===================== Routes الإشعارات =====================
+Route::middleware(['auth:sanctum'])->prefix('notifications')->name('notifications.')->group(function () {
+
+    // جلب جميع إشعارات المستخدم (مع Pagination)
+    Route::get('/', [NotificationController::class, 'index'])->name('index');
+
+    // جلب الإشعارات غير المقروءة فقط
+    Route::get('/unread', [NotificationController::class, 'unread'])->name('unread');
+
+    // عدد الإشعارات غير المقروءة (Badge)
+    Route::get('/badge', [NotificationController::class, 'badge'])->name('badge');
+
+    // تحديد إشعار كمقروء
+    Route::put('/{id}/read', [NotificationController::class, 'markAsRead'])->name('mark-read');
+
+    // تحديد جميع الإشعارات كمقروءة
+    Route::put('/read-all', [NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+
+    // حذف إشعار
+    Route::delete('/{id}', [NotificationController::class, 'destroy'])->name('destroy');
+
+    // حذف جميع الإشعارات
+    Route::delete('/', [NotificationController::class, 'destroyAll'])->name('destroy-all');
 });
