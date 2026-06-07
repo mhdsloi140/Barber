@@ -52,6 +52,8 @@ class UpdateSalonRequest extends FormRequest
             'working_hours.*.is_open' => ['required_with:working_hours', 'boolean'],
             'working_hours.*.start' => ['nullable', 'date_format:H:i'],
             'working_hours.*.end' => ['nullable', 'date_format:H:i', 'after:working_hours.*.start'],
+            'notifications_enabled' => 'sometimes|boolean',
+
         ];
     }
 
@@ -92,6 +94,9 @@ class UpdateSalonRequest extends FormRequest
             'working_hours.*.start.date_format' => 'صيغة وقت البدء غير صحيحة (مطلوب H:i)',
             'working_hours.*.end.date_format' => 'صيغة وقت النهاية غير صحيحة (مطلوب H:i)',
             'working_hours.*.end.after' => 'وقت النهاية يجب أن يكون بعد وقت البدء',
+
+            'notifications_enabled.boolean' => 'حقل الإشعارات يجب أن يكون true أو false',
+
         ];
     }
 }

@@ -28,83 +28,83 @@ class BarberProfileService
     ];
 
 
-public function getProfile(User $barber): AuthResult
-{
-    try {
-        if (!$barber->hasRole('barber')) {
-            return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
+    public function getProfile(User $barber): AuthResult
+    {
+        try {
+            if (!$barber->hasRole('barber')) {
+                return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
+            }
+
+            $workingHours = $this->getFormattedWorkingHours($barber);
+            $ratingInfo = $this->getBarberRatingInfo($barber);
+
+            // 1. اختصاصات الحلاق الحالية
+            $barberSpecializations = $barber->specializations()
+                ->where('is_active', true)
+                ->get()
+                ->map(fn($spec) => [
+                    'id' => $spec->id,
+                    'name' => $spec->name,
+                    // 'name_ar' => $spec->name_ar ?? $spec->name,
+                    // 'icon' => $spec->icon,
+                    // 'description' => $spec->description,
+                    // 'is_selected' => true,
+
+                ]);
+
+            // 2. جميع الاختصاصات المتاحة في النظام
+            $allSpecializations = \App\Models\Specialization::where('is_active', true)
+                ->get()
+                ->map(fn($spec) => [
+                    'id' => $spec->id,
+                    'name' => $spec->name,
+                    // 'name_ar' => $spec->name_ar ?? $spec->name,
+                    // 'icon' => $spec->icon,
+                    // 'description' => $spec->description,
+                    'is_active' => $spec->is_active,
+                    'is_selected' => $barber->specializations()->where('specialization_id', $spec->id)->exists(),
+                ]);
+
+            // 3. إحصائيات الاختصاصات
+            $specializationsStats = [
+                'total' => $allSpecializations->count(),
+                'selected' => $barberSpecializations->count(),
+                'remaining' => $allSpecializations->count() - $barberSpecializations->count(),
+            ];
+
+            $data = [
+                'id' => $barber->id,
+                'name' => $barber->name,
+                'phone' => $barber->phone,
+                'avatar' => $barber->getAvatarUrlAttribute(),
+                'is_active' => $barber->is_active,
+                'notifications_enabled' => (bool) $barber->notifications_enabled,
+                'working_hours' => $workingHours,
+                'created_at' => $barber->created_at,
+                'rating' => $ratingInfo,
+                'completed_appointments_this_month' => $this->getCurrentMonthCompletedAppointments($barber->id),
+
+                // اختصاصات الحلاق الحالية
+                'my_specializations' => $barberSpecializations,
+                'my_specializations_count' => $barberSpecializations->count(),
+                'my_specializations_text' => $barberSpecializations->pluck('name_ar')->implode('، '),
+                'my_specializations_ids' => $barberSpecializations->pluck('id')->toArray(),
+
+                // جميع الاختصاصات المتاحة
+                'all_specializations' => $allSpecializations,
+                'all_specializations_count' => $allSpecializations->count(),
+
+                // إحصائيات الاختصاصات
+                'specializations_stats' => $specializationsStats,
+            ];
+
+            return AuthResult::success('تم جلب الملف الشخصي بنجاح', $data);
+
+        } catch (\Exception $e) {
+            Log::error('Get barber profile error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء جلب الملف الشخصي', null, 500);
         }
-
-        $workingHours = $this->getFormattedWorkingHours($barber);
-        $ratingInfo = $this->getBarberRatingInfo($barber);
-
-        // 1. اختصاصات الحلاق الحالية
-        $barberSpecializations = $barber->specializations()
-            ->where('is_active', true)
-            ->get()
-            ->map(fn($spec) => [
-                'id' => $spec->id,
-                'name' => $spec->name,
-                // 'name_ar' => $spec->name_ar ?? $spec->name,
-                // 'icon' => $spec->icon,
-                // 'description' => $spec->description,
-                // 'is_selected' => true,
-
-            ]);
-
-        // 2. جميع الاختصاصات المتاحة في النظام
-        $allSpecializations = \App\Models\Specialization::where('is_active', true)
-            ->get()
-            ->map(fn($spec) => [
-                'id' => $spec->id,
-                'name' => $spec->name,
-                // 'name_ar' => $spec->name_ar ?? $spec->name,
-                // 'icon' => $spec->icon,
-                // 'description' => $spec->description,
-                'is_active' => $spec->is_active,
-                'is_selected' => $barber->specializations()->where('specialization_id', $spec->id)->exists(),
-            ]);
-
-        // 3. إحصائيات الاختصاصات
-        $specializationsStats = [
-            'total' => $allSpecializations->count(),
-            'selected' => $barberSpecializations->count(),
-            'remaining' => $allSpecializations->count() - $barberSpecializations->count(),
-        ];
-
-        $data = [
-            'id' => $barber->id,
-            'name' => $barber->name,
-            'phone' => $barber->phone,
-            'avatar' => $barber->getAvatarUrlAttribute(),
-            'is_active' => $barber->is_active,
-              'notifications_enabled' => (bool) $barber->notifications_enabled,
-            'working_hours' => $workingHours,
-            'created_at' => $barber->created_at,
-            'rating' => $ratingInfo,
-            'completed_appointments_this_month' => $this->getCurrentMonthCompletedAppointments($barber->id),
-
-            // اختصاصات الحلاق الحالية
-            'my_specializations' => $barberSpecializations,
-            'my_specializations_count' => $barberSpecializations->count(),
-            'my_specializations_text' => $barberSpecializations->pluck('name_ar')->implode('، '),
-            'my_specializations_ids' => $barberSpecializations->pluck('id')->toArray(),
-
-            // جميع الاختصاصات المتاحة
-            'all_specializations' => $allSpecializations,
-            'all_specializations_count' => $allSpecializations->count(),
-
-            // إحصائيات الاختصاصات
-            'specializations_stats' => $specializationsStats,
-        ];
-
-        return AuthResult::success('تم جلب الملف الشخصي بنجاح', $data);
-
-    } catch (\Exception $e) {
-        Log::error('Get barber profile error: ' . $e->getMessage());
-        return AuthResult::error('حدث خطأ أثناء جلب الملف الشخصي', null, 500);
     }
-}
 
 
     /**
@@ -170,102 +170,107 @@ public function getProfile(User $barber): AuthResult
     // دوال تحديث الملف الشخصي
     // ======================
 
-  /**
- * تحديث الملف الشخصي للحلاق
- */
-public function updateProfile(User $barber, array $data): AuthResult
-{
-    try {
-        return DB::transaction(function () use ($barber, $data) {
+    /**
+     * تحديث الملف الشخصي للحلاق
+     */
+    public function updateProfile(User $barber, array $data): AuthResult
+    {
+        try {
+            return DB::transaction(function () use ($barber, $data) {
 
-            if (!$barber->hasRole('barber')) {
-                return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
-            }
-
-            $salon = $barber->salons()->first();
-            if (!$salon) {
-                return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
-            }
-
-            // تحديث البيانات الأساسية
-            $this->updateBasicInfo($barber, $data);
-
-            // تحديث الصورة الشخصية
-            if (isset($data['avatar']) && $data['avatar'] instanceof UploadedFile) {
-                $this->updateAvatar($barber, $data['avatar']);
-            }
-
-            // تحديث كلمة المرور
-            if (isset($data['password']) && !empty($data['password'])) {
-                $barber->password = Hash::make($data['password']);
-                $barber->save();
-            }
-
-            // تحديث أوقات العمل
-            if (isset($data['working_hours']) && !empty($data['working_hours'])) {
-                $validationResult = $this->validateWorkingHoursAgainstSalon($barber, $salon, $data['working_hours']);
-                if (!$validationResult['valid']) {
-                    return AuthResult::error($validationResult['message'], null, 400);
+                if (!$barber->hasRole('barber')) {
+                    return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
                 }
-                $this->updateWorkingHours($barber, $data['working_hours']);
-            }
 
-            //  تحديث الاختصاصات
-            if (isset($data['specialization_ids']) && is_array($data['specialization_ids'])) {
-                $this->updateSpecializations($barber, $data['specialization_ids']);
-            }
+                $salon = $barber->salons()->first();
+                if (!$salon) {
+                    return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
+                }
 
-            $barber->refresh();
+                // تحديث البيانات الأساسية
+                $this->updateBasicInfo($barber, $data);
 
-            // جلب الاختصاصات المحدثة
-            $specializations = $barber->specializations()
-                ->where('is_active', true)
-                ->get()
-                ->map(fn($spec) => [
-                    'id' => $spec->id,
-                    'name' => $spec->name,
-                    'name_ar' => $spec->name_ar ?? $spec->name,
-                    'icon' => $spec->icon,
+                // تحديث الصورة الشخصية
+                if (isset($data['avatar']) && $data['avatar'] instanceof UploadedFile) {
+                    $this->updateAvatar($barber, $data['avatar']);
+                }
+
+                // تحديث كلمة المرور
+                if (isset($data['password']) && !empty($data['password'])) {
+                    $barber->password = Hash::make($data['password']);
+                    $barber->save();
+                }
+
+                // تحديث أوقات العمل
+                if (isset($data['working_hours']) && !empty($data['working_hours'])) {
+                    $validationResult = $this->validateWorkingHoursAgainstSalon($barber, $salon, $data['working_hours']);
+                    if (!$validationResult['valid']) {
+                        return AuthResult::error($validationResult['message'], null, 400);
+                    }
+                    $this->updateWorkingHours($barber, $data['working_hours']);
+                }
+
+                //  تحديث الاختصاصات
+                if (isset($data['specialization_ids']) && is_array($data['specialization_ids'])) {
+                    $this->updateSpecializations($barber, $data['specialization_ids']);
+                }
+                if (isset($data['notifications_enabled'])) {
+                    $barber->notifications_enabled = (bool) $data['notifications_enabled'];
+                    $barber->save();
+
+                }
+
+                $barber->refresh();
+
+                // جلب الاختصاصات المحدثة
+                $specializations = $barber->specializations()
+                    ->where('is_active', true)
+                    ->get()
+                    ->map(fn($spec) => [
+                        'id' => $spec->id,
+                        'name' => $spec->name,
+                        'name_ar' => $spec->name_ar ?? $spec->name,
+                        'icon' => $spec->icon,
+                    ]);
+
+                return AuthResult::success('تم تحديث الملف الشخصي بنجاح', [
+                    'id' => $barber->id,
+                    'name' => $barber->name,
+                    'phone' => $barber->phone,
+                    'avatar' => $barber->getAvatarUrlAttribute(),
+                    'working_hours' => $this->getFormattedWorkingHours($barber),
+                    'specializations' => $specializations,
+                    'specializations_count' => $specializations->count(),
+                    'specializations_text' => $specializations->pluck('name_ar')->implode('، '),
                 ]);
 
-            return AuthResult::success('تم تحديث الملف الشخصي بنجاح', [
-                'id' => $barber->id,
-                'name' => $barber->name,
-                'phone' => $barber->phone,
-                'avatar' => $barber->getAvatarUrlAttribute(),
-                'working_hours' => $this->getFormattedWorkingHours($barber),
-                'specializations' => $specializations,
-                'specializations_count' => $specializations->count(),
-                'specializations_text' => $specializations->pluck('name_ar')->implode('، '),
+            });
+        } catch (\Exception $e) {
+            Log::error('Update barber profile error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء تحديث الملف الشخصي: ' . $e->getMessage(), null, 500);
+        }
+    }
+
+    /**
+     * تحديث اختصاصات الحلاق
+     */
+    private function updateSpecializations(User $barber, array $specializationIds): void
+    {
+        // إزالة القيم المكررة
+        $uniqueIds = array_unique($specializationIds);
+
+        // التحقق من أن القيم أرقام صحيحة
+        $validIds = array_filter($uniqueIds, fn($id) => is_numeric($id) && $id > 0);
+
+        if (!empty($validIds)) {
+            $barber->specializations()->sync($validIds);
+
+            Log::info('Barber specializations updated', [
+                'barber_id' => $barber->id,
+                'specialization_ids' => $validIds,
             ]);
-
-        });
-    } catch (\Exception $e) {
-        Log::error('Update barber profile error: ' . $e->getMessage());
-        return AuthResult::error('حدث خطأ أثناء تحديث الملف الشخصي: ' . $e->getMessage(), null, 500);
+        }
     }
-}
-
-/**
- * تحديث اختصاصات الحلاق
- */
-private function updateSpecializations(User $barber, array $specializationIds): void
-{
-    // إزالة القيم المكررة
-    $uniqueIds = array_unique($specializationIds);
-
-    // التحقق من أن القيم أرقام صحيحة
-    $validIds = array_filter($uniqueIds, fn($id) => is_numeric($id) && $id > 0);
-
-    if (!empty($validIds)) {
-        $barber->specializations()->sync($validIds);
-
-        Log::info('Barber specializations updated', [
-            'barber_id' => $barber->id,
-            'specialization_ids' => $validIds,
-        ]);
-    }
-}
 
     /**
      * تحديث بيانات الحلاق الأساسية (الاسم، الهاتف)

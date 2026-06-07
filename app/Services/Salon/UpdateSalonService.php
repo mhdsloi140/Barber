@@ -96,6 +96,16 @@ class UpdateSalonService
                     $this->updatePassword($user, $data['password']);
                 }
 
+                //  6. تحديث إعدادات الإشعارات (تصحيح: استخدم $data بدلاً من $request)
+                if (isset($data['notifications_enabled'])) {
+                    $user->notifications_enabled = (bool) $data['notifications_enabled'];
+                    $user->save();
+                    Log::info('Notification settings updated', [
+                        'user_id' => $user->id,
+                        'enabled' => (bool) $data['notifications_enabled']
+                    ]);
+                }
+
                 // تحميل البيانات المحدثة
                 $user->refresh();
                 $salon->refresh();
@@ -116,7 +126,6 @@ class UpdateSalonService
                         'working_hours' => $this->getWorkingHoursFormatted($salon),
                         'rating' => $salonRatings['rating'],
                         'statistics' => $salonRatings['statistics'],
-                        // 'notifications_enabled' => (bool) $user->notifications_enabled,
                     ],
                 ]);
 
@@ -333,7 +342,7 @@ class UpdateSalonService
     {
         // جلب جميع التقييمات للصالون (من خلال الحلاقين)
         $barberIds = User::role('barber')
-            ->whereHas('salons', function($q) use ($salonId) {
+            ->whereHas('salons', function ($q) use ($salonId) {
                 $q->where('salon_id', $salonId);
             })
             ->pluck('id')

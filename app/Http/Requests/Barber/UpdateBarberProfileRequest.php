@@ -34,7 +34,8 @@ class UpdateBarberProfileRequest extends FormRequest
             'working_hours.*.start' => ['required_if:working_hours.*.is_open,true', 'nullable', 'date_format:H:i'],
             'working_hours.*.end' => ['required_if:working_hours.*.is_open,true', 'nullable', 'date_format:H:i', 'after:working_hours.*.start'],
 
-            
+            'notifications_enabled' => 'sometimes|boolean',
+
             'specialization_ids' => ['nullable'],
         ];
     }
@@ -68,7 +69,7 @@ class UpdateBarberProfileRequest extends FormRequest
             // إذا كان رقم واحد مثل "1"
             elseif (is_string($specializationIds) && is_numeric($specializationIds)) {
                 $this->merge([
-                    'specialization_ids' => [(int)$specializationIds]
+                    'specialization_ids' => [(int) $specializationIds]
                 ]);
             }
         }
@@ -110,6 +111,9 @@ class UpdateBarberProfileRequest extends FormRequest
             'working_hours.*.start.required_if' => 'وقت البدء مطلوب عندما يكون اليوم مفتوحاً',
             'working_hours.*.end.required_if' => 'وقت النهاية مطلوب عندما يكون اليوم مفتوحاً',
             'working_hours.*.end.after' => 'وقت النهاية يجب أن يكون بعد وقت البدء',
+
+            'notifications_enabled.boolean' => 'حقل الإشعارات يجب أن يكون true أو false',
+
         ];
     }
 }
