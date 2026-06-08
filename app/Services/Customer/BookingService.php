@@ -455,7 +455,7 @@ class BookingService
             }
 
             $appointments = Appointment::where('customer_id', $customer->id)
-                ->whereIn('status', ['confirmed','pending'])
+                ->whereIn('status', ['confirmed', 'pending'])
                 ->with(['barber', 'salon'])
                 ->orderBy('appointment_date', 'asc')
                 ->orderBy('appointment_time', 'asc')
@@ -575,7 +575,7 @@ class BookingService
             }
 
             $appointments = Appointment::where('customer_id', $customer->id)
-                ->whereIn('status', ['confirmed','pinding'])
+                ->whereIn('status', ['confirmed', 'pinding'])
                 ->with(['barber', 'salon'])
                 ->orderBy('appointment_date', 'asc')
                 ->orderBy('appointment_time', 'asc')
@@ -1078,15 +1078,21 @@ class BookingService
                 }
 
                 $appointment->status = 'cancelled';
-                // $appointment->cancelled_at = now();
-           //     $appointment->cancellation_reason = $reason;
+
                 $appointment->save();
+                try {
+                    $notificationService = app(FirebaseNotificationService::class);
+                    $notificationService->notifyAppointmentCancelledToBarber($appointment);
+                  
+                } catch (\Exception $e) {
+                    Log::error('Failed to send cancellation notification to barber: ' . $e->getMessage());
+                }
 
                 return AuthResult::success('تم إلغاء الحجز بنجاح', [
                     'id' => $appointment->id,
                     'status' => $appointment->status,
                     'status_text' => $this->getStatusText($appointment->status),
-                    // 'cancelled_at' => $appointment->cancelled_at,
+
                 ]);
             });
         } catch (\Exception $e) {
