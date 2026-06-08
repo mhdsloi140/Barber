@@ -1078,7 +1078,7 @@ class BookingService
                 }
 
                 $appointment->status = 'cancelled';
-                $appointment->cancelled_at = now();
+                // $appointment->cancelled_at = now();
            //     $appointment->cancellation_reason = $reason;
                 $appointment->save();
 
