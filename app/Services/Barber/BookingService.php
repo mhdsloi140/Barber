@@ -148,6 +148,7 @@ class BookingService
         $salon = $barber->salons()->first();
 
         $appointments = Appointment::where('barber_id', $barber->id)
+        ->whereIn('status', ['pending', 'confirmed'])
             ->with(['customer', 'salon'])
             ->orderBy('appointment_date', 'desc')
             ->orderBy('appointment_time', 'desc')

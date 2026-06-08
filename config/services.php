@@ -36,11 +36,11 @@ return [
     | UltraMsg WhatsApp Service
     |--------------------------------------------------------------------------
     */
-  'ultramsg' => [
-    'enabled' => env('WHATSAPP_ENABLED', false),
-    'base_url' => env('ULTRAMSG_BASE_URL', 'https://api.ultramsg.com'),
-    'instance_id' => env('ULTRAMSG_INSTANCE_ID', ''),
-    'api_token' => env('ULTRAMSG_API_TOKEN', ''),
-],
+    'ultramsg' => [
+        'enabled' => env('WHATSAPP_ENABLED', false),
+        'base_url' => env('ULTRAMSG_BASE_URL', 'https://api.ultramsg.com'),
+        'instance_id' => env('ULTRAMSG_INSTANCE_ID'),
+        'api_token' => env('ULTRAMSG_API_TOKEN'),
+    ],
 
 ];
