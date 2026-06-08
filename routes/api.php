@@ -154,6 +154,8 @@ Route::middleware(['auth:sanctum', 'role:customer'])->prefix('customer')->group(
         Route::get('confirmed', [BookingController::class, 'confirmed']);
         Route::get('completed', [BookingController::class, 'completed']);
         Route::get('cancelled', [BookingController::class, 'cancelled']);
+        Route::get('upcoming', [BookingController::class, 'upcoming']);
+
         Route::get('{id}', [BookingController::class, 'show']);
         Route::post('{id}/cancel', [BookingController::class, 'cancel']);
         Route::post('{id}', [BookingController::class, 'update']);

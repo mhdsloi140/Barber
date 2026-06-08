@@ -16,10 +16,7 @@ class BookingController extends Controller
     ) {
     }
 
-    /**
-     * عرض جميع حجوزات الزبون
-     * GET /api/customer/appointments
-     */
+
     /**
  * عرض الحجوزات قيد الانتظار فقط
  * GET /api/customer/appointments/pending
@@ -34,7 +31,16 @@ public function pending()
         'data' => $result->data,
     ], $result->statusCode);
 }
+public function upcoming()
+{
+    $result = $this->bookingService->getUpcomingAppointment(auth()->user());
 
+    return response()->json([
+        'success' => $result->success,
+        'message' => $result->message,
+        'data' => $result->data,
+    ], $result->statusCode);
+}
 /**
  * عرض الحجوزات المؤكدة فقط
  * GET /api/customer/appointments/confirmed

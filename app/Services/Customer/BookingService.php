@@ -1083,7 +1083,7 @@ class BookingService
                 try {
                     $notificationService = app(FirebaseNotificationService::class);
                     $notificationService->notifyAppointmentCancelledToBarber($appointment);
-                  
+
                 } catch (\Exception $e) {
                     Log::error('Failed to send cancellation notification to barber: ' . $e->getMessage());
                 }
@@ -1100,7 +1100,124 @@ class BookingService
             return AuthResult::error('حدث خطأ أثناء إلغاء الحجز: ' . $e->getMessage(), null, 500);
         }
     }
+/**
+ * جلب أقرب حجز للزبون (الحجز القادم)
+ * GET /api/customer/appointments/upcoming
+ */
+public function getUpcomingAppointment(User $customer): AuthResult
+{
+    try {
+        if (!$customer->hasRole('customer')) {
+            return AuthResult::error('هذه الخدمة متاحة للزبائن فقط', null, 403);
+        }
 
+        $today = Carbon::today()->format('Y-m-d');
+        $now = Carbon::now()->format('H:i:s');
+
+        // جلب أقرب حجز (قادم)
+        $appointment = Appointment::where('customer_id', $customer->id)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->where(function ($query) use ($today, $now) {
+                // حجوزات اليوم التي لم يحن وقتها بعد
+                $query->where(function ($q) use ($today, $now) {
+                    $q->whereDate('appointment_date', $today)
+                        ->whereTime('appointment_time', '>', $now);
+                })
+                // أو حجوزات الأيام القادمة
+                ->orWhereDate('appointment_date', '>', $today);
+            })
+            ->with(['barber', 'salon'])
+            ->orderBy('appointment_date', 'asc')
+            ->orderBy('appointment_time', 'asc')
+            ->first();
+
+        if (!$appointment) {
+            return AuthResult::success('لا توجد حجوزات قادمة', null);
+        }
+
+        // تنسيق البيانات
+        $data = [
+            'id' => $appointment->id,
+            'barber' => [
+                'id' => $appointment->barber->id,
+                'name' => $appointment->barber->name,
+                'phone' => $appointment->barber->phone,
+                'avatar' => $appointment->barber->getAvatarUrlAttribute(),
+                'is_active' => $appointment->barber->is_active,
+                'rating' => $this->getBarberRatingData($appointment->barber),
+            ],
+            'salon' => $this->formatSalonData($appointment->salon),
+            'services' => $this->getAppointmentServices($appointment),
+            'total_price' => (float) $appointment->total_price,
+            'date' => $this->formatDate($appointment->appointment_date),
+            'date_formatted' => Carbon::parse($appointment->appointment_date)->format('Y-m-d'),
+            'day_name' => $this->getArabicDayName(Carbon::parse($appointment->appointment_date)->format('l')),
+            'time' => $this->formatTime($appointment->appointment_time),
+            'end_time' => $this->formatTime($appointment->end_time),
+            'time_remaining' => $this->getTimeRemaining($appointment),
+            'status' => $appointment->status,
+            'status_text' => $this->getStatusText($appointment->status),
+            'can_cancel' => $this->canCancelAppointment($appointment),
+            'created_at' => $appointment->created_at,
+        ];
+
+        return AuthResult::success('تم جلب أقرب حجز بنجاح', $data);
+
+    } catch (\Exception $e) {
+        Log::error('Get upcoming appointment error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب أقرب حجز', $e->getMessage(), 500);
+    }
+}
+
+/**
+ * حساب الوقت المتبقي حتى الموعد
+ */
+private function getTimeRemaining(Appointment $appointment): ?array
+{
+    try {
+        $appointmentDateTime = Carbon::parse(
+            $appointment->appointment_date . ' ' . $appointment->appointment_time
+        );
+
+        $now = Carbon::now();
+
+        if ($appointmentDateTime->isPast()) {
+            return [
+                'passed' => true,
+                'text' => 'انتهى الموعد',
+                'minutes' => 0,
+                'hours' => 0,
+                'days' => 0,
+            ];
+        }
+
+        $diffInMinutes = $now->diffInMinutes($appointmentDateTime, false);
+        $diffInHours = $now->diffInHours($appointmentDateTime, false);
+        $diffInDays = $now->diffInDays($appointmentDateTime, false);
+
+        // نص الوقت المتبقي
+        if ($diffInDays >= 1) {
+            $text = "بعد {$diffInDays} يوم" . ($diffInDays > 1 ? 'ين' : '');
+        } elseif ($diffInHours >= 1) {
+            $text = "بعد {$diffInHours} ساعة" . ($diffInHours > 1 ? 'ات' : '');
+        } elseif ($diffInMinutes >= 1) {
+            $text = "بعد {$diffInMinutes} دقيقة" . ($diffInMinutes > 1 ? 'ق' : '');
+        } else {
+            $text = 'الموعد الآن';
+        }
+
+        return [
+            'passed' => false,
+            'text' => $text,
+            'minutes' => $diffInMinutes,
+            'hours' => $diffInHours,
+            'days' => $diffInDays,
+        ];
+
+    } catch (\Exception $e) {
+        return null;
+    }
+}
     /**
      * تحديث حجز
      */
