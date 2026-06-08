@@ -1086,7 +1086,7 @@ class BookingService
                     'id' => $appointment->id,
                     'status' => $appointment->status,
                     'status_text' => $this->getStatusText($appointment->status),
-                    'cancelled_at' => $appointment->cancelled_at,
+                    // 'cancelled_at' => $appointment->cancelled_at,
                 ]);
             });
         } catch (\Exception $e) {
