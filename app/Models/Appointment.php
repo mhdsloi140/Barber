@@ -34,7 +34,7 @@ class Appointment extends Model
         'review',
         'review_date',
         'cancellation_reason',
-        // 'cancelled_by',
+        'cancelled_by',
         'cancelled_at',
         'reminder_sent_at',
         'is_walk_in',

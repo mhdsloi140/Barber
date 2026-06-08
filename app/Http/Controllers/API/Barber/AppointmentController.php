@@ -17,16 +17,17 @@ class AppointmentController extends Controller
     ) {}
 
   /// عرض جميع الحجوزات التابعة للحلاق
-    public function index()
-    {
-        $result = $this->bookingService->getBarberAppointments(auth()->user());
+public function index(Request $request)
+{
+    $date = $request->query('date'); 
+    $result = $this->bookingService->getBarberAppointments(auth()->user(), $date);
 
-        return response()->json([
-            'success' => $result->success,
-            'message' => $result->message,
-            'data' => $result->data,
-        ], $result->statusCode);
-    }
+    return response()->json([
+        'success' => $result->success,
+        'message' => $result->message,
+        'data' => $result->data,
+    ], $result->statusCode);
+}
 
 ///الججزات قيد الانتضار
     public function pending()

@@ -787,6 +787,7 @@ class BookingService
                     'status_text' => $this->getStatusText($appointment->status),
                     'can_cancel' => $this->canCancelAppointment($appointment),
                     'can_rate' => $this->canRateAppointment($appointment),
+                    'cancelled_by' => $appointment->cancelled_by ?? null,
                     'created_at' => $appointment->created_at,
                 ];
             });
@@ -860,6 +861,7 @@ class BookingService
                 'day_name' => $this->getArabicDayName(Carbon::parse($appointment->appointment_date)->format('l')),
                 'time' => $this->formatTime($appointment->appointment_time),
                 'end_time' => $this->formatTime($appointment->end_time),
+                'cancelled_by' => $appointment->cancelled_by ?? null,
                 'created_at' => $appointment->created_at,
                 'updated_at' => $appointment->updated_at,
                 'cancelled_at' => $appointment->cancelled_at,
@@ -1078,7 +1080,7 @@ class BookingService
                 }
 
                 $appointment->status = 'cancelled';
-
+                $appointment->cancelled_by='customer';
                 $appointment->save();
                 try {
                     $notificationService = app(FirebaseNotificationService::class);
@@ -1092,6 +1094,7 @@ class BookingService
                     'id' => $appointment->id,
                     'status' => $appointment->status,
                     'status_text' => $this->getStatusText($appointment->status),
+                    'cancelled_by' => $appointment->cancelled_by ??null,
 
                 ]);
             });
@@ -1156,6 +1159,7 @@ public function getUpcomingAppointment(User $customer): AuthResult
             'end_time' => $this->formatTime($appointment->end_time),
             'time_remaining' => $this->getTimeRemaining($appointment),
             'status' => $appointment->status,
+            'cancelled_by'=>$appointment->cancelled_by ??null,
             'status_text' => $this->getStatusText($appointment->status),
             'can_cancel' => $this->canCancelAppointment($appointment),
             'created_at' => $appointment->created_at,

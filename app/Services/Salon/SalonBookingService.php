@@ -154,6 +154,7 @@ public function getSalonAppointments(User $salonOwner, ?string $search = null, i
                 'date' => $this->formatDate($appointment->appointment_date),
                 'time' => $this->formatTime($appointment->appointment_time),
                 'end_time' => $this->formatTime($appointment->end_time),
+                'cancelled_by' => $appointment->cancelled_by ??null,
                 'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
                 'status' => $appointment->status,
                 'created_at' => $this->formatDateTime($appointment->created_at),
@@ -170,7 +171,7 @@ public function getSalonAppointments(User $salonOwner, ?string $search = null, i
             'today' => Appointment::where('salon_id', $salon->id)->whereDate('appointment_date', now()->toDateString())->count(),
         ];
 
-       
+
         $paginationData = [
             'current_page' => $appointments->currentPage(),
             'data' => $formattedAppointments,
@@ -265,6 +266,7 @@ public function getSalonAppointments(User $salonOwner, ?string $search = null, i
 
             // 6. إلغاء الحجز (فقط تغيير الحالة)
             $appointment->status = 'cancelled';
+            $appointment->cancelled_by = 'salon_owner';
             $appointment->save();
 
             Log::info('Appointment cancelled', [
