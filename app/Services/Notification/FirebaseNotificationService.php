@@ -26,7 +26,7 @@ class FirebaseNotificationService
     }
 
     /**
-     * تحويل القيمة إلى نص 
+     * تحويل القيمة إلى نص
      */
     private function safeString($value, string $default = ''): string
     {
@@ -258,9 +258,7 @@ public function notifySalonOwnerAboutCancelledAppointment(Appointment $appointme
     $title = ' تم إلغاء حجز في صالونك';
     $body = "تم إلغاء حجز {$customer->name} مع {$barber->name} في {$appointmentTime}";
 
-    if ($reason) {
-        $body .= " بسبب: {$reason}";
-    }
+    
 
     $data = [
         'type' => 'appointment_cancelled_owner',

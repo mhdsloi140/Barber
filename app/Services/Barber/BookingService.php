@@ -209,6 +209,69 @@ class BookingService
         return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
     }
 }
+/**
+ * إلغاء حجز بواسطة الحلاق
+ */
+public function cancelAppointment(User $barber, int $appointmentId, ?string $reason = null): AuthResult
+{
+    try {
+        return DB::transaction(function () use ($barber, $appointmentId, $reason) {
+
+            $appointment = Appointment::where('barber_id', $barber->id)
+                ->where('id', $appointmentId)
+                ->first();
+
+            if (!$appointment) {
+                return AuthResult::error('الحجز غير موجود', null, 404);
+            }
+
+            if (!in_array($appointment->status, ['pending', 'confirmed'])) {
+                return AuthResult::error("لا يمكن إلغاء هذا الحجز، حالته الحالية: {$appointment->status}", null, 400);
+            }
+
+            // حفظ الحالة القديمة للتسجيل
+            $oldStatus = $appointment->status;
+
+            // تحديث الحجز
+            $appointment->status = 'cancelled';
+            // $appointment->cancelled_at = now();
+            // $appointment->cancellation_reason = $reason ?? 'تم الإلغاء من قبل الحلاق';
+            // $appointment->cancelled_by = 'barber'; // يمكن إضافة هذا العمود إذا أردت
+            $appointment->save();
+
+
+            try {
+                $notificationService = app(FirebaseNotificationService::class);
+                $notificationService->notifyAppointmentRejectedToCustomer($appointment, $reason);
+
+            } catch (\Exception $e) {
+                Log::error('Failed to send cancellation notification to customer: ' . $e->getMessage());
+            }
+
+
+            try {
+                $salon = $appointment->salon;
+                if ($salon && $salon->owner) {
+                    $notificationService = app(FirebaseNotificationService::class);
+                    $notificationService->notifySalonOwnerAboutCancelledAppointment($appointment, $reason);
+                }
+            } catch (\Exception $e) {
+                Log::error('Failed to send cancellation notification to salon owner: ' . $e->getMessage());
+            }
+
+            return AuthResult::success('تم إلغاء الحجز بنجاح', [
+                'id' => $appointment->id,
+                'status' => $appointment->status,
+
+
+
+            ]);
+        });
+    } catch (\Exception $e) {
+        Log::error('Barber cancel appointment error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء إلغاء الحجز: ' . $e->getMessage(), null, 500);
+    }
+}
 
     /**
      * جلب جميع حجوزات الحلاق مع البحث

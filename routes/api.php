@@ -134,6 +134,7 @@ Route::middleware(['auth:sanctum', 'role:barber'])->prefix('barber')->group(func
         Route::get('pending', [AppointmentController::class, 'pending']);
         Route::post('{id}/approve', [AppointmentController::class, 'approve']);
         Route::post('{id}/reject', [AppointmentController::class, 'reject']);
+        Route::post('{id}/cancel', [AppointmentController::class, 'cancel']);
     });
 
     Route::get('/statistics', [BarberProfileController::class, 'index']);

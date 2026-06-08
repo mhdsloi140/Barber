@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Barber;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Barber\ApproveAppointmentRequest;
+use App\Http\Requests\Barber\CancelAppointmentRequest;
 use App\Http\Requests\Barber\RejectAppointmentRequest;
 use App\Services\Barber\BookingService;
 use Illuminate\Http\Request;
@@ -69,4 +70,19 @@ class AppointmentController extends Controller
             'data' => $result->data,
         ], $result->statusCode);
     }
+     public function cancel(CancelAppointmentRequest $request)
+     {
+         $result = $this->bookingService->cancelAppointment(
+             auth()->user(),
+             $request->id,
+             $request->reason
+         );
+
+         return response()->json([
+             'success' => $result->success,
+             'message' => $result->message,
+             'data' => $result->data,
+         ], $result->statusCode);
+
+     }
 }
