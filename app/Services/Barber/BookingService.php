@@ -138,124 +138,125 @@ class BookingService
     /**
      * جلب جميع حجوزات الحلاق مع الإحصائيات
      */
- public function getBarberAppointments(User $barber, int $perPage = 10): AuthResult
-{
-    try {
-        if (!$barber->hasRole('barber')) {
-            return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
+    public function getBarberAppointments(User $barber, int $perPage = 10): AuthResult
+    {
+        try {
+            if (!$barber->hasRole('barber')) {
+                return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
+            }
+
+            $today = Carbon::today()->format('Y-m-d');
+
+            $appointments = Appointment::where('barber_id', $barber->id)
+                ->whereIn('status', ['pending', 'confirmed'])
+                ->whereDate('appointment_date', '>=', $today)
+                ->with(['customer', 'salon'])
+                ->orderBy('appointment_date', 'asc')
+                ->orderBy('appointment_time', 'asc')
+                ->paginate($perPage);
+
+            $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
+                return $this->formatAppointment($appointment);
+            });
+
+            // إحصائيات من قاعدة البيانات (لليوم وما بعده فقط)
+            $statsFromDatabase = [
+                'total' => Appointment::where('barber_id', $barber->id)->whereDate('appointment_date', '>=', $today)->count(),
+                'pending' => Appointment::where('barber_id', $barber->id)->where('status', 'pending')->whereDate('appointment_date', '>=', $today)->count(),
+                'confirmed' => Appointment::where('barber_id', $barber->id)->where('status', 'confirmed')->whereDate('appointment_date', '>=', $today)->count(),
+                'completed' => Appointment::where('barber_id', $barber->id)->where('status', 'completed')->whereDate('appointment_date', '>=', $today)->count(),
+                'cancelled' => Appointment::where('barber_id', $barber->id)->where('status', 'cancelled')->whereDate('appointment_date', '>=', $today)->count(),
+                'today' => Appointment::where('barber_id', $barber->id)->whereDate('appointment_date', now()->toDateString())->count(),
+            ];
+
+            $paginationData = [
+                'current_page' => $appointments->currentPage(),
+                'data' => $formattedAppointments,
+                'first_page_url' => $appointments->url(1),
+                'from' => $appointments->firstItem(),
+                'last_page' => $appointments->lastPage(),
+                'last_page_url' => $appointments->url($appointments->lastPage()),
+                'next_page_url' => $appointments->nextPageUrl(),
+                'path' => $appointments->path(),
+                'per_page' => $appointments->perPage(),
+                'prev_page_url' => $appointments->previousPageUrl(),
+                'to' => $appointments->lastItem(),
+                'total' => $appointments->total(),
+            ];
+
+            $response = [
+                'statistics' => $statsFromDatabase,
+                'appointments' => $paginationData,
+            ];
+
+            return AuthResult::success('تم جلب الحجوزات بنجاح', $response);
+
+        } catch (\Exception $e) {
+            Log::error('Get barber appointments error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
         }
-
-        $today = Carbon::today()->format('Y-m-d');
-
-        $appointments = Appointment::where('barber_id', $barber->id)
-            ->whereIn('status', ['pending', 'confirmed'])
-            ->whereDate('appointment_date', '>=', $today)
-            ->with(['customer', 'salon'])
-            ->orderBy('appointment_date', 'asc') 
-            ->orderBy('appointment_time', 'asc')
-            ->paginate($perPage);
-
-        $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
-            return $this->formatAppointment($appointment);
-        });
-
-        // إحصائيات من قاعدة البيانات (لليوم وما بعده فقط)
-        $statsFromDatabase = [
-            'total' => Appointment::where('barber_id', $barber->id)->whereDate('appointment_date', '>=', $today)->count(),
-            'pending' => Appointment::where('barber_id', $barber->id)->where('status', 'pending')->whereDate('appointment_date', '>=', $today)->count(),
-            'confirmed' => Appointment::where('barber_id', $barber->id)->where('status', 'confirmed')->whereDate('appointment_date', '>=', $today)->count(),
-            'completed' => Appointment::where('barber_id', $barber->id)->where('status', 'completed')->whereDate('appointment_date', '>=', $today)->count(),
-            'cancelled' => Appointment::where('barber_id', $barber->id)->where('status', 'cancelled')->whereDate('appointment_date', '>=', $today)->count(),
-            'today' => Appointment::where('barber_id', $barber->id)->whereDate('appointment_date', now()->toDateString())->count(),
-        ];
-
-        $paginationData = [
-            'current_page' => $appointments->currentPage(),
-            'data' => $formattedAppointments,
-            'first_page_url' => $appointments->url(1),
-            'from' => $appointments->firstItem(),
-            'last_page' => $appointments->lastPage(),
-            'last_page_url' => $appointments->url($appointments->lastPage()),
-            'next_page_url' => $appointments->nextPageUrl(),
-            'path' => $appointments->path(),
-            'per_page' => $appointments->perPage(),
-            'prev_page_url' => $appointments->previousPageUrl(),
-            'to' => $appointments->lastItem(),
-            'total' => $appointments->total(),
-        ];
-
-        $response = [
-            'statistics' => $statsFromDatabase,
-            'appointments' => $paginationData,
-        ];
-
-        return AuthResult::success('تم جلب الحجوزات بنجاح', $response);
-
-    } catch (\Exception $e) {
-        Log::error('Get barber appointments error: ' . $e->getMessage());
-        return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
     }
-}
-/**
- * إلغاء حجز بواسطة الحلاق
- */
-public function cancelAppointment(User $barber, int $appointmentId, ?string $reason = null): AuthResult
-{
-    try {
-        return DB::transaction(function () use ($barber, $appointmentId, $reason) {
+    /**
+     * إلغاء حجز بواسطة الحلاق
+     */
+    public function cancelAppointment(User $barber, int $appointmentId, ?string $reason = null): AuthResult
+    {
+        try {
+            return DB::transaction(function () use ($barber, $appointmentId, $reason) {
 
-            $appointment = Appointment::where('barber_id', $barber->id)
-                ->where('id', $appointmentId)
-                ->first();
+                $appointment = Appointment::where('barber_id', $barber->id)
+                    ->where('id', $appointmentId)
+                    ->first();
 
-            if (!$appointment) {
-                return AuthResult::error('الحجز غير موجود', null, 404);
-            }
-
-            if (!in_array($appointment->status, ['pending', 'confirmed'])) {
-                return AuthResult::error("لا يمكن إلغاء هذا الحجز، حالته الحالية: {$appointment->status}", null, 400);
-            }
-
-            // حفظ الحالة القديمة للتسجيل
-            $oldStatus = $appointment->status;
-
-            // تحديث الحجز
-            $appointment->status = 'cancelled';
-            $appointment->save();
-
-
-            try {
-                $notificationService = app(FirebaseNotificationService::class);
-                $notificationService->notifyAppointmentRejectedToCustomer($appointment, $reason);
-
-            } catch (\Exception $e) {
-                Log::error('Failed to send cancellation notification to customer: ' . $e->getMessage());
-            }
-
-
-            try {
-                $salon = $appointment->salon;
-                if ($salon && $salon->owner) {
-                    $notificationService = app(FirebaseNotificationService::class);
-                    $notificationService->notifySalonOwnerAboutCancelledAppointment($appointment, $reason);
+                if (!$appointment) {
+                    return AuthResult::error('الحجز غير موجود', null, 404);
                 }
-            } catch (\Exception $e) {
-                Log::error('Failed to send cancellation notification to salon owner: ' . $e->getMessage());
-            }
 
-            return AuthResult::success('تم إلغاء الحجز بنجاح', [
-                'id' => $appointment->id,
-                'status' => $appointment->status,
+                if (!in_array($appointment->status, ['pending', 'confirmed'])) {
+                    return AuthResult::error("لا يمكن إلغاء هذا الحجز، حالته الحالية: {$appointment->status}", null, 400);
+                }
+
+                // حفظ الحالة القديمة للتسجيل
+                $oldStatus = $appointment->status;
+
+                // تحديث الحجز
+                $appointment->status = 'cancelled';
+                $appointment->cancelled_by = 'barber';
+                $appointment->save();
 
 
+                try {
+                    $notificationService = app(FirebaseNotificationService::class);
+                    $notificationService->notifyAppointmentRejectedToCustomer($appointment, $reason);
 
-            ]);
-        });
-    } catch (\Exception $e) {
-        Log::error('Barber cancel appointment error: ' . $e->getMessage());
-        return AuthResult::error('حدث خطأ أثناء إلغاء الحجز: ' . $e->getMessage(), null, 500);
+                } catch (\Exception $e) {
+                    Log::error('Failed to send cancellation notification to customer: ' . $e->getMessage());
+                }
+
+
+                try {
+                    $salon = $appointment->salon;
+                    if ($salon && $salon->owner) {
+                        $notificationService = app(FirebaseNotificationService::class);
+                        $notificationService->notifySalonOwnerAboutCancelledAppointment($appointment, $reason);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Failed to send cancellation notification to salon owner: ' . $e->getMessage());
+                }
+
+                return AuthResult::success('تم إلغاء الحجز بنجاح', [
+                    'id' => $appointment->id,
+                    'status' => $appointment->status,
+                    'cancelled_by' => $appointment->cancelled_by
+
+
+                ]);
+            });
+        } catch (\Exception $e) {
+            Log::error('Barber cancel appointment error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء إلغاء الحجز: ' . $e->getMessage(), null, 500);
+        }
     }
-}
 
     /**
      * جلب جميع حجوزات الحلاق مع البحث
@@ -336,7 +337,7 @@ public function cancelAppointment(User $barber, int $appointmentId, ?string $rea
             'time' => $this->formatTime($appointment->appointment_time),
             'end_time' => $this->formatTime($appointment->end_time),
             'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
-
+            'cancelled_by' => $appointment->cancelled_by ?? null,
             'status' => $appointment->status,
             'created_at' => $this->formatDateTime($appointment->created_at),
         ];
