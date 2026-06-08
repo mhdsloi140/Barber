@@ -138,48 +138,36 @@ class BookingService
     /**
      * جلب جميع حجوزات الحلاق مع الإحصائيات
      */
-  public function getBarberAppointments(User $barber, int $perPage = 10): AuthResult
+ public function getBarberAppointments(User $barber, int $perPage = 10): AuthResult
 {
     try {
         if (!$barber->hasRole('barber')) {
             return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
         }
 
-        $salon = $barber->salons()->first();
+        $today = Carbon::today()->format('Y-m-d');
 
         $appointments = Appointment::where('barber_id', $barber->id)
-        ->whereIn('status', ['pending', 'confirmed'])
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->whereDate('appointment_date', '>=', $today)
             ->with(['customer', 'salon'])
-            ->orderBy('appointment_date', 'desc')
-            ->orderBy('appointment_time', 'desc')
+            ->orderBy('appointment_date', 'asc') 
+            ->orderBy('appointment_time', 'asc')
             ->paginate($perPage);
-
 
         $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
             return $this->formatAppointment($appointment);
         });
 
-
-        $statsFromCurrentPage = [
-            'total' => $appointments->total(),  // الإجمالي الكلي من قاعدة البيانات
-            'current_page_total' => $formattedAppointments->count(),  // عدد العناصر في الصفحة الحالية
-            'pending' => $formattedAppointments->where('status', 'pending')->count(),
-            'confirmed' => $formattedAppointments->where('status', 'confirmed')->count(),
-            'completed' => $formattedAppointments->where('status', 'completed')->count(),
-            'cancelled' => $formattedAppointments->where('status', 'cancelled')->count(),
-            'today' => $formattedAppointments->where('appointment_date', now()->toDateString())->count(),
-        ];
-
-
+        // إحصائيات من قاعدة البيانات (لليوم وما بعده فقط)
         $statsFromDatabase = [
-            'total' => Appointment::where('barber_id', $barber->id)->count(),
-            'pending' => Appointment::where('barber_id', $barber->id)->where('status', 'pending')->count(),
-            'confirmed' => Appointment::where('barber_id', $barber->id)->where('status', 'confirmed')->count(),
-            'completed' => Appointment::where('barber_id', $barber->id)->where('status', 'completed')->count(),
-            'cancelled' => Appointment::where('barber_id', $barber->id)->where('status', 'cancelled')->count(),
+            'total' => Appointment::where('barber_id', $barber->id)->whereDate('appointment_date', '>=', $today)->count(),
+            'pending' => Appointment::where('barber_id', $barber->id)->where('status', 'pending')->whereDate('appointment_date', '>=', $today)->count(),
+            'confirmed' => Appointment::where('barber_id', $barber->id)->where('status', 'confirmed')->whereDate('appointment_date', '>=', $today)->count(),
+            'completed' => Appointment::where('barber_id', $barber->id)->where('status', 'completed')->whereDate('appointment_date', '>=', $today)->count(),
+            'cancelled' => Appointment::where('barber_id', $barber->id)->where('status', 'cancelled')->whereDate('appointment_date', '>=', $today)->count(),
             'today' => Appointment::where('barber_id', $barber->id)->whereDate('appointment_date', now()->toDateString())->count(),
         ];
-
 
         $paginationData = [
             'current_page' => $appointments->currentPage(),
@@ -199,7 +187,6 @@ class BookingService
         $response = [
             'statistics' => $statsFromDatabase,
             'appointments' => $paginationData,
-            // 'statsFromCurrentPage' => $statsFromCurrentPage
         ];
 
         return AuthResult::success('تم جلب الحجوزات بنجاح', $response);
@@ -234,9 +221,6 @@ public function cancelAppointment(User $barber, int $appointmentId, ?string $rea
 
             // تحديث الحجز
             $appointment->status = 'cancelled';
-            // $appointment->cancelled_at = now();
-            // $appointment->cancellation_reason = $reason ?? 'تم الإلغاء من قبل الحلاق';
-            // $appointment->cancelled_by = 'barber'; // يمكن إضافة هذا العمود إذا أردت
             $appointment->save();
 
 
