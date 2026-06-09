@@ -14,7 +14,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\UploadedFile;
-use App\Services\Notification\SalonNotificationService;
 
 class RegisterService
 {
@@ -61,7 +60,7 @@ class RegisterService
                 [
                     'phone' => $phone,
                     'expires_in' => self::OTP_EXPIRY_MINUTES,
-                    'resend_after' => 60 // ثانية
+                    'resend_after' => 60
                 ],
                 200
             );
@@ -113,6 +112,7 @@ class RegisterService
     /**
      * الخطوة 3: التحقق من الكود وإنشاء الحساب (غير مفعل بعد)
      */
+
     public function verifyCodeAndCreate(string $phone, string $code): AuthResult
     {
         try {
@@ -128,16 +128,35 @@ class RegisterService
                 return AuthResult::error('انتهت صلاحية الجلسة، يرجى إعادة المحاولة', null, 422);
             }
 
-            // إنشاء الحساب (غير مفعل)
+            // إنشاء الحساب
             $result = $this->createSalonOwnerAccount($data);
 
-            if ($result->isSuccess()) {
+            if ($result->success) {
+
+                try {
+                    $notificationService = app(FirebaseNotificationService::class);
+
+                    // جلب الصالون الذي تم إنشاؤه
+                    $salon = Salon::where('owner_id', $result->data['user']['id'])->first();
+                    $user =User::find($result->data['user']['id']);
+
+                    if ($salon && $user) {
+                        $notificationService->notifyAdminsAboutNewSalonOwnerWeb($user, $salon);
+                        Log::info('Firebase admin notification sent for new salon owner', [
+                            'salon_id' => $salon->id,
+                            'owner_id' => $user->id,
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Failed to send Firebase admin notification: ' . $e->getMessage());
+                }
+
                 // حذف البيانات المؤقتة
                 $this->clearTemporaryData($phone);
                 $this->clearOtpCode($phone);
 
-                Log::info('Salon owner account created (pending activation)', [
-                    'user_id' => $result->getData()['user']['id'] ?? null,
+                Log::info('Salon owner account created', [
+                    'user_id' => $result->data['user']['id'] ?? null,
                     'phone' => $phone
                 ]);
             }
@@ -149,7 +168,6 @@ class RegisterService
             return AuthResult::error('حدث خطأ أثناء التحقق: ' . $e->getMessage(), null, 500);
         }
     }
-
     /**
      * إنشاء حساب صاحب الصالون (غير مفعل - ينتظر موافقة المدير)
      */
@@ -164,7 +182,7 @@ class RegisterService
                     'phone' => $data['phone'],
                     'password' => Hash::make($data['password']),
                     'role' => 'salon_owner',
-                    'is_active' => false, //  غير مفعل حتى يوافق عليه المدير
+                    'is_active' => false,
                 ]);
 
                 // 2. رفع الصورة الشخصية إذا وجدت
@@ -172,7 +190,7 @@ class RegisterService
                     $this->uploadAvatar($user, $data['avatar']);
                 }
 
-                // 3. تعيين الأدوار (معلقة حتى التفعيل)
+                // 3. تعيين الأدوار
                 $this->assignRoles($user, $data);
 
                 // 4. إنشاء الصالون (غير مفعل)
@@ -183,7 +201,7 @@ class RegisterService
                     'phone' => $data['salon_phone'] ?? $data['phone'],
                     'latitude' => $data['latitude'] ?? null,
                     'longitude' => $data['longitude'] ?? null,
-                    'is_active' => false, // غير مفعل حتى يوافق عليه المدير
+                    'is_active' => false,
                 ]);
 
                 // 5. رفع صور الصالون
@@ -213,7 +231,7 @@ class RegisterService
                         'roles' => $user->getRoleNames(),
                         'works_as_barber' => !empty($data['works_as_barber']),
                         'avatar' => $user->getAvatarUrlAttribute(),
-                        'is_active' => false, // ينتظر التفعيل
+                        'is_active' => false,
                         'status' => 'pending_approval'
                     ],
                     'salon' => [
@@ -225,7 +243,7 @@ class RegisterService
                         'longitude' => $salon->longitude,
                         'images' => $salon->getImagesUrlsAttribute(),
                         'working_hours' => $this->getWorkingHoursFormatted($salon),
-                        'is_active' => false, // ينتظر التفعيل
+                        'is_active' => false,
                     ],
                     'message' => 'تم إنشاء الحساب بنجاح، ينتظر موافقة المدير'
                 ];
@@ -370,69 +388,48 @@ class RegisterService
 
     // ===================== دوال مساعدة لتخزين البيانات المؤقتة =====================
 
-    /**
-     * تخزين البيانات المؤقتة في Cache
-     */
     private function storeTemporaryData(string $phone, array $data): void
     {
         $key = self::DATA_PREFIX . $phone;
         Cache::put($key, $data, now()->addMinutes(self::OTP_EXPIRY_MINUTES));
     }
 
-    /**
-     * استرجاع البيانات المؤقتة
-     */
     private function getTemporaryData(string $phone): ?array
     {
         $key = self::DATA_PREFIX . $phone;
         return Cache::get($key);
     }
 
-    /**
-     * حذف البيانات المؤقتة
-     */
     private function clearTemporaryData(string $phone): void
     {
         $key = self::DATA_PREFIX . $phone;
         Cache::forget($key);
     }
 
-    /**
-     * تخزين كود التحقق
-     */
     private function storeOtpCode(string $phone, string $code): void
     {
         $key = self::OTP_PREFIX . $phone;
         Cache::put($key, $code, now()->addMinutes(self::OTP_EXPIRY_MINUTES));
     }
 
-    /**
-     * استرجاع كود التحقق
-     */
     private function getOtpCode(string $phone): ?string
     {
         $key = self::OTP_PREFIX . $phone;
         return Cache::get($key);
     }
 
-    /**
-     * حذف كود التحقق
-     */
     private function clearOtpCode(string $phone): void
     {
         $key = self::OTP_PREFIX . $phone;
         Cache::forget($key);
     }
 
-    /**
-     * إرسال كود التحقق عبر WhatsApp
-     */
     private function sendOtpMessage(string $phone, string $otpCode): void
     {
         try {
             $message = "رمز التحقق الخاص بك هو: {$otpCode}\n"
-                     . "هذا الرمز صالح لمدة " . self::OTP_EXPIRY_MINUTES . " دقائق.\n"
-                     . "لا تشارك هذا الرمز مع أي شخص.";
+                . "هذا الرمز صالح لمدة " . self::OTP_EXPIRY_MINUTES . " دقائق.\n"
+                . "لا تشارك هذا الرمز مع أي شخص.";
 
             $this->ultraMsg->sendMessage($phone, $message, 5);
         } catch (\Exception $e) {
@@ -440,9 +437,6 @@ class RegisterService
         }
     }
 
-    /**
-     * إرسال إشعار للمديرين لتفعيل الحساب
-     */
     private function notifyAdminsForApproval(Salon $salon, User $user): void
     {
         try {
@@ -453,15 +447,12 @@ class RegisterService
         }
     }
 
-    /**
-     * إرسال إشعار تفعيل الحساب لصاحب الصالون
-     */
     private function sendActivationNotification(User $user, Salon $salon): void
     {
         try {
             $message = "تهانينا! تم تفعيل حساب صالون {$salon->name} بنجاح.\n"
-                     . "يمكنك الآن تسجيل الدخول والبدء في إدارة صالونك.\n"
-                     . "رابط التطبيق: " . env('APP_URL');
+                . "يمكنك الآن تسجيل الدخول والبدء في إدارة صالونك.\n"
+                . "رابط التطبيق: " . env('APP_URL');
 
             $this->ultraMsg->sendMessage($user->phone, $message, 5);
         } catch (\Exception $e) {
@@ -469,9 +460,6 @@ class RegisterService
         }
     }
 
-    /**
-     * إرسال إشعار رفض التسجيل
-     */
     private function sendRejectionNotification(string $phone, ?string $reason = null): void
     {
         try {
@@ -487,7 +475,7 @@ class RegisterService
         }
     }
 
-    // ===================== باقي الدوال المساعدة (بدون تغيير) =====================
+    // ===================== دوال مساعدة =====================
 
     private function uploadAvatar(User $user, UploadedFile $avatar): void
     {
@@ -518,7 +506,7 @@ class RegisterService
     private function addBarberToSalon(User $user, Salon $salon, array $data): void
     {
         $user->salons()->attach($salon->id, [
-            'is_active' => false, // غير مفعل حتى موافقة المدير
+            'is_active' => false,
             'created_at' => now(),
             'updated_at' => now(),
         ]);

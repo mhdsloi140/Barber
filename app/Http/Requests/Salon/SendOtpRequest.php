@@ -36,7 +36,7 @@ class SendOtpRequest extends FormRequest
             ],
 
             'password' => ['required', 'string', 'min:6'],
-            'password_confirmation' => ['required', 'same:password'],
+            // 'password_confirmation' => ['required', 'same:password'],
 
             // ===================== بيانات الصالون =====================
             'salon_name' => ['required', 'string', 'max:255'],

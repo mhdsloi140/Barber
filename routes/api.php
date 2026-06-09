@@ -49,15 +49,15 @@ Route::prefix('auth')->group(function () {
 });
 Route::prefix('auth/register/salon-owner')->group(function () {
 
-    // الخطوة 1: إرسال كود التحقق
-    Route::post('send-otp', [AuthSalonController::class, 'sendOtp'])
+    
+    Route::post('store', [AuthSalonController::class, 'sendOtp'])
         ->name('salon.register.send-otp');
 
     // الخطوة 2: إعادة إرسال كود التحقق
     Route::post('resend-otp', [AuthSalonController::class, 'resendOtp'])
         ->name('salon.register.resend-otp');
 
-    // الخطوة 3: التحقق من الكود وإنشاء الحساب
+   
     Route::post('verify', [AuthSalonController::class, 'verifyAndCreate'])
         ->name('salon.register.verify');
 });

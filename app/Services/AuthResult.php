@@ -48,4 +48,20 @@ class AuthResult
 {
     return new self(false, $message, $data, null, $statusCode);
 }
+public function isSuccess(): bool
+    {
+        return $this->success;
+    }
+      public function getMessage(): ?string
+    {
+        return $this->message;
+    }
+     public function getData()
+    {
+        return $this->data;
+    }
+      public function getStatusCode(): int
+    {
+        return $this->statusCode;
+    }
 }

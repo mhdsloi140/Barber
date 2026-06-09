@@ -1,16 +1,10 @@
 <?php
-// app/Http/Controllers/API/Salon/AuthController.php
 
 namespace App\Http\Controllers\API\Salon;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\RegisterSalonOwnerRequest;
-
-use App\Http\Requests\Salon\ResendOtpRequest;
-
 use App\Http\Requests\Salon\SendOtpRequest;
-
-
+use App\Http\Requests\Salon\ResendOtpRequest;
 use App\Http\Requests\Salon\VerifyOtpRequest;
 use App\Services\Salon\RegisterService;
 use Illuminate\Http\Request;
@@ -30,10 +24,10 @@ class AuthSalonController extends Controller
         $result = $this->registerService->sendVerificationCode($request->validated());
 
         return response()->json([
-            'success' => $result->isSuccess(),
-            'message' => $result->getMessage(),
-            'data' => $result->getData(),
-        ], $result->getStatusCode());
+            'success' => $result->success,
+            'message' => $result->message,
+            'data' => $result->data,
+        ], $result->statusCode);
     }
 
     /**
@@ -45,10 +39,10 @@ class AuthSalonController extends Controller
         $result = $this->registerService->resendVerificationCode($request->phone);
 
         return response()->json([
-            'success' => $result->isSuccess(),
-            'message' => $result->getMessage(),
-            'data' => $result->getData(),
-        ], $result->getStatusCode());
+            'success' => $result->success,
+            'message' => $result->message,
+            'data' => $result->data,
+        ], $result->statusCode);
     }
 
     /**
@@ -63,14 +57,14 @@ class AuthSalonController extends Controller
         );
 
         return response()->json([
-            'success' => $result->isSuccess(),
-            'message' => $result->getMessage(),
-            'data' => $result->getData(),
-        ], $result->getStatusCode());
+            'success' => $result->success,
+            'message' => $result->message,
+            'data' => $result->data,
+        ], $result->statusCode);
     }
 
     /**
-     * ✅ إضافة: جلب طلبات التسجيل المعلقة (للمدير فقط)
+     * جلب طلبات التسجيل المعلقة (للمدير فقط)
      * GET /api/admin/pending-registrations
      */
     public function getPendingRegistrations()
@@ -78,14 +72,14 @@ class AuthSalonController extends Controller
         $result = $this->registerService->getPendingRegistrations();
 
         return response()->json([
-            'success' => $result->isSuccess(),
-            'message' => $result->getMessage(),
-            'data' => $result->getData(),
-        ], $result->getStatusCode());
+            'success' => $result->success,
+            'message' => $result->message,
+            'data' => $result->data,
+        ], $result->statusCode);
     }
 
     /**
-     * ✅ إضافة: تفعيل حساب صاحب صالون (للمدير فقط)
+     * تفعيل حساب صاحب صالون (للمدير فقط)
      * POST /api/admin/approve-saloon/{userId}
      */
     public function approveSalonOwner(Request $request, int $userId)
@@ -93,14 +87,14 @@ class AuthSalonController extends Controller
         $result = $this->registerService->approveSalonOwner($userId, auth()->id());
 
         return response()->json([
-            'success' => $result->isSuccess(),
-            'message' => $result->getMessage(),
-            'data' => $result->getData(),
-        ], $result->getStatusCode());
+            'success' => $result->success,
+            'message' => $result->message,
+            'data' => $result->data,
+        ], $result->statusCode);
     }
 
     /**
-     * ✅ إضافة: رفض طلب تسجيل صاحب صالون (للمدير فقط)
+     * رفض طلب تسجيل صاحب صالون (للمدير فقط)
      * POST /api/admin/reject-saloon/{userId}
      */
     public function rejectSalonOwner(Request $request, int $userId)
@@ -112,9 +106,9 @@ class AuthSalonController extends Controller
         );
 
         return response()->json([
-            'success' => $result->isSuccess(),
-            'message' => $result->getMessage(),
-            'data' => $result->getData(),
-        ], $result->getStatusCode());
+            'success' => $result->success,
+            'message' => $result->message,
+            'data' => $result->data,
+        ], $result->statusCode);
     }
 }
