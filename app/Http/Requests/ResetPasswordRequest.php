@@ -21,12 +21,8 @@ class ResetPasswordRequest extends FormRequest
                 'required',
                 'string',
                 'min:8',
-                'confirmed',
-                Password::min(8)
-                    ->mixedCase()
-                    ->numbers()
-                    ->symbols()
-                    ->uncompromised(),
+               
+              
             ],
         ];
     }
