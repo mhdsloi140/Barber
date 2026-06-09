@@ -170,6 +170,8 @@ return [
         App\Providers\RouteServiceProvider::class,
         // Saeed\Otp\OtpServiceProvider::class,
         App\Providers\WhatsAppServiceProvider::class,
+
+
     ])->toArray(),
 
     /*
@@ -186,6 +188,8 @@ return [
     'aliases' => Facade::defaultAliases()->merge([
         // 'Example' => App\Facades\Example::class,
         // 'Otp' => Saeed\Otp\OtpFacade::class,
+            // 'WhatsApp' => UltraMsg\Whatsapp\Facades\WhatsApp::class,
+
     ])->toArray(),
 
 ];

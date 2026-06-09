@@ -14,7 +14,8 @@
         "laravel/tinker": "^2.8",
         "saeed/otp": "dev-main",
         "spatie/laravel-medialibrary": "^11.21",
-        "spatie/laravel-permission": "^6.24"
+        "spatie/laravel-permission": "^6.24",
+        "ultramsg/whatsapp-php-sdk": "^2.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.9.1",

@@ -2,26 +2,39 @@
 
 namespace App\Services\ultraMessage;
 
+use Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-
+use App\Models\User;
 class UltraMsgService
 {
     protected string $instanceId;
-    protected string $apiToken;
+    protected string $token;
     protected string $baseUrl;
     protected bool $enabled;
 
     public function __construct()
     {
-        $this->instanceId = config('services.ultramsg.instance_id', env('ULTRAMSG_INSTANCE_ID', '')) ?: '';
-        $this->apiToken = config('services.ultramsg.api_token', env('ULTRAMSG_API_TOKEN', '')) ?: '';
-        $this->baseUrl = config('services.ultramsg.base_url', env('ULTRAMSG_BASE_URL', 'https://api.ultramsg.com'));
-        $this->enabled = (bool) config('services.ultramsg.enabled', env('WHATSAPP_ENABLED', false));
 
-        if (empty($this->instanceId) || empty($this->apiToken)) {
-            Log::warning('UltraMsg credentials not configured properly');
+        $this->instanceId = config('services.ultramsg.instance_id', '');
+        $this->token = config('services.ultramsg.token', '');
+        $this->baseUrl = config('services.ultramsg.base_url', 'https://api.ultramsg.com');
+        $this->enabled = config('services.ultramsg.enabled', false);
+
+        if ($this->instanceId && str_starts_with($this->instanceId, 'instance')) {
+            $this->instanceId = str_replace('instance', '', $this->instanceId);
         }
+
+
+    }
+
+    /**
+     * الحصول على URL الـ API الصحيح
+     */
+    protected function getApiUrl(string $endpoint = 'messages/chat'): string
+    {
+
+        return "{$this->baseUrl}/instance{$this->instanceId}/{$endpoint}";
     }
 
     /**
@@ -29,7 +42,7 @@ class UltraMsgService
      */
     public function isConfigured(): bool
     {
-        return $this->enabled && !empty($this->instanceId) && !empty($this->apiToken);
+        return $this->enabled && !empty($this->instanceId) && !empty($this->token);
     }
 
     /**
@@ -71,7 +84,11 @@ class UltraMsgService
     public function sendMessage(string $phone, string $message, int $priority = 1): array
     {
         if (!$this->isConfigured()) {
-            Log::warning('UltraMsg is not configured');
+            Log::warning('UltraMsg is not configured', [
+                'enabled' => $this->enabled,
+                'has_instance_id' => !empty($this->instanceId),
+                'has_token' => !empty($this->token)
+            ]);
             return [
                 'success' => false,
                 'error' => 'خدمة واتساب غير مهيأة',
@@ -79,7 +96,7 @@ class UltraMsgService
             ];
         }
 
-        // التحقق من صحة الرقم (اختياري)
+        // التحقق من صحة الرقم
         if (!$this->isValidPhoneNumber($phone)) {
             Log::warning('Invalid phone number format', ['phone' => $phone]);
             return [
@@ -91,16 +108,20 @@ class UltraMsgService
 
         try {
             $formattedPhone = $this->formatPhoneNumber($phone);
+            $url = $this->getApiUrl('messages/chat');
 
-            $response = Http::timeout(15)->asForm()->post(
-                "{$this->baseUrl}/{$this->instanceId}/messages/chat",
-                [
-                    'token' => $this->apiToken,
-                    'to' => $formattedPhone,
-                    'body' => $message,
-                    'priority' => $priority,
-                ]
-            );
+            Log::info('Sending WhatsApp message', [
+                'url' => $url,
+                'to' => $formattedPhone,
+                'priority' => $priority
+            ]);
+
+            $response = Http::timeout(15)->asForm()->post($url, [
+                'token' => $this->token,
+                'to' => $formattedPhone,
+                'body' => $message,
+                'priority' => $priority,
+            ]);
 
             if ($response->successful()) {
                 $responseData = $response->json();
@@ -158,12 +179,12 @@ class UltraMsgService
         $message = " *رمز التحقق الخاص بك*\n\n" .
             "مرحباً بك في تطبيقنا!\n\n" .
             "رمز التحقق الخاص بحسابك هو:\n\n" .
-            "*{$otpCode}*\n\n" .
+            "{$otpCode}\n\n" .
             " هذا الرمز صالح لمدة {$expiresInMinutes} دقائق فقط.\n" .
-            "لا تشارك هذا الرمز مع أي شخص.\n\n" .
+            " لا تشارك هذا الرمز مع أي شخص.\n\n" .
             "إذا لم تطلب هذا الرمز، يمكنك تجاهل هذه الرسالة.";
 
-        return $this->sendMessage($phone, $message, 1);
+        return $this->sendMessage($phone, $message, 5); // أولوية أعلى لـ OTP
     }
 
     /**
@@ -176,8 +197,9 @@ class UltraMsgService
         }
 
         try {
-            $response = Http::timeout(10)->get("{$this->baseUrl}/{$this->instanceId}/instance/status", [
-                'token' => $this->apiToken
+            $url = $this->getApiUrl('instance/status');
+            $response = Http::timeout(10)->get($url, [
+                'token' => $this->token
             ]);
 
             return $response->json();
@@ -193,11 +215,11 @@ class UltraMsgService
     {
         return [
             'base_url' => $this->baseUrl,
-            'instance_id' => $this->instanceId,
-            'api_token_preview' => substr($this->apiToken, 0, 10) . '...',
-            'has_token' => !empty($this->apiToken),
+            'instance_id' => $this->instanceId ? substr($this->instanceId, 0, 6) . '...' : null,
+            'has_token' => !empty($this->token),
             'enabled' => $this->enabled,
             'is_configured' => $this->isConfigured(),
+            'api_url' => $this->getApiUrl(),
         ];
     }
 
@@ -206,6 +228,176 @@ class UltraMsgService
      */
     public function getSendUrl(): string
     {
-        return "{$this->baseUrl}/{$this->instanceId}/messages/chat";
+        return $this->getApiUrl('messages/chat');
     }
+        public function sendCredentials(User $user, $salon, string $password, string $type = 'barber'): array
+    {
+        // التحقق من صحة الإعدادات
+        if (!$this->isConfigured()) {
+            Log::warning('Cannot send credentials: UltraMsg not configured');
+            return [
+                'success' => false,
+                'error' => 'خدمة واتساب غير مهيأة',
+                'code' => 'NOT_CONFIGURED'
+            ];
+        }
+
+        // تنسيق رقم الهاتف
+        $phone = $this->formatPhoneNumber($user->phone);
+        if (!$this->isValidPhoneNumber($phone)) {
+            Log::error('Invalid phone number for sending credentials', [
+                'user_id' => $user->id,
+                'phone' => $user->phone
+            ]);
+            return [
+                'success' => false,
+                'error' => 'رقم الهاتف غير صحيح',
+                'code' => 'INVALID_PHONE'
+            ];
+        }
+
+        // بناء الرسالة حسب نوع المستخدم (بدون رموز تعبيرية)
+        $message = $this->buildCredentialsMessage($user, $salon, $password, $type);
+
+        // إرسال الرسالة
+        $result = $this->sendMessage($phone, $message, 5);
+
+        if ($result['success']) {
+            Log::info('Credentials sent successfully', [
+                'user_id' => $user->id,
+                'type' => $type,
+                'phone' => $phone
+            ]);
+        } else {
+            Log::error('Failed to send credentials', [
+                'user_id' => $user->id,
+                'type' => $type,
+                'phone' => $phone,
+                'error' => $result['error'] ?? 'Unknown error'
+            ]);
+
+            // تخزين كلمة المرور لإعادة المحاولة لاحقاً
+            $this->storePendingPassword($user->id, $password);
+        }
+
+        return $result;
+    }
+
+    /**
+     * بناء رسالة بيانات الدخول حسب نوع المستخدم (بدون رموز تعبيرية)
+     */
+    protected function buildCredentialsMessage(User $user, $salon, string $password, string $type): string
+    {
+        $salonName = $salon->name ?? $salon['name'] ?? 'صالوننا';
+        $appUrl = env('APP_URL', 'https://barber-app.com');
+
+        // اسم الدور بالعربية
+        $roleName = $this->getRoleName($type);
+
+        $message = "مرحباً بك في فريق {$salonName}\n\n"
+                 . "تم إضافتك كـ {$roleName} في المنصة.\n\n"
+                 . "بيانات الدخول الخاصة بك:\n"
+                 . "----------------------------------------\n"
+                 . "الاسم: {$user->name}\n"
+                 . "رقم الجوال: {$user->phone}\n"
+                 . "كلمة المرور: {$password}\n"
+                 . "----------------------------------------\n\n"
+                 . "تنبيه: يرجى تغيير كلمة المرور بعد أول تسجيل دخول.\n\n"
+                 . "رابط التطبيق: {$appUrl}/login\n\n"
+                 . "شكراً لانضمامك إلينا.";
+
+        // إضافة تعليمات خاصة للحلاقين
+        if ($type === 'barber') {
+            $message .= "\n\nملاحظة: يمكنك إدارة مواعيدك وعمولاتك من لوحة التحكم الخاصة بك.";
+        }
+
+        return $message;
+    }
+
+    /**
+     * الحصول على اسم الدور بالعربية
+     */
+    protected function getRoleName(string $type): string
+    {
+        return match($type) {
+            'barber' => 'حلاق',
+            'customer' => 'عميل',
+            'admin' => 'مدير',
+            default => 'مستخدم'
+        };
+    }
+
+    /**
+     * تخزين كلمة المرور المعلقة لإعادة المحاولة
+     */
+    protected function storePendingPassword(int $userId, string $password): void
+    {
+        $key = "pending_password_{$userId}";
+        Cache::put($key, $password, now()->addHours(24));
+
+        Log::info('Password stored for retry', [
+            'user_id' => $userId,
+            'key' => $key
+        ]);
+    }
+
+    /**
+     * استرجاع كلمة المرور المعلقة
+     */
+    public function getPendingPassword(int $userId): ?string
+    {
+        $key = "pending_password_{$userId}";
+        return Cache
+        ::get($key);
+    }
+
+    /**
+     * حذف كلمة المرور المعلقة
+     */
+    public function clearPendingPassword(int $userId): void
+    {
+        $key = "pending_password_{$userId}";
+        Cache::forget($key);
+    }
+
+    /**
+     * إعادة محاولة إرسال بيانات الدخول
+     */
+    public function resendCredentials(User $user, $salon, string $type = 'barber'): array
+    {
+        $password = $this->getPendingPassword($user->id);
+
+        if (!$password) {
+            return [
+                'success' => false,
+                'error' => 'لا توجد كلمة مرور معلقة لهذا المستخدم',
+                'code' => 'NO_PENDING_PASSWORD'
+            ];
+        }
+
+        $result = $this->sendCredentials($user, $salon, $password, $type);
+
+        if ($result['success']) {
+            $this->clearPendingPassword($user->id);
+        }
+
+        return $result;
+    }
+
+    /**
+     * إرسال رسالة مخصصة مع قالب (لأغراض عامة)
+     */
+    public function sendCustomTemplate(string $phone, string $name, string $password, string $salonName, string $role): array
+    {
+        $message = "مرحباً بك في {$salonName}\n\n"
+                 . "تم إضافتك كـ {$role} بنجاح.\n\n"
+                 . "بيانات الدخول:\n"
+                 . "الاسم: {$name}\n"
+                 . "كلمة المرور: {$password}\n\n"
+                 . "رابط الدخول: " . env('APP_URL') . "/login\n\n"
+                 . "نتمنى لك يوماً سعيداً";
+
+        return $this->sendMessage($phone, $message, 5);
+    }
+
 }

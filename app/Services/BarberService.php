@@ -8,6 +8,7 @@ use App\Models\WorkingHour;
 use App\Models\Rating;
 use App\Models\Appointment;
 use App\Services\AuthResult;
+use App\Services\ultraMessage\UltraMsgService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -15,8 +16,23 @@ use Carbon\Carbon;
 
 class BarberService
 {
+    protected UltraMsgService $ultraMsg;
+
+    public function __construct(UltraMsgService $ultraMsg)
+    {
+        $this->ultraMsg = $ultraMsg;
+    }
+
     /**
-     * إضافة حلاق جديد (بدون أوقات عمل)
+     * إنشاء كلمة مرور بسيطة (6 أرقام)
+     */
+    protected function generateSimplePassword(): string
+    {
+        return (string) rand(100000, 999999);
+    }
+
+    /**
+     * إضافة حلاق جديد
      */
     public function addBarber(array $data, User $salonOwner): AuthResult
     {
@@ -28,10 +44,14 @@ class BarberService
                     return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
                 }
 
+                // إنشاء كلمة مرور عشوائية
+                $plainPassword = $this->generateSimplePassword();
+                $hashedPassword = Hash::make($plainPassword);
+
                 $barber = User::create([
                     'name' => $data['name'],
                     'phone' => $data['phone'],
-                    'password' => Hash::make('password'),
+                    'password' => $hashedPassword,
                     'role' => 'barber',
                     'is_active' => true,
                 ]);
@@ -44,11 +64,8 @@ class BarberService
                     'updated_at' => now(),
                 ]);
 
-                Log::info('Barber added', [
-                    'barber_id' => $barber->id,
-                    'added_by' => $salonOwner->id,
-                    'phone' => $barber->phone
-                ]);
+                // إرسال بيانات الدخول عبر WhatsApp
+                $this->ultraMsg->sendCredentials($barber, $salon, $plainPassword, 'barber');
 
                 return AuthResult::success(
                     'تم اضافة الحلاق بنجاح',
@@ -84,16 +101,9 @@ class BarberService
                 ->get();
 
             $barbersData = $barbers->map(function($barber) {
-                // جلب متوسط تقييم الحلاق
                 $averageRating = $this->getBarberAverageRating($barber->id);
-
-                // جلب عدد الحجوزات في الأسبوع الحالي
                 $weeklyBookings = $this->getBarberWeeklyBookings($barber->id);
-
-                // جلب عدد الحجوزات الإجمالي
                 $totalBookings = $this->getBarberTotalBookings($barber->id);
-
-                // جلب عدد الحجوزات المكتملة
                 $completedBookings = $this->getBarberCompletedBookings($barber->id);
 
                 return [
@@ -143,19 +153,10 @@ class BarberService
                 return AuthResult::error('الحلاق غير موجود', null, 404);
             }
 
-            // جلب متوسط تقييم الحلاق
             $averageRating = $this->getBarberAverageRating($barber->id);
-
-            // جلب عدد الحجوزات في الأسبوع الحالي
             $weeklyBookings = $this->getBarberWeeklyBookings($barber->id);
-
-            // جلب عدد الحجوزات الإجمالي
             $totalBookings = $this->getBarberTotalBookings($barber->id);
-
-            // جلب عدد الحجوزات المكتملة
             $completedBookings = $this->getBarberCompletedBookings($barber->id);
-
-            // جلب آخر 5 تقييمات
             $recentRatings = $this->getBarberRecentRatings($barber->id);
 
             return AuthResult::success(
@@ -211,15 +212,18 @@ class BarberService
                 if (isset($data['name'])) {
                     $barber->name = $data['name'];
                 }
+
                 if (isset($data['phone'])) {
                     $existingUser = User::where('phone', $data['phone'])
                         ->where('id', '!=', $barberId)
                         ->first();
+
                     if ($existingUser) {
                         return AuthResult::error('رقم الهاتف مستخدم بالفعل', null, 422);
                     }
                     $barber->phone = $data['phone'];
                 }
+
                 $barber->save();
 
                 Log::info('Barber updated', [
@@ -494,6 +498,38 @@ class BarberService
         } catch (\Exception $e) {
             Log::error('Get working hours error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء جلب أوقات العمل', config('app.debug') ? $e->getMessage() : null, 500);
+        }
+    }
+
+    /**
+     * إعادة إرسال بيانات الدخول للحلاق
+     */
+    public function resendBarberCredentials(User $salonOwner, int $barberId): AuthResult
+    {
+        try {
+            $salon = $salonOwner->ownedSalon;
+
+            if (!$salon) {
+                return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
+            }
+
+            $barber = $salon->barbers()->where('users.id', $barberId)->first();
+
+            if (!$barber) {
+                return AuthResult::error('الحلاق غير موجود', null, 404);
+            }
+
+            $result = $this->ultraMsg->resendCredentials($barber, $salon, 'barber');
+
+            if ($result['success']) {
+                return AuthResult::success('تم إعادة إرسال بيانات الدخول بنجاح', null, 200);
+            }
+
+            return AuthResult::error('فشل إعادة إرسال البيانات: ' . ($result['error'] ?? 'خطأ غير معروف'), null, 500);
+
+        } catch (\Exception $e) {
+            Log::error('Resend barber credentials error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء إعادة الإرسال', config('app.debug') ? $e->getMessage() : null, 500);
         }
     }
 

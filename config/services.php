@@ -36,11 +36,18 @@ return [
     | UltraMsg WhatsApp Service
     |--------------------------------------------------------------------------
     */
+    // 'ultramsg' => [
+    //     // 'enabled' => env('WHATSAPP_ENABLED', false),
+    //     // 'base_url' => env('ULTRAMSG_BASE_URL', 'https://api.ultramsg.com'),
+    //     // 'instance_id' => env('ULTRAMSG_INSTANCE_ID'),
+    //     // 'api_token' => env('ULTRAMSG_API_TOKEN'),
+
+    // ],
     'ultramsg' => [
-        'enabled' => env('WHATSAPP_ENABLED', false),
-        'base_url' => env('ULTRAMSG_BASE_URL', 'https://api.ultramsg.com'),
+        'admin_phone' => env('ULTRAMSG_ADMIN_PHONE'),
         'instance_id' => env('ULTRAMSG_INSTANCE_ID'),
-        'api_token' => env('ULTRAMSG_API_TOKEN'),
+        'token' => env('ULTRAMSG_TOKEN'),
+        'enabled' => env('WHATSAPP_ENABLED', false),
     ],
 
 ];
