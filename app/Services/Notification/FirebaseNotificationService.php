@@ -396,38 +396,66 @@ public function notifySalonOwnerAboutCancelledAppointment(Appointment $appointme
     /**
      * إرسال إشعار للزبون عند رفض الحجز
      */
-    public function notifyAppointmentRejectedToCustomer(Appointment $appointment, ?string $reason = null): void
-    {
-        $customer = $appointment->customer;
+   public function notifyAppointmentRejectedToCustomer(Appointment $appointment, ?string $reason = null): void
+{
+    $customer = $appointment->customer;
 
-        if (!$customer) {
-            return;
-        }
-
-        $barber = $appointment->barber;
-        $appointmentTime = $this->formatTime($appointment->appointment_time);
-
-        $title = ' تم رفض حجزك';
-        $body = "تم رفض حجزك مع {$barber->name}";
-
-        if ($reason) {
-            $body .= " بسبب: {$reason}";
-        }
-
-        $data = [
-            'type' => 'appointment_rejected',
-            'appointment_id' => (string) $appointment->id,
-            'status' => 'cancelled',
-            'reason' => $reason ?? '',
-            'barber_name' => $barber->name,
-            'appointment_time' => $appointmentTime,
-            'appointment_date' => $this->formatDate($appointment->appointment_date),
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'appointment_details',
-        ];
-
-        $this->sendPushNotification($customer, $title, $body, $data);
+    if (!$customer) {
+        Log::error('Customer not found', ['appointment_id' => $appointment->id]);
+        return;
     }
+
+    Log::info('Attempting to send rejection notification to customer', [
+        'customer_id' => $customer->id,
+        'customer_name' => $customer->name,
+        'has_fcm_token' => !empty($customer->fcm_token),
+        'notifications_enabled' => $customer->notifications_enabled,
+    ]);
+
+    //  التحقق من وجود FCM Token
+    if (empty($customer->fcm_token)) {
+        Log::warning('Customer has no FCM token', ['customer_id' => $customer->id]);
+        return;
+    }
+
+    // ✅ التحقق من تفعيل الإشعارات
+    if (!$customer->notifications_enabled) {
+        Log::info('Customer notifications disabled', ['customer_id' => $customer->id]);
+        return;
+    }
+
+    $barber = $appointment->barber;
+    $appointmentTime = $this->formatTime($appointment->appointment_time);
+    $appointmentDate = $this->formatDate($appointment->appointment_date);
+    $services = $this->getServicesNames($appointment);
+
+    $title = ' تم رفض حجزك';
+    $body = "تم رفض حجزك مع {$barber->name} في {$appointmentTime}";
+
+    if ($reason) {
+        $body .= " بسبب: {$reason}";
+    }
+
+    $data = [
+        'type' => 'appointment_rejected',
+        'appointment_id' => (string) $appointment->id,
+        'status' => 'cancelled',
+        'reason' => $reason ?? '',
+        'barber_name' => $barber->name,
+        'appointment_time' => $appointmentTime,
+        'appointment_date' => $appointmentDate,
+        'services' => $services,
+        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+        'screen' => 'appointment_details',
+    ];
+
+    $result = $this->sendPushNotification($customer, $title, $body, $data);
+
+    Log::info('Rejection notification result', [
+        'customer_id' => $customer->id,
+        'result' => $result,
+    ]);
+}
 
     /**
      * إرسال إشعار للزبون عند إكمال الحجز

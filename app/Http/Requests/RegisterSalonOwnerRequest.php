@@ -33,7 +33,7 @@ class RegisterSalonOwnerRequest extends FormRequest
             'salon_phone' => [
                 'nullable',
                 'string',
-                'regex:/^(077|078|079)[0-9]{8}$/',  // ✅ أرقام عراقية فقط (اختياري)
+                'regex:/^(077|078|079)[0-9]{8}$/',  
                 'min:11',
                 'max:11',
             ],

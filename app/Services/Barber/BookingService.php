@@ -138,88 +138,88 @@ class BookingService
     /**
      * جلب جميع حجوزات الحلاق مع الإحصائيات
      */
-public function getBarberAppointments(User $barber, ?string $date = null, int $perPage = 10): AuthResult
-{
-    try {
-        if (!$barber->hasRole('barber')) {
-            return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
+    public function getBarberAppointments(User $barber, ?string $date = null, int $perPage = 10): AuthResult
+    {
+        try {
+            if (!$barber->hasRole('barber')) {
+                return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
+            }
+
+            // تحديد التاريخ المستهدف
+            $targetDate = $date ? Carbon::parse($date)->format('Y-m-d') : Carbon::today()->format('Y-m-d');
+
+            // بناء الاستعلام
+            $query = Appointment::where('barber_id', $barber->id)
+                ->with(['customer', 'salon']);
+
+
+            if ($date) {
+                $query->whereDate('appointment_date', $targetDate);
+
+            } else {
+
+                $query->whereIn('status', ['pending', 'confirmed'])
+                    ->whereDate('appointment_date', '>=', $targetDate);
+            }
+
+            $appointments = $query->orderBy('appointment_date', 'asc')
+                ->orderBy('appointment_time', 'asc')
+                ->paginate($perPage);
+
+            $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
+                return $this->formatAppointment($appointment);
+            });
+
+
+            $statsQuery = Appointment::where('barber_id', $barber->id);
+
+            if ($date) {
+
+                $statsQuery->whereDate('appointment_date', $targetDate);
+            } else {
+
+                $statsQuery->whereIn('status', ['pending', 'confirmed'])
+                    ->whereDate('appointment_date', '>=', $targetDate);
+            }
+
+            $statsFromDatabase = [
+                'total' => (clone $statsQuery)->count(),
+                'pending' => (clone $statsQuery)->where('status', 'pending')->count(),
+                'confirmed' => (clone $statsQuery)->where('status', 'confirmed')->count(),
+                'completed' => (clone $statsQuery)->where('status', 'completed')->count(),
+                'cancelled' => (clone $statsQuery)->where('status', 'cancelled')->count(),
+                'today' => Appointment::where('barber_id', $barber->id)->whereDate('appointment_date', now()->toDateString())->count(),
+            ];
+
+            $paginationData = [
+                'current_page' => $appointments->currentPage(),
+                'data' => $formattedAppointments,
+                'first_page_url' => $appointments->url(1),
+                'from' => $appointments->firstItem(),
+                'last_page' => $appointments->lastPage(),
+                'last_page_url' => $appointments->url($appointments->lastPage()),
+                'next_page_url' => $appointments->nextPageUrl(),
+                'path' => $appointments->path(),
+                'per_page' => $appointments->perPage(),
+                'prev_page_url' => $appointments->previousPageUrl(),
+                'to' => $appointments->lastItem(),
+                'total' => $appointments->total(),
+            ];
+
+            $response = [
+                'date' => $targetDate,
+                'is_filtered_by_date' => !is_null($date),
+                'statistics' => $statsFromDatabase,
+                'appointments' => $paginationData,
+            ];
+
+            return AuthResult::success('تم جلب الحجوزات بنجاح', $response);
+
+        } catch (\Exception $e) {
+            Log::error('Get barber appointments error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
         }
-
-        // تحديد التاريخ المستهدف
-        $targetDate = $date ? Carbon::parse($date)->format('Y-m-d') : Carbon::today()->format('Y-m-d');
-
-        // بناء الاستعلام
-        $query = Appointment::where('barber_id', $barber->id)
-            ->with(['customer', 'salon']);
-
-
-        if ($date) {
-            $query->whereDate('appointment_date', $targetDate);
-
-        } else {
-
-            $query->whereIn('status', ['pending', 'confirmed'])
-                ->whereDate('appointment_date', '>=', $targetDate);
-        }
-
-        $appointments = $query->orderBy('appointment_date', 'asc')
-            ->orderBy('appointment_time', 'asc')
-            ->paginate($perPage);
-
-        $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
-            return $this->formatAppointment($appointment);
-        });
-
-
-        $statsQuery = Appointment::where('barber_id', $barber->id);
-
-        if ($date) {
-
-            $statsQuery->whereDate('appointment_date', $targetDate);
-        } else {
-           
-            $statsQuery->whereIn('status', ['pending', 'confirmed'])
-                ->whereDate('appointment_date', '>=', $targetDate);
-        }
-
-        $statsFromDatabase = [
-            'total' => (clone $statsQuery)->count(),
-            'pending' => (clone $statsQuery)->where('status', 'pending')->count(),
-            'confirmed' => (clone $statsQuery)->where('status', 'confirmed')->count(),
-            'completed' => (clone $statsQuery)->where('status', 'completed')->count(),
-            'cancelled' => (clone $statsQuery)->where('status', 'cancelled')->count(),
-            'today' => Appointment::where('barber_id', $barber->id)->whereDate('appointment_date', now()->toDateString())->count(),
-        ];
-
-        $paginationData = [
-            'current_page' => $appointments->currentPage(),
-            'data' => $formattedAppointments,
-            'first_page_url' => $appointments->url(1),
-            'from' => $appointments->firstItem(),
-            'last_page' => $appointments->lastPage(),
-            'last_page_url' => $appointments->url($appointments->lastPage()),
-            'next_page_url' => $appointments->nextPageUrl(),
-            'path' => $appointments->path(),
-            'per_page' => $appointments->perPage(),
-            'prev_page_url' => $appointments->previousPageUrl(),
-            'to' => $appointments->lastItem(),
-            'total' => $appointments->total(),
-        ];
-
-        $response = [
-            'date' => $targetDate,
-            'is_filtered_by_date' => !is_null($date),
-            'statistics' => $statsFromDatabase,
-            'appointments' => $paginationData,
-        ];
-
-        return AuthResult::success('تم جلب الحجوزات بنجاح', $response);
-
-    } catch (\Exception $e) {
-        Log::error('Get barber appointments error: ' . $e->getMessage());
-        return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
     }
-}
     /**
      * إلغاء حجز بواسطة الحلاق
      */

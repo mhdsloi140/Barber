@@ -18,6 +18,7 @@ use App\Http\Controllers\API\NotificationSettingsController;
 use App\Http\Controllers\API\ProfileController;
 use App\Http\Controllers\API\RatingController;
 use App\Http\Controllers\API\Salon\AppointmentSalonController;
+use App\Http\Controllers\API\Salon\AuthSalonController;
 use App\Http\Controllers\API\Salon\BarberController;
 use App\Http\Controllers\API\Salon\DashboardController;
 use App\Http\Controllers\API\Salon\ProfileSalonController;
@@ -44,9 +45,22 @@ Route::prefix('auth')->group(function () {
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
     Route::post('/check-reset-otp', [AuthController::class, 'checkResetOTPStatus']);
-    Route::post('register/salon-owner', [App\Http\Controllers\API\Salon\AuthController::class, 'registerSalonOwner']);
+    // Route::post('register/salon-owner', [App\Http\Controllers\API\Salon\AuthController::class, 'registerSalonOwner']);
 });
+Route::prefix('auth/register/salon-owner')->group(function () {
 
+    // الخطوة 1: إرسال كود التحقق
+    Route::post('send-otp', [AuthSalonController::class, 'sendOtp'])
+        ->name('salon.register.send-otp');
+
+    // الخطوة 2: إعادة إرسال كود التحقق
+    Route::post('resend-otp', [AuthSalonController::class, 'resendOtp'])
+        ->name('salon.register.resend-otp');
+
+    // الخطوة 3: التحقق من الكود وإنشاء الحساب
+    Route::post('verify', [AuthSalonController::class, 'verifyAndCreate'])
+        ->name('salon.register.verify');
+});
 // ===================== Routes محمية (تتطلب مصادقة) =====================
 Route::middleware(['auth:sanctum'])->group(function () {
 
