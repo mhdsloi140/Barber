@@ -463,13 +463,13 @@ class FirebaseNotificationService
             'notifications_enabled' => $customer->notifications_enabled,
         ]);
 
-        //  التحقق من وجود FCM Token
+        
         if (empty($customer->fcm_token)) {
             Log::warning('Customer has no FCM token', ['customer_id' => $customer->id]);
             return;
         }
 
-        // ✅ التحقق من تفعيل الإشعارات
+   
         if (!$customer->notifications_enabled) {
             Log::info('Customer notifications disabled', ['customer_id' => $customer->id]);
             return;
@@ -480,8 +480,8 @@ class FirebaseNotificationService
         $appointmentDate = $this->formatDate($appointment->appointment_date);
         $services = $this->getServicesNames($appointment);
 
-        $title = ' تم رفض حجزك';
-        $body = "تم رفض حجزك مع {$barber->name} في {$appointmentTime}";
+        $title = ' تم الغاء حجزك';
+        $body = "تم الغاء حجزك مع {$barber->name} في {$appointmentTime}";
 
         if ($reason) {
             $body .= " بسبب: {$reason}";
