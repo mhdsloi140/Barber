@@ -50,7 +50,7 @@ Route::prefix('auth')->group(function () {
 Route::prefix('auth/register/salon-owner')->group(function () {
 
     
-    Route::post('store', [AuthSalonController::class, 'sendOtp'])
+    Route::post('send-otp', [AuthSalonController::class, 'sendOtp'])
         ->name('salon.register.send-otp');
 
     // الخطوة 2: إعادة إرسال كود التحقق
