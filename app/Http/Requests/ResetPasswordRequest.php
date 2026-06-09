@@ -55,42 +55,6 @@ class ResetPasswordRequest extends FormRequest
         ];
     }
 
-    /**
-     * الحصول على قواعد التحقق المخصصة بعد التحقق الأساسي
-     */
-    public function withValidator($validator)
-    {
-        $validator->after(function ($validator) {
-            // يمكن إضافة تحقق مخصص هنا إذا لزم الأمر
-        });
-    }
-
-    /**
-     * إعداد البيانات قبل التحقق
-     */
-    protected function prepareForValidation()
-    {
-        // تنسيق رقم الهاتف إذا لزم الأمر
-        if ($this->has('phone')) {
-            $this->merge([
-                'phone' => $this->normalizePhoneNumber($this->phone)
-            ]);
-        }
-    }
-
-    /**
-     * تنسيق رقم الهاتف
-     */
-    protected function normalizePhoneNumber($phone)
-    {
-     
-        $phone = preg_replace('/[^0-9]/', '', $phone);
-
-
-        if (str_starts_with($phone, '0')) {
-            $phone = '966' . substr($phone, 1);
-        }
-
-        return $phone;
-    }
+  
+ 
 }

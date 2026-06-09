@@ -35,8 +35,6 @@ use Illuminate\Support\Facades\Route;
 | API Routes
 |--------------------------------------------------------------------------
 */
-
-// ===================== Routes المصادقة =====================
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login'])->name('login');
     Route::post('register', [AuthController::class, 'register'])->name('register');
@@ -48,26 +46,17 @@ Route::prefix('auth')->group(function () {
     // Route::post('register/salon-owner', [App\Http\Controllers\API\Salon\AuthController::class, 'registerSalonOwner']);
 });
 Route::prefix('auth/register/salon-owner')->group(function () {
-
-    
     Route::post('send-otp', [AuthSalonController::class, 'sendOtp'])
         ->name('salon.register.send-otp');
-
-    // الخطوة 2: إعادة إرسال كود التحقق
     Route::post('resend-otp', [AuthSalonController::class, 'resendOtp'])
         ->name('salon.register.resend-otp');
-
-   
     Route::post('verify', [AuthSalonController::class, 'verifyAndCreate'])
         ->name('salon.register.verify');
 });
-// ===================== Routes محمية (تتطلب مصادقة) =====================
 Route::middleware(['auth:sanctum'])->group(function () {
-
     // FCM Token
     Route::post('/fcm-token', [FcmTokenController::class, 'update']);
     Route::delete('/fcm-token', [FcmTokenController::class, 'destroy']);
-
     // إعدادات الإشعارات
     Route::prefix('notifications/settings')->name('notifications.settings.')->group(function () {
         Route::get('/', [NotificationSettingsController::class, 'getStatus'])->name('status');
@@ -76,16 +65,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/toggle', [NotificationSettingsController::class, 'toggle'])->name('toggle');
         Route::put('/', [NotificationSettingsController::class, 'update'])->name('update');
     });
-
     // Device Tokens
     Route::post('/device-token', [DeviceTokenController::class, 'store']);
     Route::delete('/device-token', [DeviceTokenController::class, 'destroy']);
-
     // معلومات المستخدم
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
-
     // Routes المصادقة
     Route::prefix('auth')->name('auth.')->group(function () {
         Route::prefix('profile')->name('profile.')->group(function () {
@@ -221,10 +207,6 @@ Route::prefix('test/topics')->group(function () {
     });
     Route::post('/public/all-customers', [TestTopicsController::class, 'publicSendToAllCustomers']);
 });
-
-// ===================== Routes لاختبار الإشعارات =====================
-
-
 // ===================== Routes الإشعارات =====================
 Route::middleware(['auth:sanctum'])->prefix('notifications')->name('notifications.')->group(function () {
 
