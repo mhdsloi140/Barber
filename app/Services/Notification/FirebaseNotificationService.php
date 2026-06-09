@@ -303,7 +303,7 @@ class FirebaseNotificationService
         $appointmentTime = $this->formatTime($appointment->appointment_time);
         $services = $this->getServicesNames($appointment);
 
-        $title = ' حجز جديد';
+        $title = 'لديك حجز';
         $body = "لديك حجز جدي من {$customer->name} في {$appointmentTime}";
 
         $data = [
