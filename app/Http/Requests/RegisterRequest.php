@@ -23,7 +23,7 @@ class RegisterRequest extends FormRequest
                 'min:11',
                 'max:11',
             ],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', 'min:8'],
             'avatar' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
             // حقول صاحب الصالون (اختيارية)
             'salon_name' => ['nullable', 'string', 'max:255', 'required_if:user_type,salon_owner'],
