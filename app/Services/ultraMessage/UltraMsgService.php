@@ -6,6 +6,7 @@ use Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Models\User;
+
 class UltraMsgService
 {
     protected string $instanceId;
@@ -15,7 +16,6 @@ class UltraMsgService
 
     public function __construct()
     {
-
         $this->instanceId = config('services.ultramsg.instance_id', '');
         $this->token = config('services.ultramsg.token', '');
         $this->baseUrl = config('services.ultramsg.base_url', 'https://api.ultramsg.com');
@@ -24,16 +24,10 @@ class UltraMsgService
         if ($this->instanceId && str_starts_with($this->instanceId, 'instance')) {
             $this->instanceId = str_replace('instance', '', $this->instanceId);
         }
-
-
     }
 
-    /**
-     * الحصول على URL الـ API الصحيح
-     */
     protected function getApiUrl(string $endpoint = 'messages/chat'): string
     {
-
         return "{$this->baseUrl}/instance{$this->instanceId}/{$endpoint}";
     }
 
@@ -79,6 +73,26 @@ class UltraMsgService
     }
 
     /**
+     * الحصول على HTTP Client مع إعدادات مناسبة للبيئة
+     */
+    protected function getHttpClient()
+    {
+        $client = Http::timeout(30)->retry(3, 1000)->asForm();
+        
+       
+        if (app()->environment('local')) {
+            $client = $client->withOptions([
+                'verify' => false,
+                'ssl_verify_peer' => false,
+                'ssl_verify_host' => false,
+            ]);
+            Log::info('SSL verification disabled for local environment');
+        }
+        
+        return $client;
+    }
+
+    /**
      * إرسال رسالة عادية
      */
     public function sendMessage(string $phone, string $message, int $priority = 1): array
@@ -96,7 +110,7 @@ class UltraMsgService
             ];
         }
 
-        // التحقق من صحة الرقم
+   
         if (!$this->isValidPhoneNumber($phone)) {
             Log::warning('Invalid phone number format', ['phone' => $phone]);
             return [
@@ -113,10 +127,12 @@ class UltraMsgService
             Log::info('Sending WhatsApp message', [
                 'url' => $url,
                 'to' => $formattedPhone,
-                'priority' => $priority
+                'priority' => $priority,
+                'environment' => app()->environment()
             ]);
 
-            $response = Http::timeout(15)->asForm()->post($url, [
+       
+            $response = $this->getHttpClient()->post($url, [
                 'token' => $this->token,
                 'to' => $formattedPhone,
                 'body' => $message,
@@ -163,6 +179,16 @@ class UltraMsgService
 
         } catch (\Exception $e) {
             Log::error('WhatsApp exception: ' . $e->getMessage());
+            
+        
+            if (str_contains($e->getMessage(), 'SSL') && $this->baseUrl === 'https://api.ultramsg.com') {
+                Log::warning('SSL failed, trying HTTP fallback');
+                $this->baseUrl = 'http://api.ultramsg.com';
+                
+                // إعادة المحاولة مع HTTP
+                return $this->sendMessage($phone, $message, $priority);
+            }
+            
             return [
                 'success' => false,
                 'error' => $e->getMessage(),
@@ -179,12 +205,12 @@ class UltraMsgService
         $message = " *رمز التحقق الخاص بك*\n\n" .
             "مرحباً بك في تطبيقنا!\n\n" .
             "رمز التحقق الخاص بحسابك هو:\n\n" .
-            "{$otpCode}\n\n" .
+            "*{$otpCode}*\n\n" .
             " هذا الرمز صالح لمدة {$expiresInMinutes} دقائق فقط.\n" .
             " لا تشارك هذا الرمز مع أي شخص.\n\n" .
             "إذا لم تطلب هذا الرمز، يمكنك تجاهل هذه الرسالة.";
 
-        return $this->sendMessage($phone, $message, 5); // أولوية أعلى لـ OTP
+        return $this->sendMessage($phone, $message, 5);
     }
 
     /**
@@ -198,7 +224,7 @@ class UltraMsgService
 
         try {
             $url = $this->getApiUrl('instance/status');
-            $response = Http::timeout(10)->get($url, [
+            $response = $this->getHttpClient()->get($url, [
                 'token' => $this->token
             ]);
 
@@ -220,6 +246,8 @@ class UltraMsgService
             'enabled' => $this->enabled,
             'is_configured' => $this->isConfigured(),
             'api_url' => $this->getApiUrl(),
+            'environment' => app()->environment(),
+            'ssl_verification' => app()->environment('local') ? 'disabled' : 'enabled'
         ];
     }
 
@@ -230,9 +258,12 @@ class UltraMsgService
     {
         return $this->getApiUrl('messages/chat');
     }
-        public function sendCredentials(User $user, $salon, string $password, string $type = 'barber'): array
+
+    /**
+     * إرسال بيانات الدخول
+     */
+    public function sendCredentials(User $user, $salon, string $password, string $type = 'barber'): array
     {
-        // التحقق من صحة الإعدادات
         if (!$this->isConfigured()) {
             Log::warning('Cannot send credentials: UltraMsg not configured');
             return [
@@ -242,7 +273,6 @@ class UltraMsgService
             ];
         }
 
-        // تنسيق رقم الهاتف
         $phone = $this->formatPhoneNumber($user->phone);
         if (!$this->isValidPhoneNumber($phone)) {
             Log::error('Invalid phone number for sending credentials', [
@@ -256,10 +286,7 @@ class UltraMsgService
             ];
         }
 
-        // بناء الرسالة حسب نوع المستخدم (بدون رموز تعبيرية)
         $message = $this->buildCredentialsMessage($user, $salon, $password, $type);
-
-        // إرسال الرسالة
         $result = $this->sendMessage($phone, $message, 5);
 
         if ($result['success']) {
@@ -275,8 +302,6 @@ class UltraMsgService
                 'phone' => $phone,
                 'error' => $result['error'] ?? 'Unknown error'
             ]);
-
-            // تخزين كلمة المرور لإعادة المحاولة لاحقاً
             $this->storePendingPassword($user->id, $password);
         }
 
@@ -284,14 +309,12 @@ class UltraMsgService
     }
 
     /**
-     * بناء رسالة بيانات الدخول حسب نوع المستخدم (بدون رموز تعبيرية)
+     * بناء رسالة بيانات الدخول
      */
     protected function buildCredentialsMessage(User $user, $salon, string $password, string $type): string
     {
         $salonName = $salon->name ?? $salon['name'] ?? 'صالوننا';
         $appUrl = env('APP_URL', 'https://barber-app.com');
-
-        // اسم الدور بالعربية
         $roleName = $this->getRoleName($type);
 
         $message = "مرحباً بك في فريق {$salonName}\n\n"
@@ -306,7 +329,6 @@ class UltraMsgService
                  . "رابط التطبيق: {$appUrl}/login\n\n"
                  . "شكراً لانضمامك إلينا.";
 
-        // إضافة تعليمات خاصة للحلاقين
         if ($type === 'barber') {
             $message .= "\n\nملاحظة: يمكنك إدارة مواعيدك وعمولاتك من لوحة التحكم الخاصة بك.";
         }
@@ -328,17 +350,13 @@ class UltraMsgService
     }
 
     /**
-     * تخزين كلمة المرور المعلقة لإعادة المحاولة
+     * تخزين كلمة المرور المعلقة
      */
     protected function storePendingPassword(int $userId, string $password): void
     {
         $key = "pending_password_{$userId}";
         Cache::put($key, $password, now()->addHours(24));
-
-        Log::info('Password stored for retry', [
-            'user_id' => $userId,
-            'key' => $key
-        ]);
+        Log::info('Password stored for retry', ['user_id' => $userId, 'key' => $key]);
     }
 
     /**
@@ -347,8 +365,7 @@ class UltraMsgService
     public function getPendingPassword(int $userId): ?string
     {
         $key = "pending_password_{$userId}";
-        return Cache
-        ::get($key);
+        return Cache::get($key);
     }
 
     /**
@@ -385,7 +402,7 @@ class UltraMsgService
     }
 
     /**
-     * إرسال رسالة مخصصة مع قالب (لأغراض عامة)
+     * إرسال رسالة مخصصة
      */
     public function sendCustomTemplate(string $phone, string $name, string $password, string $salonName, string $role): array
     {
@@ -394,10 +411,8 @@ class UltraMsgService
                  . "بيانات الدخول:\n"
                  . "الاسم: {$name}\n"
                  . "كلمة المرور: {$password}\n\n"
-                 . "رابط الدخول: " . env('APP_URL') . "/login\n\n"
-                 . "نتمنى لك يوماً سعيداً";
+                 ;
 
         return $this->sendMessage($phone, $message, 5);
     }
-
 }
