@@ -165,15 +165,15 @@
 
     <aside id="naimaSidebar" class="naima-sidebar">
         <div class="relative flex flex-col items-center pt-8 pb-6 px-6 border-b border-white/20">
-            <i class="fas fa-times-circle text-white text-2xl cursor-pointer absolute top-4 left-4" id="closeSidebarMobile"></i>
-            <div class="w-28 h-28 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-xl overflow-hidden mb-4">
-                <img src="{{ asset('img/logo2.png') }}" alt="شعار نعيما" class="w-full h-full object-cover" onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\'fas fa-cut text-white text-4xl\'></i>'">
-            </div>
-            <div class="text-center">
-                <h2 class="text-2xl font-bold text-white">نعيماً</h2>
-                <p class="text-sm text-white/70 mt-1">لخدمات الحلاقة</p>
-            </div>
-        </div>
+    <i class="fas fa-times-circle text-white text-2xl cursor-pointer absolute top-4 left-4" id="closeSidebarMobile"></i>
+    <div class="w-28 h-28 rounded-full bg-white/10 backdrop-blur-sm border border-white/30 flex items-center justify-center shadow-xl overflow-hidden mb-4">
+        <img src="{{ asset('img/logo-new.png') }}" alt="شعار نعيما" class="w-full h-full object-cover" onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\'fas fa-cut text-white text-4xl\'></i>'">
+    </div>
+    <div class="text-center">
+        <h2 class="text-2xl font-bold text-white" style="font-family: 'Aref Ruqaa', serif;">نعيماً</h2>
+        <p class="text-sm text-white/70 mt-1">لخدمات الحلاقة</p>
+    </div>
+</div>
         <div class="flex-1 mt-4">
             <ul class="flex flex-col gap-1">
                 <li><a href="{{ route('admin.dashboard') }}" class="sidebar-link"><i class="fas fa-chart-line"></i><span>الرئيسية</span></a></li>

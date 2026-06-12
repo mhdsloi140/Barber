@@ -241,7 +241,7 @@
         <div class="auth-card">
             <div class="auth-header">
                 <div class="logo-icon">
-                    <img src="{{ asset('img/logo2.png') }}" alt="شعار نعيما" class="logo-image">
+                    <img src="{{ asset('img/logo-new.png') }}" alt="شعار نعيما" class="logo-image">
                 </div>
                 <h2>نعيما</h2>
                 <p>مرحباً بك، قم بتسجيل الدخول للوصول إلى لوحة التحكم</p>

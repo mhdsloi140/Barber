@@ -99,7 +99,7 @@ public function checkOTPStatus(int $userId): AuthResult
 
             if (!$user->is_active) {
                 return AuthResult::error(
-                    'الحساب غير مفعل. يرجى تفعيل الحساب باستخدام رمز التحقق المرسل إلى واتساب',
+                    'الحساب غير مفعل. يجب تفعيل الحساب من قبل المدير',
                     ['user_id' => $user->id, 'requires_verification' => true],
                     403
                 );
