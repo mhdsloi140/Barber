@@ -77,15 +77,7 @@ class AuthController extends Controller
     /**
      *  إعادة إرسال OTP
      */
-    public function resendOTP(ResendOTPRequest $request)
-    {
-        $result = $this->authService->resendOTP($request->user_id);
 
-        return response()->json(
-            $result->toArray(),
-            $result->success ? 200 : 400
-        );
-    }
     public function forgotPassword(ForgotPasswordRequest $request)
 {
     $result = $this->authService->forgotPassword($request->phone);
@@ -95,7 +87,22 @@ class AuthController extends Controller
         $result->success ? 200 : 400
     );
 }
+/**
+ * إعادة إرسال رمز التحقق OTP
+ */
+public function resendOTP(Request $request)
+{
+    $request->validate([
+        'user_id' => 'required|integer|exists:users,id',
+    ]);
 
+    $result = $this->authService->resendOTP($request->user_id);
+
+    return response()->json(
+        $result->toArray(),
+        $result->success ? 200 : 400
+    );
+}
     /**
      *  التحقق من صلاحية رمز OTP (دون تفعيل)
      */

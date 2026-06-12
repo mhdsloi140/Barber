@@ -43,6 +43,7 @@ Route::prefix('auth')->group(function () {
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
     Route::post('/check-reset-otp', [AuthController::class, 'checkResetOTPStatus']);
+    Route::post('/resend-otp', [AuthController::class, 'resendOTP']);
     // Route::post('register/salon-owner', [App\Http\Controllers\API\Salon\AuthController::class, 'registerSalonOwner']);
 });
 Route::prefix('auth/register/salon-owner')->group(function () {
