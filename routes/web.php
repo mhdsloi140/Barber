@@ -15,60 +15,9 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-Route::get('/test-notification', function () {
-    $user = App\Models\User::find(10);
-    $service = app(App\Services\Notification\FirebaseNotificationService::class);
-    $result = $service->sendPushNotification($user, 'اختبار', 'رسالة اختبار', ['type' => 'test']);
-    return response()->json(['success' => $result]);
-});
 
-Route::get('/test-notification-error', function () {
-    try {
-        $user = App\Models\User::find(10);
-        $messaging = app('firebase.messaging');
-        $token = $user->fcm_token;
-        $notification = \Kreait\Firebase\Messaging\Notification::create('اختبار', 'رسالة اختبار');
-        $message = \Kreait\Firebase\Messaging\CloudMessage::withTarget('token', $token)
-            ->withNotification($notification);
-        $result = $messaging->send($message);
-        return response()->json(['success' => true, 'result' => $result]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'error' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-        ]);
-    }
-});
 
-Route::get('/test-notification-debug', function () {
-    try {
-        $user = App\Models\User::find(10);
-        if (empty($user->fcm_token)) {
-            return '❌ No FCM token found for user';
-        }
-        $firebase = app('firebase.messaging');
-        if (!$firebase) {
-            return ' Firebase messaging not initialized';
-        }
-        $service = app(App\Services\Notification\FirebaseNotificationService::class);
-        $result = $service->sendPushNotification($user, 'اختبار', 'رسالة اختبار', ['type' => 'test']);
-        return [
-            'success' => $result,
-            'user_id' => $user->id,
-            'has_token' => !empty($user->fcm_token),
-            'token_preview' => substr($user->fcm_token, 0, 30) . '...',
-            'notifications_enabled' => $user->notifications_enabled,
-        ];
-    } catch (\Exception $e) {
-        return [
-            'error' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-        ];
-    }
-});
+
 
 Route::get('/', function () {
     return view('layout.app');

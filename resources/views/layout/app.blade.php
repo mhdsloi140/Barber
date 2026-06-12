@@ -36,7 +36,6 @@
             min-height: 100vh;
         }
 
-        /* ========== الشريط الجانبي الأنيق ========== */
         .naima-sidebar {
             position: fixed;
             top: 0;
@@ -45,7 +44,6 @@
             height: 100vh;
             z-index: 1050;
             background: linear-gradient(145deg, #4a0e6e 0%, #9b30ff 100%);
-            backdrop-filter: blur(0px);
             box-shadow: -8px 0 30px rgba(0, 0, 0, 0.2);
             transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.4, 1.2);
             transform: translateX(0);
@@ -54,20 +52,6 @@
             overflow-y: auto;
             border-top-left-radius: 28px;
             border-bottom-left-radius: 28px;
-        }
-
-        .naima-sidebar::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        .naima-sidebar::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-        }
-
-        .naima-sidebar::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.4);
-            border-radius: 10px;
         }
 
         @media (max-width: 1280px) {
@@ -109,12 +93,6 @@
 
         .sidebar-ctrl-btn i {
             font-size: 1.8rem;
-            transition: transform 0.2s;
-        }
-
-        .sidebar-ctrl-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 18px 28px rgba(108, 43, 217, 0.6);
         }
 
         @media (min-width: 1281px) {
@@ -151,7 +129,6 @@
         .active-sidebar {
             background: rgba(255, 255, 255, 0.25);
             backdrop-filter: blur(5px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
         .naima-navbar {
@@ -165,7 +142,6 @@
             position: sticky;
             top: 0;
             z-index: 1020;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .navbar-brand {
@@ -175,58 +151,11 @@
             color: white;
             font-size: 1.7rem;
             font-weight: 800;
-            letter-spacing: 1px;
         }
 
         .navbar-brand i {
             font-size: 1.8rem;
             color: #ffde7a;
-            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-        }
-
-        .navbar-icons {
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-            position: relative;
-        }
-
-        .navbar-icons .icon-btn {
-            position: relative;
-            color: white;
-            font-size: 1.3rem;
-            cursor: pointer;
-            transition: 0.2s;
-            background: rgba(255, 255, 255, 0.15);
-            padding: 8px;
-            border-radius: 50%;
-            width: 38px;
-            height: 38px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none;
-        }
-
-        .navbar-icons .icon-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: scale(1.05);
-        }
-
-        .notification-badge {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background: #ef4444;
-            color: white;
-            font-size: 10px;
-            font-weight: bold;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            display: none;
-            align-items: center;
-            justify-content: center;
         }
 
         .main-content-area {
@@ -260,50 +189,6 @@
             font-size: 0.8rem;
             border-top: 1px solid #e4e9f2;
         }
-
-        .custom-toast-notification {
-            position: fixed;
-            top: 80px;
-            left: 20px;
-            right: auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            min-width: 300px;
-            max-width: 400px;
-            z-index: 10000;
-            direction: rtl;
-            font-family: 'Cairo', sans-serif;
-            animation: slideInRight 0.3s ease;
-        }
-
-        @keyframes slideInRight {
-            from { transform: translateX(-100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-
-        .custom-toast-notification .toast-header {
-            padding: 10px 15px;
-            border-bottom: 1px solid #eee;
-            background: linear-gradient(135deg, #4a0e6e, #9b30ff);
-            color: white;
-            border-radius: 12px 12px 0 0;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .custom-toast-notification .toast-body {
-            padding: 15px;
-            color: #333;
-        }
-
-        .custom-toast-notification .btn-close {
-            background: none;
-            border: none;
-            color: white;
-            font-size: 18px;
-            cursor: pointer;
-        }
     </style>
     @stack('styles')
 </head>
@@ -312,12 +197,12 @@
 
     <aside id="naimaSidebar" class="naima-sidebar">
         <div class="relative flex flex-col items-center pt-8 pb-6 px-6 border-b border-white/20">
-            <i class="fas fa-times-circle text-white text-2xl cursor-pointer opacity-80 hover:opacity-100 transition absolute top-4 left-4" id="closeSidebarMobile"></i>
+            <i class="fas fa-times-circle text-white text-2xl cursor-pointer absolute top-4 left-4" id="closeSidebarMobile"></i>
             <div class="w-28 h-28 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-xl overflow-hidden mb-4">
                 <img src="{{ asset('img/logo2.png') }}" alt="شعار نعيما" class="w-full h-full object-cover" onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\'fas fa-cut text-white text-4xl\'></i>'">
             </div>
             <div class="text-center">
-                <h2 class="text-2xl font-bold text-white" style="font-family: 'Aref Ruqaa', serif;">نعيماً</h2>
+                <h2 class="text-2xl font-bold text-white">نعيماً</h2>
                 <p class="text-sm text-white/70 mt-1">لخدمات الحلاقة</p>
             </div>
         </div>
@@ -351,126 +236,128 @@
         </div>
     </div>
 
-    <script src="{{ asset('assets/js/plugins/perfect-scrollbar.min.js') }}" async></script>
+    {{-- تم تعطيل Perfect Scrollbar لأنه يسبب مشاكل --}}
+    {{-- <script src="{{ asset('assets/js/plugins/perfect-scrollbar.min.js') }}" async></script> --}}
+    
     <script src="{{ asset('assets/js/soft-ui-dashboard-tailwind.js?v=1.0.5') }}" async></script>
 
-    {{-- Firebase Configuration --}}
-    @auth
-   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js"></script>
-<script src="https://apis.google.com/js/api.js"></script>
-
-<script>
-    (function() {
-        if (window._firebaseInitialized) return;
-        window._firebaseInitialized = true;
-
-        const firebaseConfig = {
-            apiKey: "{{ env('FIREBASE_API_KEY') }}",
-            authDomain: "{{ env('FIREBASE_AUTH_DOMAIN') }}",
-            projectId: "{{ env('FIREBASE_PROJECT_ID') }}",
-            storageBucket: "{{ env('FIREBASE_STORAGE_BUCKET') }}",
-            messagingSenderId: "{{ env('FIREBASE_MESSAGING_SENDER_ID') }}",
-            appId: "{{ env('FIREBASE_APP_ID') }}"
-        };
-
-        // تهيئة Firebase
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-
-        const messaging = firebase.messaging();
-
-        // تسجيل Service Worker
-        async function registerSW() {
-            if ('serviceWorker' in navigator) {
-                try {
-                    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-                    console.log('✅ Service Worker registered');
-                    return registration;
-                } catch (error) {
-                    console.error('❌ SW failed:', error);
+    {{-- إصلاح بسيط للـ Sidebar --}}
+    <script>
+        // إصلاح الـ Sidebar
+        (function() {
+            // تعطيل Perfect Scrollbar
+            if (typeof PerfectScrollbar !== 'undefined') {
+                window.PerfectScrollbar = null;
+            }
+            
+            // التأكد من ظهور الـ Sidebar
+            function fixSidebar() {
+                var sidebar = document.getElementById('naimaSidebar');
+                if (sidebar) {
+                    sidebar.style.overflowY = 'auto';
+                    if (window.innerWidth < 1280) {
+                        sidebar.classList.remove('sidebar-visible');
+                    }
                 }
             }
-            return null;
-        }
+            
+            fixSidebar();
+            window.addEventListener('resize', fixSidebar);
+        })();
+    </script>
 
-        // الحصول على التوكن مع المصادقة
-        async function getTokenWithAuth() {
-            try {
-                // طلب الإذن أولاً
-                const permission = await Notification.requestPermission();
-                if (permission !== 'granted') {
-                    console.warn('Permission denied');
+    @auth
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js"></script>
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script>
+        (function() {
+            if (window._firebaseInitialized) return;
+            window._firebaseInitialized = true;
+
+            const firebaseConfig = {
+                apiKey: "{{ env('FIREBASE_API_KEY') }}",
+                authDomain: "{{ env('FIREBASE_AUTH_DOMAIN') }}",
+                projectId: "{{ env('FIREBASE_PROJECT_ID') }}",
+                storageBucket: "{{ env('FIREBASE_STORAGE_BUCKET') }}",
+                messagingSenderId: "{{ env('FIREBASE_MESSAGING_SENDER_ID') }}",
+                appId: "{{ env('FIREBASE_APP_ID') }}"
+            };
+
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+
+            const messaging = firebase.messaging();
+
+            async function registerSW() {
+                if ('serviceWorker' in navigator) {
+                    try {
+                        await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                        console.log('Service Worker registered');
+                    } catch (error) {
+                        console.error('SW failed:', error);
+                    }
+                }
+            }
+
+            async function getTokenWithAuth() {
+                try {
+                    const permission = await Notification.requestPermission();
+                    if (permission !== 'granted') return null;
+                    await registerSW();
+                    const token = await messaging.getToken({ vapidKey: '{{ env("FIREBASE_VAPID_KEY") }}' });
+                    if (token) {
+                        await fetch('/admin/fcm/token', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                            },
+                            body: JSON.stringify({ fcm_token: token })
+                        });
+                    }
+                    return token;
+                } catch (error) {
+                    console.error('Token error:', error);
                     return null;
                 }
-
-                // تسجيل SW
-                await registerSW();
-
-                // الحصول على التوكن
-                const token = await messaging.getToken({
-                    vapidKey: '{{ env("FIREBASE_VAPID_KEY") }}'
-                });
-
-                if (token) {
-                    console.log('✅ Token obtained');
-                    await saveToken(token);
-                }
-
-                return token;
-            } catch (error) {
-                console.error('❌ Token error:', error);
-                return null;
             }
-        }
 
-        async function saveToken(token) {
-            try {
-                await fetch('/admin/fcm/token', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    },
-                    body: JSON.stringify({ fcm_token: token })
-                });
-                console.log('✅ Token saved');
-            } catch (e) {
-                console.error('Save failed:', e);
-            }
-        }
-
-        // بدء العملية
-        setTimeout(() => getTokenWithAuth(), 2000);
-    })();
-</script>
+            setTimeout(() => getTokenWithAuth(), 2000);
+        })();
+    </script>
     @endauth
 
     <script>
-        const sidebarElement = document.getElementById('naimaSidebar');
-        const toggleFloatBtn = document.getElementById('sidebarToggleFloating');
-        const closeMobileBtn = document.getElementById('closeSidebarMobile');
+        var sidebarElement = document.getElementById('naimaSidebar');
+        var toggleFloatBtn = document.getElementById('sidebarToggleFloating');
+        var closeMobileBtn = document.getElementById('closeSidebarMobile');
 
         function isMobile() { return window.innerWidth < 1280; }
         function openSidebar() { if (isMobile()) { sidebarElement.classList.add('sidebar-visible'); document.body.style.overflow = 'hidden'; } }
         function closeSidebar() { if (isMobile()) { sidebarElement.classList.remove('sidebar-visible'); document.body.style.overflow = ''; } }
         function toggleSidebar() { if (isMobile()) { sidebarElement.classList.contains('sidebar-visible') ? closeSidebar() : openSidebar(); } }
 
-        if (toggleFloatBtn) toggleFloatBtn.addEventListener('click', (e) => { e.preventDefault(); toggleSidebar(); });
-        if (closeMobileBtn) closeMobileBtn.addEventListener('click', (e) => { e.preventDefault(); closeSidebar(); });
+        if (toggleFloatBtn) toggleFloatBtn.addEventListener('click', function(e) { e.preventDefault(); toggleSidebar(); });
+        if (closeMobileBtn) closeMobileBtn.addEventListener('click', function(e) { e.preventDefault(); closeSidebar(); });
 
-        document.addEventListener('click', (event) => {
+        document.addEventListener('click', function(event) {
             if (isMobile() && sidebarElement && toggleFloatBtn && !sidebarElement.contains(event.target) && !toggleFloatBtn.contains(event.target)) {
                 if (sidebarElement.classList.contains('sidebar-visible')) closeSidebar();
             }
         });
 
-        window.addEventListener('resize', () => { if (window.innerWidth >= 1280) { sidebarElement.classList.remove('sidebar-visible'); document.body.style.overflow = ''; } });
+        window.addEventListener('resize', function() { 
+            if (window.innerWidth >= 1280) { 
+                sidebarElement.classList.remove('sidebar-visible'); 
+                document.body.style.overflow = ''; 
+            } 
+        });
 
         function setActiveLink() {
-            const currentUrl = window.location.pathname;
-            document.querySelectorAll('.sidebar-link').forEach(link => {
+            var currentUrl = window.location.pathname;
+            document.querySelectorAll('.sidebar-link').forEach(function(link) {
                 link.classList.remove('active-sidebar');
                 if (link.getAttribute('href') === currentUrl) link.classList.add('active-sidebar');
             });
@@ -479,6 +366,7 @@
     </script>
 
     @stack('scripts')
+    
 </body>
 
 </html>

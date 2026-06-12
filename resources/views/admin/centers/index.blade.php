@@ -1,6 +1,6 @@
 {{-- resources/views/admin/centers/index.blade.php --}}
 
-@extends('layout.app')
+@extends('layout.admin')
 
 @section('content')
 
@@ -17,8 +17,7 @@
                 <div>
                     <label class="block text-xs text-gray-500 mb-1"> البحث</label>
                     <div class="relative">
-                        <i
-                            class="fas fa-search absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
+                        <i class="fas fa-search absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
                         <input type="text" name="search" value="{{ request('search') }}"
                             class="w-full pr-10 pl-3 py-2 text-sm border border-gray-200 rounded-xl focus:border-purple-400 focus:outline-none transition"
                             placeholder="اسم الصالون...">
@@ -47,28 +46,22 @@
                 </div>
 
                 <!-- الأزرار -->
-               <div class="flex gap-2 pt-5 md:pt-0">
-    <button type="submit"
-            style="flex: 1; background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; padding: 10px 12px; border-radius: 12px; font-weight: 600; border: none; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; box-shadow: 0 2px 5px rgba(124, 58, 237, 0.3);"
-            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 10px rgba(124, 58, 237, 0.4)';"
-            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 5px rgba(124, 58, 237, 0.3)';">
-        <i class="fas fa-search"></i> بحث
-    </button>
+                <div class="flex gap-2 pt-5 md:pt-0">
+                    <button type="submit"
+                            style="flex: 1; background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; padding: 10px 12px; border-radius: 12px; font-weight: 600; border: none; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; box-shadow: 0 2px 5px rgba(124, 58, 237, 0.3);">
+                        <i class="fas fa-search"></i> بحث
+                    </button>
 
-    <a href="{{ route('admin.center') }}"
-       style="flex: 1; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: white; padding: 10px 12px; border-radius: 12px; font-weight: 600; text-decoration: none; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; box-shadow: 0 2px 5px rgba(107, 114, 128, 0.3);"
-       onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 10px rgba(107, 114, 128, 0.4)';"
-       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 5px rgba(107, 114, 128, 0.3)';">
-        <i class="fas fa-undo-alt"></i> مسح
-    </a>
+                    <a href="{{ route('admin.center') }}"
+                       style="flex: 1; background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: white; padding: 10px 12px; border-radius: 12px; font-weight: 600; text-decoration: none; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; box-shadow: 0 2px 5px rgba(107, 114, 128, 0.3);">
+                        <i class="fas fa-undo-alt"></i> مسح
+                    </a>
 
-    <button type="button" onclick="refreshSalonsTable()"
-            style="flex: 1; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; padding: 10px 12px; border-radius: 12px; font-weight: 600; border: none; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; box-shadow: 0 2px 5px rgba(37, 99, 235, 0.3);"
-            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 10px rgba(37, 99, 235, 0.4)';"
-            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 5px rgba(37, 99, 235, 0.3)';">
-        <i class="fas fa-sync-alt"></i> تحديث
-    </button>
-</div>
+                    <a href="{{ route('admin.center') }}?refresh=1"
+                       style="flex: 1; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; padding: 10px 12px; border-radius: 12px; font-weight: 600; text-decoration: none; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; box-shadow: 0 2px 5px rgba(37, 99, 235, 0.3);">
+                        <i class="fas fa-sync-alt"></i> تحديث
+                    </a>
+                </div>
             </div>
         </form>
     </div>
@@ -93,8 +86,7 @@
                 <tbody id="salonsTableBody">
                     @forelse($salons as $index => $salon)
                     <tr class="border-b border-gray-100 hover:bg-purple-50 transition text-sm">
-                        <td class="py-2 md:py-3 px-1 md:px-2">{{ ($salons->currentPage() - 1) * $salons->perPage() +
-                            $index + 1 }}</td>
+                        <td class="py-2 md:py-3 px-1 md:px-2">{{ ($salons->currentPage() - 1) * $salons->perPage() + $index + 1 }}</td>
                         <td class="py-2 md:py-3 px-2 md:px-2 font-semibold text-xs md:text-sm">
                             <i class="fas fa-store text-purple-500 ml-1 md:ml-2"></i>
                             {{ Str::limit($salon->name, 15) }}
@@ -102,10 +94,8 @@
                         <td class="py-2 md:py-3 px-1 md:px-2 text-xs md:text-sm">
                             {{ $salon->owner ? Str::limit($salon->owner->name, 12) : 'غير معروف' }}
                         </td>
-                        <td class="py-2 md:py-3 px-1 md:px-2 dir-ltr text-xs md:text-sm">{{ $salon->phone ?? '---' }}
-                        </td>
-                        <td class="py-2 md:py-3 px-1 md:px-2 max-w-[120px] md:max-w-[200px] truncate text-xs md:text-sm"
-                            title="{{ $salon->address }}">
+                        <td class="py-2 md:py-3 px-1 md:px-2 dir-ltr text-xs md:text-sm">{{ $salon->phone ?? '---' }}</td>
+                        <td class="py-2 md:py-3 px-1 md:px-2 max-w-[120px] md:max-w-[200px] truncate text-xs md:text-sm" title="{{ $salon->address }}">
                             <i class="fas fa-location-dot text-gray-400 ml-1"></i>
                             {{ Str::limit($salon->address, 15) }}
                         </td>
@@ -133,8 +123,7 @@
                             </span>
                         </td>
                         <td class="py-2 md:py-3 px-2 md:px-2">
-                            <button onclick="openModal({{ $salon->id }})"
-                                class="btn-action btn-view text-xs md:text-sm">
+                            <button onclick="openModal({{ $salon->id }})" class="btn-action btn-view text-xs md:text-sm">
                                 <i class="fas fa-eye"></i> عرض
                             </button>
                         </td>
@@ -158,7 +147,7 @@
     </div>
 </div>
 
-<!-- ========== موديل عرض التفاصيل (كما هو بدون تغيير) ========== -->
+<!-- ========== موديل عرض التفاصيل ========== -->
 <div id="salonModal" class="modal-overlay" style="display: none;">
     <div class="modal-container">
         <div class="modal-content">
@@ -273,7 +262,6 @@
 </div>
 
 <style>
-    /* نفس الـ Styles الموجودة مع إضافة تجاوب للهواتف للموديل */
     .badge-status {
         padding: 5px 12px;
         border-radius: 60px;
@@ -351,7 +339,6 @@
         color: white;
     }
 
-    /* موديل متجاوب مع الهواتف */
     .modal-overlay {
         position: fixed;
         top: 0;
@@ -379,26 +366,21 @@
             max-width: 95%;
             margin: 0.5rem;
         }
-
         .modal-body {
             padding: 1rem;
             max-height: 80vh;
         }
-
         .info-row {
             flex-direction: column;
             align-items: flex-start;
             gap: 0.25rem;
         }
-
         .info-label {
             font-size: 0.7rem;
         }
-
         .info-value {
             font-size: 0.8rem;
         }
-
         .action-btn {
             padding: 0.6rem 0.8rem;
             font-size: 0.8rem;
@@ -436,17 +418,6 @@
         justify-content: center;
     }
 
-    @media (min-width: 768px) {
-        .modal-icon {
-            width: 48px;
-            height: 48px;
-        }
-
-        .modal-icon i {
-            font-size: 1.5rem;
-        }
-    }
-
     .modal-icon i {
         font-size: 1.2rem;
         color: white;
@@ -459,22 +430,10 @@
         margin: 0;
     }
 
-    @media (min-width: 768px) {
-        .modal-title {
-            font-size: 1.25rem;
-        }
-    }
-
     .modal-subtitle {
         font-size: 0.6rem;
         color: rgba(255, 255, 255, 0.8);
         margin-top: 0.2rem;
-    }
-
-    @media (min-width: 768px) {
-        .modal-subtitle {
-            font-size: 0.7rem;
-        }
     }
 
     .modal-close-btn {
@@ -491,24 +450,10 @@
         color: white;
     }
 
-    @media (min-width: 768px) {
-        .modal-close-btn {
-            width: 32px;
-            height: 32px;
-            border-radius: 12px;
-        }
-    }
-
     .modal-body {
         padding: 1rem;
         max-height: 70vh;
         overflow-y: auto;
-    }
-
-    @media (min-width: 768px) {
-        .modal-body {
-            padding: 1.5rem;
-        }
     }
 
     .info-card,
@@ -527,12 +472,6 @@
         border-bottom: 1px solid #e2e8f0;
     }
 
-    @media (min-width: 768px) {
-        .card-header {
-            padding: 0.75rem 1rem;
-        }
-    }
-
     .card-icon {
         width: 24px;
         height: 24px;
@@ -544,17 +483,6 @@
 
     .card-icon i {
         font-size: 0.8rem;
-    }
-
-    @media (min-width: 768px) {
-        .card-icon {
-            width: 28px;
-            height: 28px;
-        }
-
-        .card-icon i {
-            font-size: 0.9rem;
-        }
     }
 
     .card-icon.purple {
@@ -574,20 +502,8 @@
         margin: 0;
     }
 
-    @media (min-width: 768px) {
-        .card-title {
-            font-size: 0.9rem;
-        }
-    }
-
     .card-body {
         padding: 0.8rem;
-    }
-
-    @media (min-width: 768px) {
-        .card-body {
-            padding: 1rem;
-        }
     }
 
     .info-row {
@@ -596,14 +512,6 @@
         align-items: center;
         padding: 0.4rem 0;
         border-bottom: 1px dashed #e2e8f0;
-    }
-
-    @media (max-width: 640px) {
-        .info-row {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 0.25rem;
-        }
     }
 
     .info-row:last-child {
@@ -615,22 +523,10 @@
         color: #64748b;
     }
 
-    @media (min-width: 768px) {
-        .info-label {
-            font-size: 0.75rem;
-        }
-    }
-
     .info-value {
         font-size: 0.75rem;
         font-weight: 600;
         color: #1e293b;
-    }
-
-    @media (min-width: 768px) {
-        .info-value {
-            font-size: 0.85rem;
-        }
     }
 
     .action-btn {
@@ -648,13 +544,6 @@
         border: none;
         margin-bottom: 0.75rem;
         text-decoration: none;
-    }
-
-    @media (min-width: 768px) {
-        .action-btn {
-            padding: 0.7rem 1rem;
-            font-size: 0.85rem;
-        }
     }
 
     .action-btn:last-child {
@@ -697,7 +586,6 @@
             opacity: 0;
             transform: scale(0.95);
         }
-
         to {
             opacity: 1;
             transform: scale(1);
@@ -747,19 +635,15 @@
             padding: 1.2rem;
             width: 95%;
         }
-
         .delete-title {
             font-size: 1.2rem;
         }
-
         .delete-message {
             font-size: 0.85rem;
         }
-
         .delete-warning {
             font-size: 0.7rem;
         }
-
         .delete-confirm-btn,
         .delete-cancel-btn {
             padding: 0.5rem 1rem;
@@ -778,17 +662,6 @@
         margin: 0 auto 1rem;
     }
 
-    @media (min-width: 768px) {
-        .delete-icon {
-            width: 70px;
-            height: 70px;
-        }
-
-        .delete-icon i {
-            font-size: 2.5rem;
-        }
-    }
-
     .delete-icon i {
         font-size: 2rem;
         color: #dc2626;
@@ -799,12 +672,6 @@
         font-weight: 800;
         color: #1e293b;
         margin-bottom: 0.5rem;
-    }
-
-    @media (min-width: 768px) {
-        .delete-title {
-            font-size: 1.4rem;
-        }
     }
 
     .delete-message {
@@ -844,12 +711,6 @@
         gap: 0.5rem;
     }
 
-    @media (min-width: 768px) {
-        .delete-confirm-btn {
-            padding: 0.6rem 1.2rem;
-        }
-    }
-
     .delete-confirm-btn:hover {
         background: linear-gradient(135deg, #ef4444, #dc2626);
         transform: scale(1.02);
@@ -869,12 +730,6 @@
         gap: 0.5rem;
     }
 
-    @media (min-width: 768px) {
-        .delete-cancel-btn {
-            padding: 0.6rem 1.2rem;
-        }
-    }
-
     .delete-cancel-btn:hover {
         background: #cbd5e1;
         transform: scale(1.02);
@@ -882,7 +737,7 @@
 </style>
 
 <script>
-    // جميع الـ JavaScript كما هو دون تغيير
+    // ========== الكود الأصلي للصفحة (بدون تحديث تلقائي) ==========
     let currentSalonId = null;
     let currentSalonStatus = null;
 
@@ -911,7 +766,7 @@
                 updateStatusBadge(salon.is_active);
                 updateToggleButton(salon.is_active, salonId);
                 const viewLink = document.getElementById('viewDetailsLink');
-                viewLink.href = `/admin/centers/${salonId}`;
+                viewLink.href = `/centers/${salonId}`;
             } else {
                 alert('حدث خطأ في تحميل البيانات');
                 closeModal();
@@ -1015,112 +870,6 @@
             cancelDelete();
         }
     });
-</script>
-
-<script>
-    let currentPage = 1;
-    let currentSearch = '';
-    let currentStatus = '';
-    let currentSort = 'desc';
-
-    function saveFilterValues() {
-        currentSearch = document.querySelector('input[name="search"]')?.value || '';
-        currentStatus = document.querySelector('select[name="status"]')?.value || '';
-        currentSort = document.querySelector('select[name="sort"]')?.value || 'desc';
-        currentPage = document.querySelector('.pagination .active .page-link')?.innerText || 1;
-    }
-
-    function refreshSalonsTable() {
-        saveFilterValues();
-        const tbody = document.getElementById('salonsTableBody');
-        if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="10" class="py-8 text-center"><i class="fas fa-spinner fa-spin text-purple-500 text-2xl"></i><p class="text-gray-400 mt-2">جاري تحديث البيانات...</p></td></td>`;
-        }
-        fetch(`{{ route('admin.center') }}?search=${encodeURIComponent(currentSearch)}&status=${currentStatus}&sort=${currentSort}&page=${currentPage}&ajax=1`, {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                if (data.html) {
-                    tbody.innerHTML = data.html;
-                }
-                if (data.pagination) {
-                    const paginationContainer = document.querySelector('.mt-4');
-                    if (paginationContainer) {
-                        paginationContainer.innerHTML = data.pagination;
-                    }
-                }
-                showToast('تم تحديث البيانات بنجاح', 'success');
-            } else {
-                showToast('حدث خطأ في تحديث البيانات', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('حدث خطأ في الاتصال بالخادم', 'error');
-        });
-    }
-
-    function showToast(message, type = 'success') {
-        const toast = document.createElement('div');
-        toast.className = `fixed bottom-5 left-5 z-50 px-4 py-2 rounded-lg text-white shadow-lg transition-all duration-300 ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
-        toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} ml-2"></i> ${message}`;
-        document.body.appendChild(toast);
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            setTimeout(() => toast.remove(), 300);
-        }, 3000);
-    }
-
-    let autoRefreshInterval = null;
-    function startAutoRefresh() {
-        if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-        autoRefreshInterval = setInterval(() => {
-            refreshSalonsTable();
-        }, 30000);
-    }
-    function stopAutoRefresh() {
-        if (autoRefreshInterval) {
-            clearInterval(autoRefreshInterval);
-            autoRefreshInterval = null;
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        startAutoRefresh();
-    });
-
-    window.addEventListener('beforeunload', function() {
-        stopAutoRefresh();
-    });
-
-    document.addEventListener('click', function(e) {
-        if (e.target.closest('.pagination a')) {
-            e.preventDefault();
-            const url = e.target.closest('.pagination a').getAttribute('href');
-            if (url) {
-                const pageMatch = url.match(/[?&]page=(\d+)/);
-                if (pageMatch) {
-                    currentPage = pageMatch[1];
-                    refreshSalonsTable();
-                }
-            }
-        }
-    });
-
-    const filterForm = document.getElementById('filterForm');
-    if (filterForm) {
-        filterForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            saveFilterValues();
-            currentPage = 1;
-            refreshSalonsTable();
-        });
-    }
 </script>
 
 @endsection

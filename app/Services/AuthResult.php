@@ -30,10 +30,15 @@ class AuthResult
         return new self(true, $message, $data, null, $statusCode);
     }
 
-    public static function error(string $message, ?string $error = null, int $statusCode = 400): self
-    {
-        return new self(false, $message, null, $error, $statusCode);
+   public static function error(?string $message = null, $error = null, int $statusCode = 400): self
+{
+  
+    if (is_array($error)) {
+        $error = json_encode($error);
     }
+    
+    return new self(false, $message, $error, $statusCode);
+}
 
     public function toArray(): array
     {
