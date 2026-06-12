@@ -18,7 +18,7 @@ use Illuminate\Http\UploadedFile;
 class RegisterService
 {
     protected UltraMsgService $ultraMsg;
-    protected const OTP_EXPIRY_MINUTES = 10;
+    protected const OTP_EXPIRY_MINUTES = 2;
     protected const OTP_PREFIX = 'salon_registration_otp_';
     protected const DATA_PREFIX = 'salon_registration_data_';
 

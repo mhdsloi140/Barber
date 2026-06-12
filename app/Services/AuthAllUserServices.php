@@ -66,7 +66,7 @@ public function checkOTPStatus(int $userId): AuthResult
         }
 
         $remainingAttempts = 3 - $otpData['attempts'];
-        $remainingSeconds = now()->diffInSeconds($otpData['created_at']->addMinutes(10));
+        $remainingSeconds = now()->diffInSeconds($otpData['created_at']->addMinutes(2));
 
         return AuthResult::success('الرمز فعال', [
             'has_active_otp' => true,
