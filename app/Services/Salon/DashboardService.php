@@ -30,6 +30,9 @@ private function getArabicDayName(string $day): string
     ];
     return $days[$day] ?? $day;
 }
+/**
+ * جلب إحصائيات الصالون وعدد الحلاقين والإشعارات
+ */
 public function getBarbersCount(User $salonOwner): AuthResult
 {
     try {
@@ -46,6 +49,21 @@ public function getBarbersCount(User $salonOwner): AuthResult
         $endOfWeek = Carbon::now()->endOfWeek();
         $startOfMonth = Carbon::now()->startOfMonth();
         $endOfMonth = Carbon::now()->endOfMonth();
+
+        // ===================== الإشعارات (عدد فقط) =====================
+        $notificationsCount = [
+            'total' => 0,
+            'unread' => 0,
+        ];
+
+        try {
+            $notificationsCount = [
+                'total' => $salonOwner->notifications()->count(),
+                'unread' => $salonOwner->unreadNotifications()->count(),
+            ];
+        } catch (\Exception $e) {
+            // تجاهل الخطأ إذا كان جدول الإشعارات غير موجود
+        }
 
         // ===================== إيرادات اليوم =====================
         $todayRevenue = Appointment::where('salon_id', $salon->id)
@@ -122,7 +140,7 @@ public function getBarbersCount(User $salonOwner): AuthResult
             ->whereDate('appointment_date', $yesterday)
             ->count();
 
-        //
+        // ===================== النسب المئوية =====================
         $completionRate = $todayTotalAppointments > 0
             ? round(($todayCompletedAppointments / $todayTotalAppointments) * 100, 1)
             : 0;
@@ -131,7 +149,6 @@ public function getBarbersCount(User $salonOwner): AuthResult
             ? round((($todayRevenue - $yesterdayRevenue) / $yesterdayRevenue) * 100, 1)
             : ($todayRevenue > 0 ? 100 : 0);
 
-        // نسبة تغير الحجوزات مقارنة بالأمس
         $appointmentsChange = $yesterdayTotalAppointments > 0
             ? round((($todayTotalAppointments - $yesterdayTotalAppointments) / $yesterdayTotalAppointments) * 100, 1)
             : ($todayTotalAppointments > 0 ? 100 : 0);
@@ -181,14 +198,23 @@ public function getBarbersCount(User $salonOwner): AuthResult
         $activeBarbers = $barbers->where('is_active', true)->count();
         $inactiveBarbers = $totalBarbers - $activeBarbers;
 
+        // ===================== الرد النهائي =====================
         return AuthResult::success('تم جلب بيانات الصالون بنجاح', [
+            // إحصائيات الإشعارات
+            'notifications_statistics' => $notificationsCount,
+
+            // معلومات الصالون
             'salon' => $salonInfo,
+
+            // الحلاقين
             'barbers' => $barbers,
             'barbers_statistics' => [
                 'total_barbers' => $totalBarbers,
                 'active_barbers' => $activeBarbers,
                 'inactive_barbers' => $inactiveBarbers,
             ],
+
+            // إحصائيات الإيرادات
             'revenue_statistics' => [
                 'today' => (float) $todayRevenue,
                 'yesterday' => (float) $yesterdayRevenue,
@@ -197,30 +223,28 @@ public function getBarbersCount(User $salonOwner): AuthResult
                 'total' => (float) $totalRevenue,
                 'change_percentage' => $revenueChange,
             ],
+
+            // إحصائيات حجوزات اليوم
             'appointments_statistics' => [
-                // إحصائيات اليوم
                 'today_total' => $todayTotalAppointments,
                 'today_completed' => $todayCompletedAppointments,
                 'today_cancelled' => $todayCancelledAppointments,
                 'today_pending' => $todayPendingAppointments,
                 'today_confirmed' => $todayConfirmedAppointments,
                 'completion_rate' => $completionRate,
-
-
-
-
-
-
             ],
-            'appointments_statistics_yesterday'=>
-            [
-                 'yesterday_total' => $yesterdayTotalAppointments,
+
+            // إحصائيات حجوزات الأمس
+            'appointments_statistics_yesterday' => [
+                'yesterday_total' => $yesterdayTotalAppointments,
                 'yesterday_completed' => $yesterdayCompletedAppointments,
                 'yesterday_cancelled' => $yesterdayCancelledAppointments,
                 'yesterday_pending' => $yesterdayPendingAppointments,
                 'yesterday_confirmed' => $yesterdayConfirmedAppointments,
             ],
-            // 'change_percentage' => $appointmentsChange,
+
+            // نسبة تغير الحجوزات
+            'appointments_change_percentage' => $appointmentsChange,
         ]);
 
     } catch (\Exception $e) {

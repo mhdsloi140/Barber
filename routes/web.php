@@ -30,6 +30,13 @@ Route::post('/admin/logout', [AuthController::class, 'logout'])->name('admin.log
 Route::middleware(['auth'])->group(function () {
     Route::post('/fcm-token', [FcmTokenController::class, 'update'])->name('fcm.token.update');
 });
+// ===================== Routes إعادة تعيين كلمة المرور للمدير =====================
+Route::prefix('admin')->name('admin.')->group(function () {
+    Route::get('forgot-password', [AuthController::class, 'showForgotPasswordForm'])->name('forgot-password.form');
+    Route::post('forgot-password', [AuthController::class, 'sendResetOTP'])->name('forgot-password.send');
+    Route::get('reset-password/{userId}', [AuthController::class, 'showResetPasswordForm'])->name('reset-password.form');
+    Route::post('reset-password', [AuthController::class, 'resetPassword'])->name('reset-password.reset');
+});
 // ===================== Routes المحمية =====================
 Route::middleware(['auth'])->group(function () {
     //  Route لحفظ FCM Token (المطلوب من JavaScript)
@@ -57,16 +64,3 @@ Route::middleware(['auth'])->group(function () {
     });
 });
 
-// ===================== Routes اختبار واتساب =====================
-Route::get('/test-whatsapp', function (UltraMsgService $whatsapp) {
-    return response()->json([
-        'configured' => $whatsapp->isConfigured(),
-        'instance_id' => config('services.ultramsg.instance_id') ? 'set' : 'not set',
-        'api_token' => config('services.ultramsg.api_token') ? 'set' : 'not set',
-    ]);
-});
-
-Route::get('/test-whatsapp-send', function (UltraMsgService $whatsapp) {
-    $result = $whatsapp->sendMessage('9665XXXXXXXX', ' تم تفعيل واتساب بنجاح!');
-    return response()->json($result);
-});

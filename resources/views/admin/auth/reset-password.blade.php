@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>نعيما | تسجيل الدخول</title>
+    <title>نعيما | إعادة تعيين كلمة المرور</title>
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,600,700&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap"
@@ -68,11 +68,14 @@
             justify-content: center;
             margin-bottom: 1rem;
             box-shadow: 0 10px 20px rgba(108, 43, 217, 0.3);
+            overflow: hidden;
         }
 
-        .logo-icon i {
-            font-size: 2.4rem;
-            color: white;
+        .logo-image {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+            border-radius: 12px;
         }
 
         .auth-header h2 {
@@ -133,13 +136,11 @@
             background: white;
         }
 
-        /* تنسيق الحقل الذي به خطأ */
         .input-icon input.is-invalid {
             border-color: #dc2626;
             background-color: #fff5f5;
         }
 
-        /* رسالة الخطأ فقط - بدون أيقونات */
         .error-text {
             color: #dc2626;
             font-size: 0.7rem;
@@ -167,24 +168,6 @@
             box-shadow: 0 8px 18px rgba(124, 58, 237, 0.4);
         }
 
-        .auth-footer {
-            text-align: center;
-            margin-top: 1.5rem;
-            font-size: 0.85rem;
-            color: #6c757d;
-        }
-
-        .auth-footer a {
-            color: #7c3aed;
-            text-decoration: none;
-            font-weight: 600;
-        }
-
-        .auth-footer a:hover {
-            text-decoration: underline;
-        }
-
-        /* صندوق الأخطاء العامة - بدون أيقونات */
         .alert-danger {
             background: #fee2e2;
             color: #dc2626;
@@ -203,6 +186,30 @@
             margin-bottom: 0;
         }
 
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem;
+            font-size: 0.8rem;
+            margin-bottom: 1rem;
+            border-right: 3px solid #10b981;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 1rem;
+            color: #7c3aed;
+            font-size: 0.8rem;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .back-link:hover {
+            color: #c2418c;
+            text-decoration: underline;
+        }
+
         @media (max-width: 480px) {
             .auth-card {
                 padding: 1.5rem;
@@ -211,26 +218,6 @@
             .auth-header h2 {
                 font-size: 1.5rem;
             }
-        }
-
-        .logo-icon {
-            background: linear-gradient(125deg, #7c3aed, #db2777);
-            width: 70px;
-            height: 70px;
-            border-radius: 30px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 1rem;
-            box-shadow: 0 10px 20px rgba(108, 43, 217, 0.3);
-            overflow: hidden;
-        }
-
-        .logo-image {
-            width: 50px;
-            height: 50px;
-            object-fit: contain;
-            border-radius: 12px;
         }
     </style>
 
@@ -243,11 +230,11 @@
                 <div class="logo-icon">
                     <img src="{{ asset('img/logo-new.png') }}" alt="شعار نعيما" class="logo-image">
                 </div>
-                <h2>نعيما</h2>
-                <p>مرحباً بك، قم بتسجيل الدخول للوصول إلى لوحة التحكم</p>
+                <h2>إعادة تعيين كلمة المرور</h2>
+                <p>أدخل رمز التحقق وكلمة المرور الجديدة</p>
             </div>
 
-            {{-- عرض رسائل الأخطاء من الخادم --}}
+            {{-- عرض رسائل الأخطاء --}}
             @if ($errors->any())
             <div class="alert-danger">
                 @foreach ($errors->all() as $error)
@@ -256,22 +243,23 @@
             </div>
             @endif
 
-            {{-- رسالة خطأ عامة من الجلسة --}}
-            @if (session('error'))
-            <div class="alert-danger">
-                {{ session('error') }}
+            {{-- عرض رسالة النجاح --}}
+            @if (session('success'))
+            <div class="alert-success">
+                {{ session('success') }}
             </div>
             @endif
 
-            <form action="{{ route('admin.login') }}" method="POST">
+            <form action="{{ route('admin.reset-password.reset') }}" method="POST">
                 @csrf
+                <input type="hidden" name="user_id" value="{{ $userId }}">
 
                 <div class="input-group">
                     <label>رقم الهاتف</label>
                     <div class="input-icon">
                         <i class="fas fa-phone-alt"></i>
                         <input type="tel" name="phone" value="{{ old('phone') }}"
-                            class="@error('phone') is-invalid @enderror" placeholder="05xxxxxxxx">
+                            class="@error('phone') is-invalid @enderror" placeholder="07712345678" dir="ltr">
                     </div>
                     @error('phone')
                     <div class="error-text">{{ $message }}</div>
@@ -279,7 +267,19 @@
                 </div>
 
                 <div class="input-group">
-                    <label>كلمة المرور</label>
+                    <label>رمز التحقق (OTP)</label>
+                    <div class="input-icon">
+                        <i class="fas fa-key"></i>
+                        <input type="text" name="code" value="{{ old('code') }}"
+                            class="@error('code') is-invalid @enderror" placeholder="123456" dir="ltr" maxlength="6">
+                    </div>
+                    @error('code')
+                    <div class="error-text">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div class="input-group">
+                    <label>كلمة المرور الجديدة</label>
                     <div class="input-icon">
                         <i class="fas fa-lock"></i>
                         <input type="password" name="password" class="@error('password') is-invalid @enderror"
@@ -290,18 +290,29 @@
                     @enderror
                 </div>
 
+                <div class="input-group">
+                    <label>تأكيد كلمة المرور</label>
+                    <div class="input-icon">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" name="password_confirmation"
+                            class="@error('password_confirmation') is-invalid @enderror"
+                            placeholder="••••••••">
+                    </div>
+                    @error('password_confirmation')
+                    <div class="error-text">{{ $message }}</div>
+                    @enderror
+                </div>
+
                 <button type="submit" class="auth-btn">
-                    دخول <i class="fas fa-arrow-left mr-1"></i>
+                    <i class="fas fa-check-circle ml-2"></i> إعادة تعيين كلمة المرور
                 </button>
-                <!-- إضافة رابط نسيت كلمة المرور -->
+
                 <div class="text-center mt-3">
-                    <a href="{{ route('admin.forgot-password.form') }}"
-                        class="text-purple-600 hover:text-purple-800 text-sm font-medium transition">
-                        <i class="fas fa-key ml-1"></i> نسيت كلمة المرور؟
+                    <a href="{{ route('admin.login') }}" class="back-link">
+                        <i class="fas fa-arrow-right ml-1"></i> العودة إلى تسجيل الدخول
                     </a>
                 </div>
             </form>
-
 
         </div>
     </div>

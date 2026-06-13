@@ -9,13 +9,13 @@
 
     <!-- Tailwind CSS CDN (بديل عن الملفات المسببة للمشكلة) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- Custom CSS لتعديل اتجاه RTL -->
     <style>
         [dir="rtl"] {
             text-align: right;
         }
-        
+
         body {
             font-family: 'Cairo', sans-serif;
             background: linear-gradient(135deg, #f5f7ff 0%, #f0f2fa 100%);
@@ -47,6 +47,7 @@
                 border-radius: 0;
                 z-index: 9999;
             }
+
             .naima-sidebar.sidebar-visible {
                 transform: translateX(0) !important;
             }
@@ -152,9 +153,10 @@
     </style>
 
     <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&display=swap" rel="stylesheet">
-    
+
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 
@@ -165,20 +167,26 @@
 
     <aside id="naimaSidebar" class="naima-sidebar">
         <div class="relative flex flex-col items-center pt-8 pb-6 px-6 border-b border-white/20">
-    <i class="fas fa-times-circle text-white text-2xl cursor-pointer absolute top-4 left-4" id="closeSidebarMobile"></i>
-    <div class="w-28 h-28 rounded-full bg-white/10 backdrop-blur-sm border border-white/30 flex items-center justify-center shadow-xl overflow-hidden mb-4">
-        <img src="{{ asset('img/logo-new.png') }}" alt="شعار نعيما" class="w-full h-full object-cover" onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\'fas fa-cut text-white text-4xl\'></i>'">
-    </div>
-    <div class="text-center">
-        <h2 class="text-2xl font-bold text-white" style="font-family: 'Aref Ruqaa', serif;">نعيماً</h2>
-        <p class="text-sm text-white/70 mt-1">لخدمات الحلاقة</p>
-    </div>
-</div>
+            <i class="fas fa-times-circle text-white text-2xl cursor-pointer absolute top-4 left-4"
+                id="closeSidebarMobile"></i>
+            <div
+                class="w-28 h-28 rounded-full bg-white flex items-center justify-center shadow-xl overflow-hidden mb-4">
+                <img src="{{ asset('img/logo-new.png') }}" alt="شعار نعيما" class="w-full h-full object-cover"
+                    onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\'fas fa-cut text-white text-4xl\'></i>'">
+            </div>
+            <div class="text-center">
+                <h2 class="text-2xl font-bold text-white" style="font-family: 'Aref Ruqaa', serif;">نعيماً</h2>
+                <p class="text-sm text-white/70 mt-1">لخدمات الحلاقة</p>
+            </div>
+        </div>
         <div class="flex-1 mt-4">
             <ul class="flex flex-col gap-1">
-                <li><a href="{{ route('admin.dashboard') }}" class="sidebar-link"><i class="fas fa-chart-line"></i><span>الرئيسية</span></a></li>
-                <li><a href="{{ route('admin.center') }}" class="sidebar-link"><i class="fas fa-store"></i><span>إدارة الصالونات</span></a></li>
-                <li><a href="{{ route('ads.index') }}" class="sidebar-link"><i class="fas fa-bullhorn"></i><span>إدارة الإعلانات</span></a></li>
+                <li><a href="{{ route('admin.dashboard') }}" class="sidebar-link"><i
+                            class="fas fa-chart-line"></i><span>الرئيسية</span></a></li>
+                <li><a href="{{ route('admin.center') }}" class="sidebar-link"><i class="fas fa-store"></i><span>إدارة
+                            الصالونات</span></a></li>
+                <li><a href="{{ route('ads.index') }}" class="sidebar-link"><i class="fas fa-bullhorn"></i><span>إدارة
+                            الإعلانات</span></a></li>
                 <li class="mt-4 pt-2 border-t border-white/20">
                     <form action="{{ route('admin.logout') }}" method="POST">
                         @csrf
@@ -210,45 +218,45 @@
         var toggleFloatBtn = document.getElementById('sidebarToggleFloating');
         var closeMobileBtn = document.getElementById('closeSidebarMobile');
 
-        function isMobile() { 
-            return window.innerWidth < 1280; 
+        function isMobile() {
+            return window.innerWidth < 1280;
         }
-        
-        function openSidebar() { 
-            if (isMobile()) { 
-                sidebarElement.classList.add('sidebar-visible'); 
-                document.body.style.overflow = 'hidden'; 
-            } 
+
+        function openSidebar() {
+            if (isMobile()) {
+                sidebarElement.classList.add('sidebar-visible');
+                document.body.style.overflow = 'hidden';
+            }
         }
-        
-        function closeSidebar() { 
-            if (isMobile()) { 
-                sidebarElement.classList.remove('sidebar-visible'); 
-                document.body.style.overflow = ''; 
-            } 
+
+        function closeSidebar() {
+            if (isMobile()) {
+                sidebarElement.classList.remove('sidebar-visible');
+                document.body.style.overflow = '';
+            }
         }
-        
-        function toggleSidebar() { 
-            if (isMobile()) { 
+
+        function toggleSidebar() {
+            if (isMobile()) {
                 if (sidebarElement.classList.contains('sidebar-visible')) {
                     closeSidebar();
                 } else {
                     openSidebar();
                 }
-            } 
+            }
         }
 
         if (toggleFloatBtn) {
-            toggleFloatBtn.addEventListener('click', function(e) { 
-                e.preventDefault(); 
-                toggleSidebar(); 
+            toggleFloatBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                toggleSidebar();
             });
         }
-        
+
         if (closeMobileBtn) {
-            closeMobileBtn.addEventListener('click', function(e) { 
-                e.preventDefault(); 
-                closeSidebar(); 
+            closeMobileBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                closeSidebar();
             });
         }
 
@@ -262,13 +270,13 @@
             }
         });
 
-        window.addEventListener('resize', function() { 
-            if (window.innerWidth >= 1280) { 
+        window.addEventListener('resize', function() {
+            if (window.innerWidth >= 1280) {
                 if (sidebarElement) {
-                    sidebarElement.classList.remove('sidebar-visible'); 
+                    sidebarElement.classList.remove('sidebar-visible');
                 }
-                document.body.style.overflow = ''; 
-            } 
+                document.body.style.overflow = '';
+            }
         });
 
         function setActiveLink() {
@@ -285,7 +293,7 @@
     </script>
 
     @stack('scripts')
-    
+
 </body>
 
 </html>

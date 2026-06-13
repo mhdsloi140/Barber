@@ -227,7 +227,7 @@
             <i class="fas fa-times-circle text-white text-2xl cursor-pointer absolute top-4 left-4"
                 id="closeSidebarMobile"></i>
             <div
-                class="w-28 h-28 rounded-full bg-white/10 backdrop-blur-sm border border-white/30 flex items-center justify-center shadow-xl overflow-hidden mb-4">
+                class="w-28 h-28 rounded-full bg-white flex items-center justify-center shadow-xl overflow-hidden mb-4">
                 <img src="{{ asset('img/logo-new.png') }}" alt="شعار نعيما" class="w-full h-full object-cover"
                     onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\'fas fa-cut text-white text-4xl\'></i>'">
             </div>
