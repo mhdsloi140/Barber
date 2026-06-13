@@ -18,19 +18,29 @@ class AppointmentSalonController extends Controller
      * عرض جميع حجوزات الصالون (مع إمكانية البحث عن حلاق)
      * GET /api/salon/appointments?search=اسم_الحلاق
      */
-    public function index(Request $request)
-    {
+public function index(Request $request)
+{
+    $search = $request->query('search');
+    $status = $request->query('status');
+    $dateFrom = $request->query('date_from');
+    $dateTo = $request->query('date_to');
+    $perPage = $request->query('per_page', 10);
 
-        $search = $request->query('search');
+    $result = $this->bookingService->getSalonAppointments(
+        auth()->user(),
+        $search,
+        $status,
+        $dateFrom,
+        $dateTo,
+        $perPage
+    );
 
-        $result = $this->bookingService->getSalonAppointments(auth()->user(), $search);
-
-        return response()->json([
-            'success' => $result->success,
-            'message' => $result->message,
-            'data' => $result->data,
-        ], $result->statusCode);
-    }
+    return response()->json([
+        'success' => $result->success,
+        'message' => $result->message,
+        'data' => $result->data,
+    ], $result->statusCode);
+}
 
     /**
      * عرض حجوزات حسب الحالة
