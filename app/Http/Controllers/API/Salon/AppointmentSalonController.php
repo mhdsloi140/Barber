@@ -20,15 +20,24 @@ class AppointmentSalonController extends Controller
      */
 public function index(Request $request)
 {
-     $search = $request->query('search');
+    $search = $request->query('search');
     $status = $request->query('status');
     $dateFrom = $request->query('date_from');
     $dateTo = $request->query('date_to');
     $barberId = $request->query('barber_id');
     $period = $request->query('period');
+    $month = $request->query('month');
     $perPage = $request->query('per_page', 10);
     $page = $request->query('page', 1);
 
+    
+    if ($period && !in_array($period, ['today', 'yesterday', 'week1', 'week2', 'week3', 'week4', 'week5', 'month'])) {
+        return response()->json([
+            'success' => false,
+            'message' => 'قيمة الفترة غير صالحة. القيم المقبولة: today, yesterday, week1, week2, week3, week4, week5, month',
+            'data' => null
+        ], 400);
+    }
 
     $result = $this->bookingService->getSalonAppointments(
         auth()->user(),
@@ -37,10 +46,12 @@ public function index(Request $request)
         $dateFrom,
         $dateTo,
         $barberId,
-        $period,  
+        $period,
+        $month,
         $perPage,
         $page
     );
+
     return response()->json([
         'success' => $result->success,
         'message' => $result->message,
