@@ -30,6 +30,9 @@ class UpdateSalonRequest extends FormRequest
             // الصورة الشخصية
             'avatar' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
 
+
+            //الحلاق يعمل بالصالون
+            'works_as_barber' => ['nullable', 'boolean'],
             // بيانات الصالون
             'salon_name' => ['nullable', 'string', 'max:255'],
             'salon_address' => ['nullable', 'string', 'max:255'],
@@ -96,6 +99,7 @@ class UpdateSalonRequest extends FormRequest
             'working_hours.*.end.after' => 'وقت النهاية يجب أن يكون بعد وقت البدء',
 
             'notifications_enabled.boolean' => 'حقل الإشعارات يجب أن يكون true أو false',
+            'works_as_barber.boolean' => 'حقل يعمل كحلاق يجب أن يكون صحيح أو خطأ',
 
         ];
     }

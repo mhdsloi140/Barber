@@ -80,23 +80,28 @@ class UpdateSalonService
                     $this->updateAvatar($user, $data['avatar']);
                 }
 
-                // 2. تحديث بيانات الصالون
+                // 2. تحديث حالة "يعمل كحلاق"
+                if (isset($data['works_as_barber'])) {
+                    $this->updateWorksAsBarber($user, $salon, (bool) $data['works_as_barber']);
+                }
+
+                // 3. تحديث بيانات الصالون
                 $this->updateSalonInfo($salon, $data);
 
-                // 3. تحديث الصور (إضافة وحذف)
+                // 4. تحديث الصور (إضافة وحذف)
                 $this->updateSalonImages($salon, $data);
 
-                // 4. تحديث أوقات العمل (فترة واحدة فقط مع الحفاظ على القيم غير المرسلة)
+                // 5. تحديث أوقات العمل
                 if (isset($data['working_hours']) && !empty($data['working_hours'])) {
                     $this->updateWorkingHours($salon, $data['working_hours']);
                 }
 
-                // 5. تحديث كلمة المرور إذا وجدت
+                // 6. تحديث كلمة المرور إذا وجدت
                 if (isset($data['password']) && !empty($data['password'])) {
                     $this->updatePassword($user, $data['password']);
                 }
 
-                //  6. تحديث إعدادات الإشعارات (تصحيح: استخدم $data بدلاً من $request)
+                // 7. تحديث إعدادات الإشعارات
                 if (isset($data['notifications_enabled'])) {
                     $user->notifications_enabled = (bool) $data['notifications_enabled'];
                     $user->save();
@@ -113,8 +118,11 @@ class UpdateSalonService
                 // جلب تقييمات الصالون بعد التحديث
                 $salonRatings = $this->getSalonRatings($salon->id);
 
+                // تحديث بيانات user format لتشمل الأدوار المحدثة
+                $formattedUser = $this->formatUserData($user);
+
                 return AuthResult::success('تم تحديث بيانات الصالون بنجاح', [
-                    'user' => $this->formatUserData($user),
+                    'user' => $formattedUser,
                     'salon' => [
                         'id' => $salon->id,
                         'name' => $salon->name,
@@ -156,6 +164,9 @@ class UpdateSalonService
         }
     }
 
+    /**
+     * تنسيق بيانات المستخدم
+     */
     private function formatUserData(User $user): array
     {
         $roles = $user->getRoleNames()->toArray();
@@ -171,6 +182,7 @@ class UpdateSalonService
             'created_at' => $user->created_at,
             'updated_at' => $user->updated_at,
             'notifications_enabled' => (bool) $user->notifications_enabled,
+            'works_as_barber' => $user->hasRole('barber'),
         ];
 
         return $data;
@@ -200,6 +212,47 @@ class UpdateSalonService
     }
 
     /**
+     * تحديث حالة "يعمل كحلاق"
+     */
+    private function updateWorksAsBarber(User $user, Salon $salon, bool $worksAsBarber): void
+    {
+        if ($worksAsBarber) {
+            // إضافة دور الحلاق إذا لم يكن موجوداً
+            if (!$user->hasRole('barber')) {
+                $user->assignRole('barber');
+                Log::info('Barber role assigned to salon owner', ['user_id' => $user->id]);
+            }
+
+            // إضافة العلاقة مع الصالون إذا لم تكن موجودة
+            $exists = $user->salons()->where('salon_id', $salon->id)->exists();
+            if (!$exists) {
+                $user->salons()->attach($salon->id, [
+                    'is_active' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                Log::info('Salon owner added as barber to his salon', [
+                    'user_id' => $user->id,
+                    'salon_id' => $salon->id,
+                ]);
+            }
+        } else {
+            // إزالة دور الحلاق إذا كان موجوداً
+            if ($user->hasRole('barber')) {
+                $user->removeRole('barber');
+                Log::info('Barber role removed from salon owner', ['user_id' => $user->id]);
+            }
+
+            // إزالة العلاقة مع الصالون
+            $user->salons()->detach($salon->id);
+            Log::info('Salon owner removed as barber from his salon', [
+                'user_id' => $user->id,
+                'salon_id' => $salon->id,
+            ]);
+        }
+    }
+
+    /**
      * تحديث بيانات الصالون
      */
     private function updateSalonInfo(Salon $salon, array $data): void
@@ -220,6 +273,9 @@ class UpdateSalonService
         }
         if (isset($data['longitude'])) {
             $salonData['longitude'] = $data['longitude'];
+        }
+        if (isset($data['description'])) {
+            $salonData['description'] = $data['description'];
         }
 
         if (!empty($salonData)) {
@@ -280,11 +336,6 @@ class UpdateSalonService
             $newStart = $hours['start'] ?? $hours['shift1_start'] ?? null;
             $newEnd = $hours['end'] ?? $hours['shift1_end'] ?? null;
 
-            // 🔴 منطق الحفاظ على القيم:
-            // - إذا لم يتم إرسال start، استخدم القيمة الحالية (إذا وجدت)
-            // - إذا لم يتم إرسال end، استخدم القيمة الحالية (إذا وجدت)
-            // - إذا كان اليوم مغلقاً (is_open = false)، اجعل start و end = null
-
             if ($isOpen) {
                 // إذا كان اليوم مفتوحاً
                 if ($newStart === null && $currentHour) {
@@ -317,7 +368,6 @@ class UpdateSalonService
                     'is_open' => $isOpen,
                     'shift1_start' => $finalStart,
                     'shift1_end' => $finalEnd,
-                    // shift2_start, shift2_end, break_start, break_end تبقى null
                 ]
             );
         }
