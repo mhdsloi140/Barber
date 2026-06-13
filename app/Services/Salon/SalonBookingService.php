@@ -112,8 +112,10 @@ public function getSalonAppointments(
     ?string $status = null,
     ?string $dateFrom = null,
     ?string $dateTo = null,
+    ?string $barberId = null,
+    ?string $period = null, // week, month, today, yesterday, week1, week2, week3, week4
     int $perPage = 10,
-    int $page = 1 
+    int $page = 1
 ): AuthResult
 {
     try {
@@ -130,36 +132,48 @@ public function getSalonAppointments(
         $query = Appointment::where('salon_id', $salon->id)
             ->with(['customer', 'barber', 'service']);
 
-        // البحث باسم الحلاق
+        //  البحث باسم الحلاق
         if ($search && !empty(trim($search))) {
             $query->whereHas('barber', function ($q) use ($search) {
                 $q->where('name', 'like', '%' . $search . '%');
             });
         }
 
-        // الفلترة حسب الحالة
+        //  الفلترة حسب ID الحلاق
+        if ($barberId && is_numeric($barberId)) {
+            $query->where('barber_id', $barberId);
+        }
+
+        //  الفلترة حسب الحالة
         if ($status && in_array($status, ['pending', 'confirmed', 'completed', 'cancelled'])) {
             $query->where('status', $status);
         }
 
-        // الفلترة حسب التاريخ (من)
-        if ($dateFrom && $this->isValidDate($dateFrom)) {
+        //  الفلترة حسب الفترة (period) مع دعم الأسابيع الأربعة
+        if ($period) {
+            $dateRange = $this->getDateRangeByPeriod($period);
+            if ($dateRange) {
+                $query->whereBetween('appointment_date', [$dateRange['start'], $dateRange['end']]);
+            }
+        }
+
+        //  الفلترة حسب التاريخ (من) - تتجاوز الفلترة بالفترة إذا وجدت
+        if ($dateFrom && $this->isValidDate($dateFrom) && !$period) {
             $query->whereDate('appointment_date', '>=', Carbon::parse($dateFrom)->startOfDay());
         }
 
-        // الفلترة حسب التاريخ (إلى)
-        if ($dateTo && $this->isValidDate($dateTo)) {
+        //  الفلترة حسب التاريخ (إلى)
+        if ($dateTo && $this->isValidDate($dateTo) && !$period) {
             $query->whereDate('appointment_date', '<=', Carbon::parse($dateTo)->endOfDay());
         }
 
-        // إذا تم تحديد تاريخ محدد
-        if ($dateFrom && !$dateTo) {
+        // إذا تم تحديد تاريخ محدد (بدون فترة)
+        if ($dateFrom && !$dateTo && !$period) {
             $query->whereDate('appointment_date', Carbon::parse($dateFrom)->toDateString());
         }
 
-
-        $appointments = $query->orderBy('appointment_date', 'desc')
-            ->orderBy('appointment_time', 'desc')
+        $appointments = $query->orderBy('appointment_date', 'asc')
+            ->orderBy('appointment_time', 'asc')
             ->paginate($perPage, ['*'], 'page', $page);
 
         // تنسيق البيانات
@@ -194,14 +208,26 @@ public function getSalonAppointments(
         // إحصائيات الحجوزات مع مراعاة الفلتر
         $statsQuery = Appointment::where('salon_id', $salon->id);
 
-        if ($dateFrom && $this->isValidDate($dateFrom)) {
+        if ($barberId && is_numeric($barberId)) {
+            $statsQuery->where('barber_id', $barberId);
+        }
+
+        if ($status && in_array($status, ['pending', 'confirmed', 'completed', 'cancelled'])) {
+            $statsQuery->where('status', $status);
+        }
+
+        if ($period) {
+            $dateRange = $this->getDateRangeByPeriod($period);
+            if ($dateRange) {
+                $statsQuery->whereBetween('appointment_date', [$dateRange['start'], $dateRange['end']]);
+            }
+        }
+
+        if ($dateFrom && $this->isValidDate($dateFrom) && !$period) {
             $statsQuery->whereDate('appointment_date', '>=', Carbon::parse($dateFrom)->startOfDay());
         }
-        if ($dateTo && $this->isValidDate($dateTo)) {
+        if ($dateTo && $this->isValidDate($dateTo) && !$period) {
             $statsQuery->whereDate('appointment_date', '<=', Carbon::parse($dateTo)->endOfDay());
-        }
-        if ($dateFrom && !$dateTo) {
-            $statsQuery->whereDate('appointment_date', Carbon::parse($dateFrom)->toDateString());
         }
 
         $stats = [
@@ -213,15 +239,18 @@ public function getSalonAppointments(
             'today' => Appointment::where('salon_id', $salon->id)->whereDate('appointment_date', now()->toDateString())->count(),
         ];
 
-
+        // معلومات الفلتر
         $filterInfo = [
             'search' => $search,
             'status' => $status,
+            'barber_id' => $barberId,
+            'period' => $period,
+            'period_name' => $this->getPeriodName($period),
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
         ];
 
-
+        // معلومات Pagination
         $paginationData = [
             'current_page' => $appointments->currentPage(),
             'data' => $formattedAppointments,
@@ -243,6 +272,7 @@ public function getSalonAppointments(
             'appointments' => $paginationData,
         ];
 
+        // إذا كان هناك بحث وأوجد حلاقاً
         if ($search && !empty(trim($search))) {
             $barber = User::role('barber')
                 ->whereHas('salons', function($q) use ($salon) {
@@ -266,6 +296,95 @@ public function getSalonAppointments(
         Log::error('Get salon appointments error: ' . $e->getMessage());
         return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
     }
+}
+
+/**
+ * الحصول على نطاق التاريخ بناءً على الفترة
+ */
+private function getDateRangeByPeriod(string $period): ?array
+{
+    $now = Carbon::now();
+
+    switch ($period) {
+        case 'today':
+            return [
+                'start' => $now->copy()->startOfDay(),
+                'end' => $now->copy()->endOfDay(),
+            ];
+
+        case 'yesterday':
+            return [
+                'start' => $now->copy()->subDay()->startOfDay(),
+                'end' => $now->copy()->subDay()->endOfDay(),
+            ];
+
+        case 'week':
+        case 'week1':
+            return [
+                'start' => $now->copy()->startOfWeek(),
+                'end' => $now->copy()->endOfWeek(),
+            ];
+
+        case 'week2':
+            return [
+                'start' => $now->copy()->addWeek()->startOfWeek(),
+                'end' => $now->copy()->addWeek()->endOfWeek(),
+            ];
+
+        case 'week3':
+            return [
+                'start' => $now->copy()->addWeeks(2)->startOfWeek(),
+                'end' => $now->copy()->addWeeks(2)->endOfWeek(),
+            ];
+
+        case 'week4':
+            return [
+                'start' => $now->copy()->addWeeks(3)->startOfWeek(),
+                'end' => $now->copy()->addWeeks(3)->endOfWeek(),
+            ];
+
+        case 'month':
+            return [
+                'start' => $now->copy()->startOfMonth(),
+                'end' => $now->copy()->endOfMonth(),
+            ];
+
+        case 'last_week':
+            return [
+                'start' => $now->copy()->subWeek()->startOfWeek(),
+                'end' => $now->copy()->subWeek()->endOfWeek(),
+            ];
+
+        case 'last_month':
+            return [
+                'start' => $now->copy()->subMonth()->startOfMonth(),
+                'end' => $now->copy()->subMonth()->endOfMonth(),
+            ];
+
+        default:
+            return null;
+    }
+}
+
+/**
+ * الحصول على اسم الفترة بالعربية
+ */
+private function getPeriodName(?string $period): ?string
+{
+    $names = [
+        'today' => 'اليوم',
+        'yesterday' => 'أمس',
+        'week' => 'هذا الأسبوع',
+        'week1' => 'هذا الأسبوع',
+        'week2' => 'الأسبوع القادم',
+        'week3' => 'بعد أسبوعين',
+        'week4' => 'بعد ثلاثة أسابيع',
+        'month' => 'هذا الشهر',
+        'last_week' => 'الأسبوع الماضي',
+        'last_month' => 'الشهر الماضي',
+    ];
+
+    return $names[$period] ?? null;
 }
 
 /**
