@@ -87,50 +87,51 @@ class BarberService
     /**
      * جلب كل الحلاقين التابعين لصاحب الصالون مع تقييماتهم وإحصائياتهم
      */
-    public function getBarbers(User $salonOwner): AuthResult
-    {
-        try {
-            $salon = $salonOwner->ownedSalon;
+  public function getBarbers(User $salonOwner): AuthResult
+{
+    try {
+        $salon = $salonOwner->ownedSalon;
 
-            if (!$salon) {
-                return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
-            }
-
-            $barbers = $salon->barbers()
-                ->select('users.id', 'users.name', 'users.phone', 'users.is_active')
-                ->get();
-
-            $barbersData = $barbers->map(function($barber) {
-                $averageRating = $this->getBarberAverageRating($barber->id);
-                $weeklyBookings = $this->getBarberWeeklyBookings($barber->id);
-                $totalBookings = $this->getBarberTotalBookings($barber->id);
-                $completedBookings = $this->getBarberCompletedBookings($barber->id);
-
-                return [
-                    'id' => $barber->id,
-                    'name' => $barber->name,
-                    'phone' => $barber->phone,
-                    'is_active' => $barber->is_active,
-                    'rating' => [
-                        'average' => $averageRating['average'],
-                        'total' => $averageRating['total'],
-                        'distribution' => $averageRating['distribution'],
-                    ],
-                    'statistics' => [
-                        'weekly_bookings' => $weeklyBookings,
-                        'total_bookings' => $totalBookings,
-                        'completed_bookings' => $completedBookings,
-                    ],
-                ];
-            });
-
-            return AuthResult::success('تم جلب الحلاقين بنجاح', $barbersData);
-
-        } catch (\Exception $e) {
-            Log::error('Get barbers error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب الحلاقين: ' . $e->getMessage(), null, 500);
+        if (!$salon) {
+            return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
         }
+
+        $barbers = $salon->barbers()
+            ->select('users.id', 'users.name', 'users.phone', 'users.is_active')
+            ->get();
+
+        $barbersData = $barbers->map(function($barber) {
+            $averageRating = $this->getBarberAverageRating($barber->id);
+            $weeklyBookings = $this->getBarberWeeklyBookings($barber->id);
+            $totalBookings = $this->getBarberTotalBookings($barber->id);
+            $completedBookings = $this->getBarberCompletedBookings($barber->id);
+
+            return [
+                'id' => $barber->id,
+                'name' => $barber->name,
+                'phone' => $barber->phone,
+                'is_active' => $barber->is_active,
+                'avatar' => $barber->getAvatarUrlAttribute(), 
+                'rating' => [
+                    'average' => $averageRating['average'],
+                    'total' => $averageRating['total'],
+                    'distribution' => $averageRating['distribution'],
+                ],
+                'statistics' => [
+                    'weekly_bookings' => $weeklyBookings,
+                    'total_bookings' => $totalBookings,
+                    'completed_bookings' => $completedBookings,
+                ],
+            ];
+        });
+
+        return AuthResult::success('تم جلب الحلاقين بنجاح', $barbersData);
+
+    } catch (\Exception $e) {
+        Log::error('Get barbers error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب الحلاقين: ' . $e->getMessage(), null, 500);
     }
+}
 
     /**
      * جلب بيانات حلاق معين مع تقييمه وإحصائياته
