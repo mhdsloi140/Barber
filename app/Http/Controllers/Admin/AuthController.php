@@ -56,17 +56,21 @@ class AuthController extends Controller
     /**
      * معالجة طلب إعادة تعيين كلمة المرور (إرسال OTP)
      */
-    public function sendResetOTP(ForgotPasswordRequest $request)
-    {
-        $result = $this->autservics->forgotPassword($request->phone);
 
-        if ($result['status']) {
-            return redirect()->route('admin.reset-password.form', ['user_id' => $result['data']['user_id']])
+public function sendResetOTP(ForgotPasswordRequest $request)
+{
+    $result = $this->autservics->forgotPassword($request->phone);
+
+    if ($result['status']) {
+        if (isset($result['data']['user_id'])) {
+            return redirect()->route('admin.reset-password.form', ['userId' => $result['data']['user_id']])
                            ->with('success', $result['message']);
         }
-
-        return back()->withErrors(['phone' => $result['message']]);
+        return back()->withErrors(['phone' => 'حدث خطأ، يرجى المحاولة مرة أخرى']);
     }
+
+    return back()->withErrors(['phone' => $result['message']]);
+}
 
     /**
      * عرض صفحة إدخال OTP وكلمة المرور الجديدة

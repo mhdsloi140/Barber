@@ -21,7 +21,7 @@ class RegisterSalonOwnerRequest extends FormRequest
                 'required',
                 'string',
                 'unique:users,phone',
-                'regex:/^(077|078|079)[0-9]{8}$/',  // ✅ أرقام عراقية فقط
+                'regex:/^(077|078|079)[0-9]{8}$/',
                 'min:11',
                 'max:11',
             ],
@@ -33,7 +33,7 @@ class RegisterSalonOwnerRequest extends FormRequest
             'salon_phone' => [
                 'nullable',
                 'string',
-                'regex:/^(077|078|079)[0-9]{8}$/',  
+                'regex:/^(077|078|079)[0-9]{8}$/',
                 'min:11',
                 'max:11',
             ],

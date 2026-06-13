@@ -3,6 +3,7 @@
 namespace App\Exceptions;
 
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Log;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -23,8 +24,20 @@ class Handler extends ExceptionHandler
      */
     public function register(): void
     {
-        $this->reportable(function (Throwable $e) {
-            //
-        });
+          $this->renderable(function (\ErrorException $e, $request) {
+      if (str_contains($e->getMessage(), 'preg_match')) {
+            Log::error('preg_match error in file: ' . $e->getFile());
+            Log::error('Line: ' . $e->getLine());
+            Log::error('Message: ' . $e->getMessage());
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'حدث خطأ في التحقق من البيانات',
+                    'code' => 'VALIDATION_ERROR'
+                ], 422);
+            }
+        }
+    });
     }
 }

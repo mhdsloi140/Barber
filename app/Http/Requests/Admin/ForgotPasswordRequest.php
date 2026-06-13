@@ -14,7 +14,29 @@ class ForgotPasswordRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'phone' => 'required|string|regex:/^(077|078|079)[0-9]{8}$/|min:11|max:11',
+            'phone' => [
+                'required',
+                'string',
+                'min:11',
+                'max:11',
+                function ($attribute, $value, $fail) {
+                    // تنظيف الرقم من أي أحرف غير رقمية
+                    $phone = preg_replace('/[^0-9]/', '', $value);
+
+                    // التحقق من الطول
+                    if (strlen($phone) !== 11) {
+                        $fail('رقم الهاتف يجب أن يتكون من 11 رقم');
+                        return;
+                    }
+
+                    // التحقق من البداية (077, 078, 079)
+                    $prefix = substr($phone, 0, 3);
+                    if (!in_array($prefix, ['077', '078', '079'])) {
+                        $fail('رقم الهاتف يجب أن يبدأ بـ 077 أو 078 أو 079');
+                        return;
+                    }
+                },
+            ],
         ];
     }
 
@@ -22,7 +44,8 @@ class ForgotPasswordRequest extends FormRequest
     {
         return [
             'phone.required' => 'رقم الهاتف مطلوب',
-            'phone.regex' => 'رقم الهاتف غير صحيح (يجب أن يبدأ بـ 077 أو 078 أو 079)',
+            'phone.min' => 'رقم الهاتف يجب أن يكون 11 رقم',
+            'phone.max' => 'رقم الهاتف يجب أن يكون 11 رقم',
         ];
     }
 }

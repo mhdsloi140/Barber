@@ -287,9 +287,11 @@ class FirebaseNotificationService
             'owner_id' => $salonOwner->id,
         ]);
     }
+
     /**
      * إرسال إشعار للحلاق عند إنشاء حجز جديد
      */
+
     public function notifyNewAppointmentToBarber(Salon $salon, Appointment $appointment): void
     {
         $barber = $appointment->barber;
@@ -463,13 +465,13 @@ class FirebaseNotificationService
             'notifications_enabled' => $customer->notifications_enabled,
         ]);
 
-        
+
         if (empty($customer->fcm_token)) {
             Log::warning('Customer has no FCM token', ['customer_id' => $customer->id]);
             return;
         }
 
-   
+
         if (!$customer->notifications_enabled) {
             Log::info('Customer notifications disabled', ['customer_id' => $customer->id]);
             return;
@@ -597,49 +599,49 @@ class FirebaseNotificationService
     /**
      * إرسال إشعار لجميع المديرين (Admin) عند إنشاء صالون جديد
      */
-    public function notifyAdminsAboutNewSalon(Salon $salon, User $owner): void
-    {
-        $admins = User::role('admin')
-            ->whereNotNull('fcm_token')
-            ->get();
+    // public function notifyAdminsAboutNewSalon(Salon $salon, User $owner): void
+    // {
+    //     $admins = User::role('admin')
+    //         ->whereNotNull('fcm_token')
+    //         ->get();
 
-        if ($admins->isEmpty()) {
-            Log::info('No admins found with FCM token to notify about new salon');
-            return;
-        }
+    //     if ($admins->isEmpty()) {
+    //         Log::info('No admins found with FCM token to notify about new salon');
+    //         return;
+    //     }
 
-        $title = ' صالون جديد';
-        $body = "تم إنشاء صالون جديد: {$salon->name} بواسطة {$owner->name}";
+    //     $title = ' صالون جديد';
+    //     $body = "تم إنشاء صالون جديد: {$salon->name} بواسطة {$owner->name}";
 
-        $data = [
-            'type' => 'new_salon',
-            'salon_id' => (string) $salon->id,
-            'salon_name' => $salon->name,
-            'salon_phone' => $salon->phone,
-            'salon_address' => $salon->address,
-            'owner_id' => (string) $owner->id,
-            'owner_name' => $owner->name,
-            'owner_phone' => $owner->phone,
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'admin_salon_details',
-        ];
+    //     $data = [
+    //         'type' => 'new_salon',
+    //         'salon_id' => (string) $salon->id,
+    //         'salon_name' => $salon->name,
+    //         'salon_phone' => $salon->phone,
+    //         'salon_address' => $salon->address,
+    //         'owner_id' => (string) $owner->id,
+    //         'owner_name' => $owner->name,
+    //         'owner_phone' => $owner->phone,
+    //         'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+    //         'screen' => 'admin_salon_details',
+    //     ];
 
-        $sentCount = 0;
+    //     $sentCount = 0;
 
-        foreach ($admins as $admin) {
-            if ($this->sendPushNotification($admin, $title, $body, $data)) {
-                $sentCount++;
-            }
-            usleep(50000);
-        }
+    //     foreach ($admins as $admin) {
+    //         if ($this->sendPushNotification($admin, $title, $body, $data)) {
+    //             $sentCount++;
+    //         }
+    //         usleep(50000);
+    //     }
 
-        Log::info('Admin notifications sent for new salon', [
-            'salon_id' => $salon->id,
-            'salon_name' => $salon->name,
-            'admins_count' => $admins->count(),
-            'sent_count' => $sentCount,
-        ]);
-    }
+    //     Log::info('Admin notifications sent for new salon', [
+    //         'salon_id' => $salon->id,
+    //         'salon_name' => $salon->name,
+    //         'admins_count' => $admins->count(),
+    //         'sent_count' => $sentCount,
+    //     ]);
+    // }
 
     /**
      * إرسال إشعار لجميع الزبائن عند إضافة خدمة جديدة
@@ -808,12 +810,7 @@ class FirebaseNotificationService
      */
     public function sendToTopic(string $topic, string $title, string $body, array $data = []): bool
     {
-        Log::info('🔔 [TOPIC] Attempting to send notification', [
-            'topic' => $topic,
-            'title' => $title,
-            'body' => $body,
-            'data' => $data,
-        ]);
+
 
         if (!$this->messaging) {
             Log::warning('Firebase messaging not available');
@@ -996,5 +993,117 @@ class FirebaseNotificationService
             return $date->format('Y-m-d');
         }
         return \Carbon\Carbon::parse($date)->format('Y-m-d');
+
+        }
+            // ===================== إشعارات الصالون الجديد للمديرين =====================
+
+    /**
+     * إرسال إشعار لجميع المديرين عند إنشاء صالون جديد (Push Notification)
+     */
+    public function notifyAdminsAboutNewSalon(Salon $salon, User $owner): void
+    {
+        // جلب جميع المستخدمين الذين لديهم دور admin
+        $admins = User::role('admin')->get();
+
+        if ($admins->isEmpty()) {
+            Log::info('No admins found to notify about new salon');
+            return;
+        }
+
+        $title = ' صالون جديد ينتظر الموافقة';
+        $body = "الصالون: {$salon->name}\nالمالك: {$owner->name}\nرقم الهاتف: {$owner->phone}";
+
+        $data = [
+            'type' => 'new_salon_pending',
+            'salon_id' => (string) $salon->id,
+            'salon_name' => $salon->name,
+            'salon_phone' => $salon->phone ?? '',
+            'salon_address' => $salon->address ?? '',
+            'owner_id' => (string) $owner->id,
+            'owner_name' => $owner->name,
+            'owner_phone' => $owner->phone,
+            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+            'screen' => 'admin_pending_salons',
+            'url' => route('admin.centers.show', $salon->id),
+        ];
+
+        $sentCount = 0;
+
+        foreach ($admins as $admin) {
+            if ($this->sendPushNotification($admin, $title, $body, $data)) {
+                $sentCount++;
+            }
+            usleep(50000); // تأخير 50ms بين الإشعارات
+        }
+
+        Log::info('Admin notifications sent for new salon', [
+            'salon_id' => $salon->id,
+            'salon_name' => $salon->name,
+            'admins_count' => $admins->count(),
+            'sent_count' => $sentCount,
+        ]);
+    }
+
+
+    /**
+     * إرسال إشعار عند تفعيل حساب صالون بواسطة المدير
+     */
+    public function notifySalonOwnerAboutActivation(User $salonOwner, Salon $salon): void
+    {
+        if (!$salonOwner->fcm_token) {
+            Log::info('Salon owner has no FCM token', ['owner_id' => $salonOwner->id]);
+            return;
+        }
+
+        $title = ' تم تفعيل صالونك بنجاح';
+        $body = "تم تفعيل صالون {$salon->name} بنجاح.\nيمكنك الآن تسجيل الدخول والبدء في إدارة صالونك.";
+
+        $data = [
+            'type' => 'salon_activated',
+            'salon_id' => (string) $salon->id,
+            'salon_name' => $salon->name,
+            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+            'screen' => 'salon_dashboard',
+            'url' => route('admin.dashboard'),
+        ];
+
+        $this->sendPushNotification($salonOwner, $title, $body, $data);
+
+        Log::info('Activation notification sent to salon owner', [
+            'salon_id' => $salon->id,
+            'owner_id' => $salonOwner->id,
+        ]);
+    }
+
+    /**
+     * إرسال إشعار عند رفض حساب صالون بواسطة المدير
+     */
+    public function notifySalonOwnerAboutRejection(User $salonOwner, string $reason = null): void
+    {
+        if (!$salonOwner->fcm_token) {
+            Log::info('Salon owner has no FCM token', ['owner_id' => $salonOwner->id]);
+            return;
+        }
+
+        $title = ' تم رفع طلب تسجيل صالونك';
+        $body = "نأسف لإبلاغك أنه تم رفع طلب تسجيل صالونك.\n";
+
+        if ($reason) {
+            $body .= "السبب: {$reason}\n";
+        }
+        $body .= "يمكنك التواصل مع الدعم الفني للمزيد من المعلومات.";
+
+        $data = [
+            'type' => 'salon_rejected',
+            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+            'screen' => 'contact_support',
+        ];
+
+        $this->sendPushNotification($salonOwner, $title, $body, $data);
+
+        Log::info('Rejection notification sent to salon owner', [
+            'owner_id' => $salonOwner->id,
+            'reason' => $reason,
+        ]);
     }
 }

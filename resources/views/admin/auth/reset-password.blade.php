@@ -227,7 +227,7 @@
     <div class="auth-wrapper">
         <div class="auth-card">
             <div class="auth-header">
-                <div class="logo-icon">
+                <div class="logo-icon" style="background: white; box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);">
                     <img src="{{ asset('img/logo-new.png') }}" alt="شعار نعيما" class="logo-image">
                 </div>
                 <h2>إعادة تعيين كلمة المرور</h2>
@@ -259,7 +259,7 @@
                     <div class="input-icon">
                         <i class="fas fa-phone-alt"></i>
                         <input type="tel" name="phone" value="{{ old('phone') }}"
-                            class="@error('phone') is-invalid @enderror" placeholder="07712345678" dir="ltr">
+                            class="@error('phone') is-invalid @enderror" placeholder="07********" dir="ltr">
                     </div>
                     @error('phone')
                     <div class="error-text">{{ $message }}</div>
@@ -295,8 +295,7 @@
                     <div class="input-icon">
                         <i class="fas fa-lock"></i>
                         <input type="password" name="password_confirmation"
-                            class="@error('password_confirmation') is-invalid @enderror"
-                            placeholder="••••••••">
+                            class="@error('password_confirmation') is-invalid @enderror" placeholder="••••••••">
                     </div>
                     @error('password_confirmation')
                     <div class="error-text">{{ $message }}</div>

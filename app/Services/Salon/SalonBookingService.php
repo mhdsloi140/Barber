@@ -106,7 +106,14 @@ class SalonBookingService
     }
 
 
-public function getSalonAppointments(User $salonOwner, ?string $search = null, int $perPage = 10): AuthResult
+public function getSalonAppointments(
+    User $salonOwner,
+    ?string $search = null,
+    ?string $status = null,
+    ?string $dateFrom = null,
+    ?string $dateTo = null,
+    int $perPage = 10
+): AuthResult
 {
     try {
         if (!$salonOwner->hasRole('salon_owner')) {
@@ -122,16 +129,36 @@ public function getSalonAppointments(User $salonOwner, ?string $search = null, i
         $query = Appointment::where('salon_id', $salon->id)
             ->with(['customer', 'barber', 'service']);
 
+        //  البحث باسم الحلاق
         if ($search && !empty(trim($search))) {
             $query->whereHas('barber', function ($q) use ($search) {
                 $q->where('name', 'like', '%' . $search . '%');
             });
         }
 
+        //  الفلترة حسب الحالة (pending, confirmed, completed, cancelled)
+        if ($status && in_array($status, ['pending', 'confirmed', 'completed', 'cancelled'])) {
+            $query->where('status', $status);
+        }
+
+        //  الفلترة حسب التاريخ (من)
+        if ($dateFrom && $this->isValidDate($dateFrom)) {
+            $query->whereDate('appointment_date', '>=', Carbon::parse($dateFrom)->startOfDay());
+        }
+
+        //  الفلترة حسب التاريخ (إلى)
+        if ($dateTo && $this->isValidDate($dateTo)) {
+            $query->whereDate('appointment_date', '<=', Carbon::parse($dateTo)->endOfDay());
+        }
+
+        // إذا تم تحديد تاريخ محدد
+        if ($dateFrom && !$dateTo) {
+            $query->whereDate('appointment_date', Carbon::parse($dateFrom)->toDateString());
+        }
+
         $appointments = $query->orderBy('appointment_date', 'desc')
             ->orderBy('appointment_time', 'desc')
             ->paginate($perPage);
-
 
         $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
             $services = $this->getAppointmentServices($appointment);
@@ -154,23 +181,42 @@ public function getSalonAppointments(User $salonOwner, ?string $search = null, i
                 'date' => $this->formatDate($appointment->appointment_date),
                 'time' => $this->formatTime($appointment->appointment_time),
                 'end_time' => $this->formatTime($appointment->end_time),
-                'cancelled_by' => $appointment->cancelled_by ??null,
+                'cancelled_by' => $appointment->cancelled_by ?? null,
                 'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
                 'status' => $appointment->status,
                 'created_at' => $this->formatDateTime($appointment->created_at),
             ];
         });
 
+        // إحصائيات الحجوزات مع مراعاة الفلتر
+        $statsQuery = Appointment::where('salon_id', $salon->id);
+
+        if ($dateFrom && $this->isValidDate($dateFrom)) {
+            $statsQuery->whereDate('appointment_date', '>=', Carbon::parse($dateFrom)->startOfDay());
+        }
+        if ($dateTo && $this->isValidDate($dateTo)) {
+            $statsQuery->whereDate('appointment_date', '<=', Carbon::parse($dateTo)->endOfDay());
+        }
+        if ($dateFrom && !$dateTo) {
+            $statsQuery->whereDate('appointment_date', Carbon::parse($dateFrom)->toDateString());
+        }
 
         $stats = [
             'total' => $appointments->total(),
-            'pending' => Appointment::where('salon_id', $salon->id)->where('status', 'pending')->count(),
-            'confirmed' => Appointment::where('salon_id', $salon->id)->where('status', 'confirmed')->count(),
-            'completed' => Appointment::where('salon_id', $salon->id)->where('status', 'completed')->count(),
-            'cancelled' => Appointment::where('salon_id', $salon->id)->where('status', 'cancelled')->count(),
+            'pending' => (clone $statsQuery)->where('status', 'pending')->count(),
+            'confirmed' => (clone $statsQuery)->where('status', 'confirmed')->count(),
+            'completed' => (clone $statsQuery)->where('status', 'completed')->count(),
+            'cancelled' => (clone $statsQuery)->where('status', 'cancelled')->count(),
             'today' => Appointment::where('salon_id', $salon->id)->whereDate('appointment_date', now()->toDateString())->count(),
         ];
 
+        // إضافة معلومات الفلتر إلى الرد
+        $filterInfo = [
+            'search' => $search,
+            'status' => $status,
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+        ];
 
         $paginationData = [
             'current_page' => $appointments->currentPage(),
@@ -188,6 +234,7 @@ public function getSalonAppointments(User $salonOwner, ?string $search = null, i
         ];
 
         $response = [
+            'filters' => $filterInfo,
             'statistics' => $stats,
             'appointments' => $paginationData,
         ];
@@ -214,6 +261,21 @@ public function getSalonAppointments(User $salonOwner, ?string $search = null, i
     } catch (\Exception $e) {
         Log::error('Get salon appointments error: ' . $e->getMessage());
         return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
+    }
+}
+
+/**
+ * التحقق من صحة التاريخ
+ */
+private function isValidDate(?string $date): bool
+{
+    if (!$date) return false;
+
+    try {
+        Carbon::parse($date);
+        return true;
+    } catch (\Exception $e) {
+        return false;
     }
 }
 

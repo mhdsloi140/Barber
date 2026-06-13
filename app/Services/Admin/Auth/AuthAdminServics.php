@@ -13,6 +13,7 @@ class AuthAdminServics
 {
     protected UltraMsgService $whatsappService;
     protected const RESET_PASSWORD_PREFIX = 'admin_password_reset_';
+    protected const OTP_EXPIRY_MINUTES = 3; // ✅ مدة صلاحية OTP بالدقائق
 
     public function __construct(UltraMsgService $whatsappService)
     {
@@ -21,10 +22,8 @@ class AuthAdminServics
 
     public function login($data)
     {
-        // 1. البحث عن المستخدم برقم الهاتف
         $user = User::where('phone', $data['phone'])->first();
 
-        // 2. التحقق: هل رقم الهاتف موجود؟
         if (!$user) {
             Log::warning('محاولة دخول برقم هاتف غير موجود', ['phone' => $data['phone']]);
             return [
@@ -46,7 +45,6 @@ class AuthAdminServics
             ];
         }
 
-        // 4. التحقق: هل كلمة المرور صحيحة؟
         if (!Hash::check($data['password'], $user->password)) {
             return [
                 'status' => false,
@@ -79,7 +77,6 @@ class AuthAdminServics
                 ];
             }
 
-            // التحقق من أن المستخدم مدير
             if ($user->role !== 'admin' && $user->role !== 'مدير') {
                 return [
                     'status' => false,
@@ -88,24 +85,22 @@ class AuthAdminServics
                 ];
             }
 
-            // توليد OTP عشوائي (6 أرقام)
             $otpCode = sprintf("%06d", rand(0, 999999));
 
-            // تخزين OTP في Cache (مدة 10 دقائق)
             $cacheKey = self::RESET_PASSWORD_PREFIX . $user->id;
             Cache::put($cacheKey, [
                 'otp' => $otpCode,
                 'attempts' => 0,
                 'created_at' => now(),
-            ], now()->addMinutes(10));
+            ], now()->addMinutes(self::OTP_EXPIRY_MINUTES));
 
-            // إرسال OTP عبر WhatsApp
-            $message = " *إعادة تعيين كلمة المرور* 🔐\n\n"
+
+            $message = " *إعادة تعيين كلمة المرور* \n\n"
                      . "مرحباً {$user->name}،\n\n"
                      . "لقد طلبت إعادة تعيين كلمة المرور الخاصة بحسابك في لوحة تحكم نعيما.\n\n"
                      . " *رمز التحقق الخاص بك:*\n"
                      . "*{$otpCode}*\n\n"
-                     . " هذا الرمز صالح لمدة 3 دقائق فقط.\n"
+                     . " هذا الرمز صالح لمدة " . self::OTP_EXPIRY_MINUTES . " دقائق فقط.\n"
                      . " لا تشارك هذا الرمز مع أي شخص.\n\n"
                      . "إذا لم تطلب هذا الرمز، يمكنك تجاهل هذه الرسالة.";
 
@@ -130,7 +125,7 @@ class AuthAdminServics
                 'data' => [
                     'user_id' => $user->id,
                     'phone' => $user->phone,
-                    'expires_in' => 10,
+                    'expires_in' => self::OTP_EXPIRY_MINUTES,
                 ],
                 'code' => 'success'
             ];
@@ -161,7 +156,6 @@ class AuthAdminServics
                 ];
             }
 
-            // التحقق من أن المستخدم مدير
             if ($user->role !== 'admin' && $user->role !== 'مدير') {
                 return [
                     'status' => false,
@@ -181,7 +175,6 @@ class AuthAdminServics
                 ];
             }
 
-            // التحقق من عدد المحاولات
             if ($resetData['attempts'] >= 3) {
                 Cache::forget($cacheKey);
                 return [
@@ -191,10 +184,9 @@ class AuthAdminServics
                 ];
             }
 
-            // التحقق من صحة الرمز
             if ($resetData['otp'] !== $otpCode) {
                 $resetData['attempts']++;
-                Cache::put($cacheKey, $resetData, now()->diffInSeconds($resetData['created_at']->addMinutes(10)));
+                Cache::put($cacheKey, $resetData, now()->diffInSeconds($resetData['created_at']->addMinutes(self::OTP_EXPIRY_MINUTES)));
 
                 $remainingAttempts = 3 - $resetData['attempts'];
                 return [
@@ -205,15 +197,12 @@ class AuthAdminServics
                 ];
             }
 
-            // تحديث كلمة المرور
             $user->update([
                 'password' => Hash::make($newPassword),
             ]);
 
-            // تنظيف الـ Cache
             Cache::forget($cacheKey);
 
-            // إرسال رسالة تأكيد عبر WhatsApp
             $this->sendPasswordChangedConfirmation($user);
 
             Log::info('Admin password reset successfully', [
@@ -283,7 +272,7 @@ class AuthAdminServics
             }
 
             $remainingAttempts = 3 - $resetData['attempts'];
-            $remainingSeconds = now()->diffInSeconds($resetData['created_at']->addMinutes(10));
+            $remainingSeconds = now()->diffInSeconds($resetData['created_at']->addMinutes(self::OTP_EXPIRY_MINUTES));
 
             return [
                 'status' => true,
@@ -292,7 +281,7 @@ class AuthAdminServics
                     'has_active_code' => true,
                     'remaining_attempts' => $remainingAttempts,
                     'remaining_seconds' => $remainingSeconds,
-                    'expires_at' => $resetData['created_at']->addMinutes(10)->toISOString(),
+                    'expires_at' => $resetData['created_at']->addMinutes(self::OTP_EXPIRY_MINUTES)->toISOString(),
                 ],
                 'code' => 'success'
             ];

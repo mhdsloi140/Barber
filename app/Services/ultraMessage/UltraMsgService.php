@@ -28,7 +28,7 @@ class UltraMsgService
 
     }
 
- 
+
     protected function getApiUrl(string $endpoint = 'messages/chat'): string
     {
 
@@ -396,5 +396,39 @@ class UltraMsgService
 
         return $this->sendMessage($phone, $message, 5);
     }
+/**
+ * التحقق من صحة رقم هاتف عراقي (بدون preg_match)
+ */
+public function validateIraqiPhone($phone)
+{
+    // إزالة المسافات والشرطات
+    $phone = preg_replace('/[^0-9]/', '', $phone);
 
+    // التحقق من الطول
+    if (strlen($phone) != 11) {
+        return [
+            'valid' => false,
+            'message' => 'رقم الهاتف يجب أن يتكون من 11 رقم',
+            'phone' => $phone
+        ];
+    }
+
+    // التحقق من البداية
+    $prefix = substr($phone, 0, 3);
+    $validPrefixes = ['077', '078', '079'];
+
+    if (!in_array($prefix, $validPrefixes)) {
+        return [
+            'valid' => false,
+            'message' => 'رقم الهاتف يجب أن يبدأ بـ ' . implode(' أو ', $validPrefixes),
+            'phone' => $phone
+        ];
+    }
+
+    return [
+        'valid' => true,
+        'message' => 'رقم الهاتف صحيح',
+        'phone' => $phone
+    ];
+}
 }

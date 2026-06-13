@@ -240,7 +240,7 @@
     <div class="auth-wrapper">
         <div class="auth-card">
             <div class="auth-header">
-                <div class="logo-icon">
+                <div class="logo-icon" style="background: white; box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);">
                     <img src="{{ asset('img/logo-new.png') }}" alt="شعار نعيما" class="logo-image">
                 </div>
                 <h2>نعيما</h2>
