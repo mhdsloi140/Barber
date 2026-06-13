@@ -111,7 +111,7 @@ class BarberService
                 'name' => $barber->name,
                 'phone' => $barber->phone,
                 'is_active' => $barber->is_active,
-                'avatar' => $barber->getAvatarUrlAttribute(), 
+                'avatar' => $barber->getAvatarUrlAttribute(),
                 'rating' => [
                     'average' => $averageRating['average'],
                     'total' => $averageRating['total'],
@@ -383,35 +383,109 @@ class BarberService
     /**
      * حذف حلاق (Soft Delete)
      */
-    public function deleteBarber(User $salonOwner, int $barberId): AuthResult
-    {
-        try {
-            $salon = $salonOwner->ownedSalon;
 
-            if (!$salon) {
-                return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
+public function deleteBarber(User $salonOwner, int $barberId): AuthResult
+{
+    try {
+        // 1. التحقق من وجود الصالون
+        $salon = $salonOwner->ownedSalon;
+        if (!$salon) {
+            return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
+        }
+
+        // 2. جلب الحلاق من الصالون
+        $barber = $salon->barbers()->where('users.id', $barberId)->first();
+        if (!$barber) {
+            return AuthResult::error('الحلاق غير موجود', null, 404);
+        }
+
+        // 3. التحقق من صلاحيات الحلاق
+        $roles = $barber->getRoleNames()->toArray();
+        $isSalonOwner = ($barber->id === $salonOwner->id);
+        $hasSalonOwnerRole = in_array('salon_owner', $roles);
+        $hasOnlyBarberRole = (count($roles) === 1 && in_array('barber', $roles));
+
+        // 4. حالة: الحلاق هو صاحب الصالون نفسه
+        if ($isSalonOwner) {
+            if ($hasSalonOwnerRole) {
+                // إزالة صلاحية barber فقط (لا يتم حذف الحساب)
+                $barber->removeRole('barber');
+                $barber->salons()->detach($salon->id);
+
+                Log::info('تم إزالة صلاحية الحلاق من صاحب الصالون', [
+                    'user_id' => $barber->id,
+                    'salon_id' => $salon->id,
+                    'remaining_roles' => $barber->getRoleNames()
+                ]);
+
+                return AuthResult::success('تم إزالة صلاحية الحلاق من صاحب الصالون بنجاح', [
+                    'id' => $barber->id,
+                    'name' => $barber->name,
+                    'phone' => $barber->phone,
+                    'action' => 'role_removed',
+                    'remaining_roles' => $barber->getRoleNames(),
+                ]);
             }
 
-            $barber = $salon->barbers()->where('users.id', $barberId)->first();
+            if ($hasOnlyBarberRole) {
+                // حذف الحساب نهائياً (حالة نادرة)
+                $barber->delete();
 
-            if (!$barber) {
-                return AuthResult::error('الحلاق غير موجود', null, 404);
+                Log::info('تم حذف صاحب الصالون (لديه صلاحية barber فقط)', [
+                    'user_id' => $barber->id,
+                    'salon_id' => $salon->id,
+                ]);
+
+                return AuthResult::success('تم حذف الحلاق بنجاح', [
+                    'id' => $barber->id,
+                    'name' => $barber->name,
+                    'phone' => $barber->phone,
+                    'action' => 'deleted',
+                ]);
             }
+        }
 
+        // 5. حالة: حلاق عادي (ليس صاحب الصالون)
+        if ($hasOnlyBarberRole) {
+            // حذف الحساب نهائياً
             $barber->delete();
+
+            Log::info('تم حذف حلاق عادي', [
+                'user_id' => $barber->id,
+                'salon_id' => $salon->id,
+            ]);
 
             return AuthResult::success('تم حذف الحلاق بنجاح', [
                 'id' => $barber->id,
                 'name' => $barber->name,
                 'phone' => $barber->phone,
+                'action' => 'deleted',
             ]);
-
-        } catch (\Exception $e) {
-            Log::error('Delete barber error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء حذف الحلاق', config('app.debug') ? $e->getMessage() : null, 500);
         }
-    }
 
+        // 6. حالة: الحلاق لديه صلاحيات أخرى (ليس فقط barber)
+        // فقط قم بإزالة العلاقة مع الصالون
+        $barber->salons()->detach($salon->id);
+
+        Log::info('تم إزالة الحلاق من الصالون (مع الاحتفاظ بالحساب)', [
+            'user_id' => $barber->id,
+            'salon_id' => $salon->id,
+            'roles' => $roles,
+        ]);
+
+        return AuthResult::success('تم إزالة الحلاق من الصالون بنجاح', [
+            'id' => $barber->id,
+            'name' => $barber->name,
+            'phone' => $barber->phone,
+            'action' => 'removed_from_salon',
+            'roles' => $roles,
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Delete barber error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء حذف الحلاق', config('app.debug') ? $e->getMessage() : null, 500);
+    }
+}
     /**
      * إضافة أوقات العمل (يقوم بها الحلاق بعد تسجيل الدخول)
      */
