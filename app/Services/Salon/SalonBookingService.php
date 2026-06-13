@@ -112,7 +112,8 @@ public function getSalonAppointments(
     ?string $status = null,
     ?string $dateFrom = null,
     ?string $dateTo = null,
-    int $perPage = 10
+    int $perPage = 10,
+    int $page = 1 
 ): AuthResult
 {
     try {
@@ -129,24 +130,24 @@ public function getSalonAppointments(
         $query = Appointment::where('salon_id', $salon->id)
             ->with(['customer', 'barber', 'service']);
 
-        //  البحث باسم الحلاق
+        // البحث باسم الحلاق
         if ($search && !empty(trim($search))) {
             $query->whereHas('barber', function ($q) use ($search) {
                 $q->where('name', 'like', '%' . $search . '%');
             });
         }
 
-        //  الفلترة حسب الحالة (pending, confirmed, completed, cancelled)
+        // الفلترة حسب الحالة
         if ($status && in_array($status, ['pending', 'confirmed', 'completed', 'cancelled'])) {
             $query->where('status', $status);
         }
 
-        //  الفلترة حسب التاريخ (من)
+        // الفلترة حسب التاريخ (من)
         if ($dateFrom && $this->isValidDate($dateFrom)) {
             $query->whereDate('appointment_date', '>=', Carbon::parse($dateFrom)->startOfDay());
         }
 
-        //  الفلترة حسب التاريخ (إلى)
+        // الفلترة حسب التاريخ (إلى)
         if ($dateTo && $this->isValidDate($dateTo)) {
             $query->whereDate('appointment_date', '<=', Carbon::parse($dateTo)->endOfDay());
         }
@@ -156,10 +157,12 @@ public function getSalonAppointments(
             $query->whereDate('appointment_date', Carbon::parse($dateFrom)->toDateString());
         }
 
+
         $appointments = $query->orderBy('appointment_date', 'desc')
             ->orderBy('appointment_time', 'desc')
-            ->paginate($perPage);
+            ->paginate($perPage, ['*'], 'page', $page);
 
+        // تنسيق البيانات
         $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
             $services = $this->getAppointmentServices($appointment);
             $totalPrice = $this->calculateTotalPrice($appointment, $services);
@@ -210,13 +213,14 @@ public function getSalonAppointments(
             'today' => Appointment::where('salon_id', $salon->id)->whereDate('appointment_date', now()->toDateString())->count(),
         ];
 
-        // إضافة معلومات الفلتر إلى الرد
+
         $filterInfo = [
             'search' => $search,
             'status' => $status,
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
         ];
+
 
         $paginationData = [
             'current_page' => $appointments->currentPage(),
