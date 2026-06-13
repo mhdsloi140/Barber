@@ -20,11 +20,15 @@ class AppointmentSalonController extends Controller
      */
 public function index(Request $request)
 {
-    $search = $request->query('search');
+     $search = $request->query('search');
     $status = $request->query('status');
     $dateFrom = $request->query('date_from');
     $dateTo = $request->query('date_to');
+    $barberId = $request->query('barber_id');
+    $period = $request->query('period');
     $perPage = $request->query('per_page', 10);
+    $page = $request->query('page', 1);
+
 
     $result = $this->bookingService->getSalonAppointments(
         auth()->user(),
@@ -32,9 +36,11 @@ public function index(Request $request)
         $status,
         $dateFrom,
         $dateTo,
-        $perPage
+        $barberId,
+        $period,  
+        $perPage,
+        $page
     );
-
     return response()->json([
         'success' => $result->success,
         'message' => $result->message,
