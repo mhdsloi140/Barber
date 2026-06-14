@@ -10,9 +10,36 @@ class UpdateSalonRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // dd(auth()->user());
-        // dd($this->all());
         return auth()->user()?->hasRole('salon_owner');
+    }
+
+    
+    protected function prepareForValidation(): void
+    {
+        // إذا كان delete_image_ids موجوداً كنص (من query string)، حوله إلى مصفوفة
+        if ($this->has('delete_image_ids') && is_string($this->delete_image_ids)) {
+            // إزالة الأقواس [] وتحويل إلى مصفوفة
+            $value = $this->delete_image_ids;
+            $value = trim($value, '[]');
+
+            if (str_contains($value, ',')) {
+                $ids = explode(',', $value);
+                $ids = array_map('intval', $ids);
+            } else {
+                $ids = [(int) $value];
+            }
+
+            $this->merge([
+                'delete_image_ids' => $ids
+            ]);
+        }
+
+        // إذا كان delete_image_ids رقم واحد، حوله إلى مصفوفة
+        if ($this->has('delete_image_ids') && is_numeric($this->delete_image_ids)) {
+            $this->merge([
+                'delete_image_ids' => [(int) $this->delete_image_ids]
+            ]);
+        }
     }
 
     public function rules(): array
@@ -30,9 +57,9 @@ class UpdateSalonRequest extends FormRequest
             // الصورة الشخصية
             'avatar' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
 
-
-            //الحلاق يعمل بالصالون
+            // الحلاق يعمل بالصالون
             'works_as_barber' => ['nullable', 'boolean'],
+
             // بيانات الصالون
             'salon_name' => ['nullable', 'string', 'max:255'],
             'salon_address' => ['nullable', 'string', 'max:255'],
@@ -49,14 +76,12 @@ class UpdateSalonRequest extends FormRequest
             'delete_image_ids' => ['nullable', 'array'],
             'delete_image_ids.*' => ['exists:media,id'],
 
-
             'working_hours' => ['nullable', 'array'],
             'working_hours.*.day' => ['required_with:working_hours', 'in:sunday,monday,tuesday,wednesday,thursday,friday,saturday'],
             'working_hours.*.is_open' => ['required_with:working_hours', 'boolean'],
             'working_hours.*.start' => ['nullable', 'date_format:H:i'],
             'working_hours.*.end' => ['nullable', 'date_format:H:i', 'after:working_hours.*.start'],
             'notifications_enabled' => 'sometimes|boolean',
-
         ];
     }
 
@@ -89,7 +114,7 @@ class UpdateSalonRequest extends FormRequest
             'delete_image_ids.array' => 'معرفات الصور المحذوفة يجب أن تكون مصفوفة',
             'delete_image_ids.*.exists' => 'الصورة غير موجودة',
 
-            //  رسائل أوقات العمل
+            // رسائل أوقات العمل
             'working_hours.array' => 'أوقات العمل يجب أن تكون مصفوفة',
             'working_hours.*.day.required_with' => 'اليوم مطلوب عند إضافة أوقات العمل',
             'working_hours.*.day.in' => 'اليوم غير صالح',
@@ -100,7 +125,6 @@ class UpdateSalonRequest extends FormRequest
 
             'notifications_enabled.boolean' => 'حقل الإشعارات يجب أن يكون true أو false',
             'works_as_barber.boolean' => 'حقل يعمل كحلاق يجب أن يكون صحيح أو خطأ',
-
         ];
     }
 }
