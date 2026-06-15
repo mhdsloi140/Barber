@@ -87,7 +87,10 @@ class BarberService
     /**
      * جلب كل الحلاقين التابعين لصاحب الصالون مع تقييماتهم وإحصائياتهم
      */
-  public function getBarbers(User $salonOwner): AuthResult
+/**
+ * جلب الحلاقين مع Pagination
+ */
+public function getBarbers(User $salonOwner, int $perPage = 10, int $page = 1): AuthResult
 {
     try {
         $salon = $salonOwner->ownedSalon;
@@ -98,9 +101,9 @@ class BarberService
 
         $barbers = $salon->barbers()
             ->select('users.id', 'users.name', 'users.phone', 'users.is_active')
-            ->get();
+            ->paginate($perPage, ['*'], 'page', $page);
 
-        $barbersData = $barbers->map(function($barber) {
+        $barbersData = collect($barbers->items())->map(function($barber) {
             $averageRating = $this->getBarberAverageRating($barber->id);
             $weeklyBookings = $this->getBarberWeeklyBookings($barber->id);
             $totalBookings = $this->getBarberTotalBookings($barber->id);
@@ -125,7 +128,23 @@ class BarberService
             ];
         });
 
-        return AuthResult::success('تم جلب الحلاقين بنجاح', $barbersData);
+    
+        $paginationData = [
+            'current_page' => $barbers->currentPage(),
+            'data' => $barbersData,
+            'first_page_url' => $barbers->url(1),
+            'from' => $barbers->firstItem(),
+            'last_page' => $barbers->lastPage(),
+            'last_page_url' => $barbers->url($barbers->lastPage()),
+            'next_page_url' => $barbers->nextPageUrl(),
+            'path' => $barbers->path(),
+            'per_page' => $barbers->perPage(),
+            'prev_page_url' => $barbers->previousPageUrl(),
+            'to' => $barbers->lastItem(),
+            'total' => $barbers->total(),
+        ];
+
+        return AuthResult::success('تم جلب الحلاقين بنجاح', $paginationData);
 
     } catch (\Exception $e) {
         Log::error('Get barbers error: ' . $e->getMessage());
