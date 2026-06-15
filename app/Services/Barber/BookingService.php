@@ -150,7 +150,7 @@ class BookingService
 
         // بناء الاستعلام
         $query = Appointment::where('barber_id', $barber->id)
-            ->with(['customer', 'salon', 'service', 'barber']); // ✅ إضافة barber
+            ->with(['customer', 'salon', 'barber']); 
 
         if ($date) {
             $query->whereDate('appointment_date', $targetDate);
@@ -164,7 +164,7 @@ class BookingService
             ->paginate($perPage);
 
         $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
-            return $this->formatAppointmentWithFullObjects($appointment);
+            return $this->formatAppointmentWithBarberObject($appointment);
         });
 
         $statsQuery = Appointment::where('barber_id', $barber->id);
@@ -216,45 +216,14 @@ class BookingService
 }
 
 /**
- * تنسيق الحجز مع إرجاع كائنات كاملة (الزبون، الصالون، الحلاق، الخدمات)
+ * تنسيق الحجز مع إرجاع كائن الحلاق كامل
  */
-private function formatAppointmentWithFullObjects(Appointment $appointment): array
+private function formatAppointmentWithBarberObject(Appointment $appointment): array
 {
     $services = $this->getAppointmentServices($appointment);
     $totalPrice = $this->calculateTotalPrice($appointment, $services);
     $totalDuration = $this->calculateTotalDuration($appointment, $services);
     $serviceNames = collect($services)->pluck('name')->implode(' + ');
-
-   
-    $customer = $appointment->customer;
-    $customerData = null;
-    if ($customer) {
-        $customerData = [
-            'id' => $customer->id,
-            'name' => $customer->name,
-            'phone' => $customer->phone,
-            'email' => $customer->email ?? null,
-            'avatar' => $customer->getAvatarUrlAttribute(),
-            'is_active' => $customer->is_active,
-            'created_at' => $customer->created_at,
-        ];
-    }
-
-
-    $salon = $appointment->salon;
-    $salonData = null;
-    if ($salon) {
-        $salonData = [
-            'id' => $salon->id,
-            'name' => $salon->name,
-            'address' => $salon->address,
-            'phone' => $salon->phone,
-            'latitude' => $salon->latitude,
-            'longitude' => $salon->longitude,
-            'images' => $salon->getImagesUrlsAttribute(),
-            'is_active' => $salon->is_active,
-        ];
-    }
 
 
     $barber = $appointment->barber;
@@ -273,9 +242,10 @@ private function formatAppointmentWithFullObjects(Appointment $appointment): arr
 
     return [
         'id' => $appointment->id,
-        'customer' => $customerData,
-        'salon' => $salonData,
+        'customer_name' => $appointment->customer->name ?? 'غير معروف',
+        'customer_phone' => $appointment->customer->phone ?? 'غير معروف',
         'barber' => $barberData,
+        'salon_name' => $appointment->salon->name ?? 'غير معروف',
         'services' => $services,
         'services_summary' => $serviceNames,
         'total_price' => $totalPrice,
