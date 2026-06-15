@@ -109,7 +109,7 @@ class SalonBookingService
     /**
      * الحصول على نطاق التاريخ بناءً على الفترة (حسب أيام الشهر)
      */
- 
+
 private function getDateRangeByPeriod(string $period, ?string $month = null): ?array
 {
     // التحقق من أن period هي قيمة صحيحة
@@ -295,200 +295,214 @@ private function getDateRangeByPeriod(string $period, ?string $month = null): ?a
     }
 
 
-    public function getSalonAppointments(
-        User $salonOwner,
-        ?string $search = null,
-        ?string $status = null,
-        ?string $dateFrom = null,
-        ?string $dateTo = null,
-        ?string $barberId = null,
-        ?string $period = null,
-        ?string $month = null,
-        int $perPage = 10,
-        int $page = 1
-    ): AuthResult
-    {
-        try {
-            if (!$salonOwner->hasRole('salon_owner')) {
-                return AuthResult::error('هذه الخدمة متاحة لأصحاب الصالونات فقط', null, 403);
-            }
-
-            $salon = $salonOwner->ownedSalon;
-
-            if (!$salon) {
-                return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
-            }
-
-            $query = Appointment::where('salon_id', $salon->id)
-                ->with(['customer', 'barber', 'service']);
-
-            // البحث باسم الحلاق
-            if ($search && !empty(trim($search))) {
-                $query->whereHas('barber', function ($q) use ($search) {
-                    $q->where('name', 'like', '%' . $search . '%');
-                });
-            }
-
-            // الفلترة حسب ID الحلاق
-            if ($barberId && is_numeric($barberId)) {
-                $query->where('barber_id', $barberId);
-            }
-
-            // الفلترة حسب الحالة
-            if ($status && in_array($status, ['pending', 'confirmed', 'completed', 'cancelled'])) {
-                $query->where('status', $status);
-            }
-
-            // الفلترة حسب الفترة (period) مع دعم الأسابيع حسب أيام الشهر
-            if ($period) {
-                $dateRange = $this->getDateRangeByPeriod($period, $month);
-                if ($dateRange) {
-                    $query->whereBetween('appointment_date', [$dateRange['start'], $dateRange['end']]);
-                }
-            }
-
-            // الفلترة حسب التاريخ (من) - تتجاوز الفلترة بالفترة إذا وجدت
-            if ($dateFrom && $this->isValidDate($dateFrom) && !$period) {
-                $query->whereDate('appointment_date', '>=', Carbon::parse($dateFrom)->startOfDay());
-            }
-
-            // الفلترة حسب التاريخ (إلى)
-            if ($dateTo && $this->isValidDate($dateTo) && !$period) {
-                $query->whereDate('appointment_date', '<=', Carbon::parse($dateTo)->endOfDay());
-            }
-
-            // إذا تم تحديد تاريخ محدد (بدون فترة)
-            if ($dateFrom && !$dateTo && !$period) {
-                $query->whereDate('appointment_date', Carbon::parse($dateFrom)->toDateString());
-            }
-
-            $appointments = $query->orderBy('appointment_date', 'asc')
-                ->orderBy('appointment_time', 'asc')
-                ->paginate($perPage, ['*'], 'page', $page);
-
-            // تنسيق البيانات
-            $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
-                $services = $this->getAppointmentServices($appointment);
-                $totalPrice = $this->calculateTotalPrice($appointment, $services);
-                $totalDuration = $this->calculateTotalDuration($appointment, $services);
-                $serviceNames = collect($services)->pluck('name')->implode(' + ');
-
-                return [
-                    'id' => $appointment->id,
-                    'customer_name' => $appointment->customer->name ?? 'غير معروف',
-                    'customer_phone' => $appointment->customer->phone ?? 'غير معروف',
-                    'barber_name' => $appointment->barber->name ?? 'غير معروف',
-                    'barber_id' => $appointment->barber->id,
-                    'services' => $services,
-                    'services_summary' => $serviceNames,
-                    'total_price' => $totalPrice,
-                    'total_duration' => $totalDuration,
-                    'service_name' => $services[0]['name'] ?? null,
-                    'service_price' => $services[0]['price'] ?? null,
-                    'date' => $this->formatDate($appointment->appointment_date),
-                    'time' => $this->formatTime($appointment->appointment_time),
-                    'end_time' => $this->formatTime($appointment->end_time),
-                    'cancelled_by' => $appointment->cancelled_by ?? null,
-                    'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
-                    'status' => $appointment->status,
-                    'created_at' => $this->formatDateTime($appointment->created_at),
-                ];
-            });
-
-            // إحصائيات الحجوزات مع مراعاة الفلتر
-            $statsQuery = Appointment::where('salon_id', $salon->id);
-
-            if ($barberId && is_numeric($barberId)) {
-                $statsQuery->where('barber_id', $barberId);
-            }
-
-            if ($status && in_array($status, ['pending', 'confirmed', 'completed', 'cancelled'])) {
-                $statsQuery->where('status', $status);
-            }
-
-            if ($period) {
-                $dateRange = $this->getDateRangeByPeriod($period, $month);
-                if ($dateRange) {
-                    $statsQuery->whereBetween('appointment_date', [$dateRange['start'], $dateRange['end']]);
-                }
-            }
-
-            if ($dateFrom && $this->isValidDate($dateFrom) && !$period) {
-                $statsQuery->whereDate('appointment_date', '>=', Carbon::parse($dateFrom)->startOfDay());
-            }
-            if ($dateTo && $this->isValidDate($dateTo) && !$period) {
-                $statsQuery->whereDate('appointment_date', '<=', Carbon::parse($dateTo)->endOfDay());
-            }
-
-            $stats = [
-                'total' => $appointments->total(),
-                'pending' => (clone $statsQuery)->where('status', 'pending')->count(),
-                'confirmed' => (clone $statsQuery)->where('status', 'confirmed')->count(),
-                'completed' => (clone $statsQuery)->where('status', 'completed')->count(),
-                'cancelled' => (clone $statsQuery)->where('status', 'cancelled')->count(),
-                'today' => Appointment::where('salon_id', $salon->id)->whereDate('appointment_date', now()->toDateString())->count(),
-            ];
-
-            // معلومات الفلتر
-            $filterInfo = [
-                'search' => $search,
-                'status' => $status,
-                'barber_id' => $barberId,
-                'period' => $period,
-                'period_name' => $this->getPeriodName($period),
-                'month' => $month,
-                'date_from' => $dateFrom,
-                'date_to' => $dateTo,
-            ];
-
-            // معلومات Pagination
-            $paginationData = [
-                'current_page' => $appointments->currentPage(),
-                'data' => $formattedAppointments,
-                'first_page_url' => $appointments->url(1),
-                'from' => $appointments->firstItem(),
-                'last_page' => $appointments->lastPage(),
-                'last_page_url' => $appointments->url($appointments->lastPage()),
-                'next_page_url' => $appointments->nextPageUrl(),
-                'path' => $appointments->path(),
-                'per_page' => $appointments->perPage(),
-                'prev_page_url' => $appointments->previousPageUrl(),
-                'to' => $appointments->lastItem(),
-                'total' => $appointments->total(),
-            ];
-
-            $response = [
-                'filters' => $filterInfo,
-                'statistics' => $stats,
-                'appointments' => $paginationData,
-            ];
-
-            // إذا كان هناك بحث وأوجد حلاقاً
-            if ($search && !empty(trim($search))) {
-                $barber = User::role('barber')
-                    ->whereHas('salons', function($q) use ($salon) {
-                        $q->where('salon_id', $salon->id);
-                    })
-                    ->where('name', 'like', '%' . $search . '%')
-                    ->first();
-
-                if ($barber) {
-                    $response['searched_barber'] = [
-                        'id' => $barber->id,
-                        'name' => $barber->name,
-                        'phone' => $barber->phone,
-                    ];
-                }
-            }
-
-            return AuthResult::success('تم جلب حجوزات الصالون بنجاح', $response);
-
-        } catch (\Exception $e) {
-            Log::error('Get salon appointments error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
+   public function getSalonAppointments(
+    User $salonOwner,
+    ?string $search = null,
+    ?string $status = null,
+    ?string $dateFrom = null,
+    ?string $dateTo = null,
+    ?string $barberId = null,
+    ?string $period = null,
+    ?string $month = null,
+    int $perPage = 10,
+    int $page = 1
+): AuthResult
+{
+    try {
+        if (!$salonOwner->hasRole('salon_owner')) {
+            return AuthResult::error('هذه الخدمة متاحة لأصحاب الصالونات فقط', null, 403);
         }
-    }
 
+        $salon = $salonOwner->ownedSalon;
+
+        if (!$salon) {
+            return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
+        }
+
+        $query = Appointment::where('salon_id', $salon->id)
+            ->with(['customer', 'barber', 'service']);
+
+        // البحث باسم الحلاق
+        if ($search && !empty(trim($search))) {
+            $query->whereHas('barber', function ($q) use ($search) {
+                $q->where('name', 'like', '%' . $search . '%');
+            });
+        }
+
+        // الفلترة حسب ID الحلاق
+        if ($barberId && is_numeric($barberId)) {
+            $query->where('barber_id', $barberId);
+        }
+
+        // الفلترة حسب الحالة
+        if ($status && in_array($status, ['pending', 'confirmed', 'completed', 'cancelled'])) {
+            $query->where('status', $status);
+        }
+
+        // الفلترة حسب الفترة (period) مع دعم الأسابيع حسب أيام الشهر
+        if ($period) {
+            $dateRange = $this->getDateRangeByPeriod($period, $month);
+            if ($dateRange) {
+                $query->whereBetween('appointment_date', [$dateRange['start'], $dateRange['end']]);
+            }
+        }
+
+        // الفلترة حسب التاريخ (من) - تتجاوز الفلترة بالفترة إذا وجدت
+        if ($dateFrom && $this->isValidDate($dateFrom) && !$period) {
+            $query->whereDate('appointment_date', '>=', Carbon::parse($dateFrom)->startOfDay());
+        }
+
+        // الفلترة حسب التاريخ (إلى)
+        if ($dateTo && $this->isValidDate($dateTo) && !$period) {
+            $query->whereDate('appointment_date', '<=', Carbon::parse($dateTo)->endOfDay());
+        }
+
+        // إذا تم تحديد تاريخ محدد (بدون فترة)
+        if ($dateFrom && !$dateTo && !$period) {
+            $query->whereDate('appointment_date', Carbon::parse($dateFrom)->toDateString());
+        }
+
+        $appointments = $query->orderBy('appointment_date', 'asc')
+            ->orderBy('appointment_time', 'asc')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        // تنسيق البيانات مع إرجاع كائن الحلاق كامل
+        $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
+            $services = $this->getAppointmentServices($appointment);
+            $totalPrice = $this->calculateTotalPrice($appointment, $services);
+            $totalDuration = $this->calculateTotalDuration($appointment, $services);
+            $serviceNames = collect($services)->pluck('name')->implode(' + ');
+
+           
+            $barber = $appointment->barber;
+            $barberData = null;
+            if ($barber) {
+                $barberData = [
+                    'id' => $barber->id,
+                    'name' => $barber->name,
+                    'phone' => $barber->phone,
+                    'email' => $barber->email ?? null,
+                    'avatar' => $barber->getAvatarUrlAttribute(),
+                    'is_active' => $barber->is_active,
+                    'created_at' => $barber->created_at,
+                ];
+            }
+
+            return [
+                'id' => $appointment->id,
+                'customer_name' => $appointment->customer->name ?? 'غير معروف',
+                'customer_phone' => $appointment->customer->phone ?? 'غير معروف',
+                'barber' => $barberData,
+                'services' => $services,
+                'services_summary' => $serviceNames,
+                'total_price' => $totalPrice,
+                'total_duration' => $totalDuration,
+                'service_name' => $services[0]['name'] ?? null,
+                'service_price' => $services[0]['price'] ?? null,
+                'date' => $this->formatDate($appointment->appointment_date),
+                'time' => $this->formatTime($appointment->appointment_time),
+                'end_time' => $this->formatTime($appointment->end_time),
+                'cancelled_by' => $appointment->cancelled_by ?? null,
+                'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
+                'status' => $appointment->status,
+                'created_at' => $this->formatDateTime($appointment->created_at),
+            ];
+        });
+
+        // إحصائيات الحجوزات مع مراعاة الفلتر
+        $statsQuery = Appointment::where('salon_id', $salon->id);
+
+        if ($barberId && is_numeric($barberId)) {
+            $statsQuery->where('barber_id', $barberId);
+        }
+
+        if ($status && in_array($status, ['pending', 'confirmed', 'completed', 'cancelled'])) {
+            $statsQuery->where('status', $status);
+        }
+
+        if ($period) {
+            $dateRange = $this->getDateRangeByPeriod($period, $month);
+            if ($dateRange) {
+                $statsQuery->whereBetween('appointment_date', [$dateRange['start'], $dateRange['end']]);
+            }
+        }
+
+        if ($dateFrom && $this->isValidDate($dateFrom) && !$period) {
+            $statsQuery->whereDate('appointment_date', '>=', Carbon::parse($dateFrom)->startOfDay());
+        }
+        if ($dateTo && $this->isValidDate($dateTo) && !$period) {
+            $statsQuery->whereDate('appointment_date', '<=', Carbon::parse($dateTo)->endOfDay());
+        }
+
+        $stats = [
+            'total' => $appointments->total(),
+            'pending' => (clone $statsQuery)->where('status', 'pending')->count(),
+            'confirmed' => (clone $statsQuery)->where('status', 'confirmed')->count(),
+            'completed' => (clone $statsQuery)->where('status', 'completed')->count(),
+            'cancelled' => (clone $statsQuery)->where('status', 'cancelled')->count(),
+            'today' => Appointment::where('salon_id', $salon->id)->whereDate('appointment_date', now()->toDateString())->count(),
+        ];
+
+        // معلومات الفلتر
+        $filterInfo = [
+            'search' => $search,
+            'status' => $status,
+            'barber_id' => $barberId,
+            'period' => $period,
+            'period_name' => $this->getPeriodName($period),
+            'month' => $month,
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+        ];
+
+        // معلومات Pagination
+        $paginationData = [
+            'current_page' => $appointments->currentPage(),
+            'data' => $formattedAppointments,
+            'first_page_url' => $appointments->url(1),
+            'from' => $appointments->firstItem(),
+            'last_page' => $appointments->lastPage(),
+            'last_page_url' => $appointments->url($appointments->lastPage()),
+            'next_page_url' => $appointments->nextPageUrl(),
+            'path' => $appointments->path(),
+            'per_page' => $appointments->perPage(),
+            'prev_page_url' => $appointments->previousPageUrl(),
+            'to' => $appointments->lastItem(),
+            'total' => $appointments->total(),
+        ];
+
+        $response = [
+            'filters' => $filterInfo,
+            'statistics' => $stats,
+            'appointments' => $paginationData,
+        ];
+
+        // إذا كان هناك بحث وأوجد حلاقاً
+        if ($search && !empty(trim($search))) {
+            $barber = User::role('barber')
+                ->whereHas('salons', function($q) use ($salon) {
+                    $q->where('salon_id', $salon->id);
+                })
+                ->where('name', 'like', '%' . $search . '%')
+                ->first();
+
+            if ($barber) {
+                $response['searched_barber'] = [
+                    'id' => $barber->id,
+                    'name' => $barber->name,
+                    'phone' => $barber->phone,
+                    'avatar' => $barber->getAvatarUrlAttribute(),
+                ];
+            }
+        }
+
+        return AuthResult::success('تم جلب حجوزات الصالون بنجاح', $response);
+
+    } catch (\Exception $e) {
+        Log::error('Get salon appointments error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
+    }
+}
 
     /**
      * إلغاء حجز بواسطة صاحب الصالون
