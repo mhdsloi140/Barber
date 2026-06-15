@@ -138,7 +138,7 @@ class BookingService
     /**
      * جلب جميع حجوزات الحلاق مع الإحصائيات
      */
-    public function getBarberAppointments(User $barber, ?string $date = null, int $perPage = 10): AuthResult
+public function getBarberAppointments(User $barber, ?string $date = null, int $perPage = 10): AuthResult
 {
     try {
         if (!$barber->hasRole('barber')) {
@@ -150,7 +150,7 @@ class BookingService
 
         // بناء الاستعلام
         $query = Appointment::where('barber_id', $barber->id)
-            ->with(['customer', 'salon', 'barber']); 
+            ->with(['customer', 'salon', 'barber']);
 
         if ($date) {
             $query->whereDate('appointment_date', $targetDate);
@@ -164,7 +164,7 @@ class BookingService
             ->paginate($perPage);
 
         $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
-            return $this->formatAppointmentWithBarberObject($appointment);
+            return $this->formatAppointmentWithCustomerObject($appointment);
         });
 
         $statsQuery = Appointment::where('barber_id', $barber->id);
@@ -213,6 +213,52 @@ class BookingService
         Log::error('Get barber appointments error: ' . $e->getMessage());
         return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
     }
+}
+
+/**
+ * تنسيق الحجز مع إرجاع كائن الزبون كامل
+ */
+private function formatAppointmentWithCustomerObject(Appointment $appointment): array
+{
+    $services = $this->getAppointmentServices($appointment);
+    $totalPrice = $this->calculateTotalPrice($appointment, $services);
+    $totalDuration = $this->calculateTotalDuration($appointment, $services);
+    $serviceNames = collect($services)->pluck('name')->implode(' + ');
+
+    
+    $customer = $appointment->customer;
+    $customerData = null;
+    if ($customer) {
+        $customerData = [
+            'id' => $customer->id,
+            'name' => $customer->name,
+            'phone' => $customer->phone,
+            'email' => $customer->email ?? null,
+            'avatar' => $customer->getAvatarUrlAttribute(),
+            'is_active' => $customer->is_active,
+            'created_at' => $customer->created_at,
+        ];
+    }
+
+    return [
+        'id' => $appointment->id,
+        'customer' => $customerData,
+        'barber_name' => $appointment->barber->name ?? 'غير معروف',
+        'salon_name' => $appointment->salon->name ?? 'غير معروف',
+        'services' => $services,
+        'services_summary' => $serviceNames,
+        'total_price' => $totalPrice,
+        'total_duration' => $totalDuration,
+        'service_name' => $services[0]['name'] ?? null,
+        'service_price' => $services[0]['price'] ?? null,
+        'date' => $this->formatDate($appointment->appointment_date),
+        'time' => $this->formatTime($appointment->appointment_time),
+        'end_time' => $this->formatTime($appointment->end_time),
+        'cancelled_by' => $appointment->cancelled_by ?? null,
+        'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
+        'status' => $appointment->status,
+        'created_at' => $this->formatDateTime($appointment->created_at),
+    ];
 }
 
 /**

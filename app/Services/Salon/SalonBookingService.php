@@ -295,7 +295,7 @@ private function getDateRangeByPeriod(string $period, ?string $month = null): ?a
     }
 
 
-   public function getSalonAppointments(
+  public function getSalonAppointments(
     User $salonOwner,
     ?string $search = null,
     ?string $status = null,
@@ -366,14 +366,14 @@ private function getDateRangeByPeriod(string $period, ?string $month = null): ?a
             ->orderBy('appointment_time', 'asc')
             ->paginate($perPage, ['*'], 'page', $page);
 
-        // تنسيق البيانات مع إرجاع كائن الحلاق كامل
+        // تنسيق البيانات مع إرجاع كائن الزبون كامل
         $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
             $services = $this->getAppointmentServices($appointment);
             $totalPrice = $this->calculateTotalPrice($appointment, $services);
             $totalDuration = $this->calculateTotalDuration($appointment, $services);
             $serviceNames = collect($services)->pluck('name')->implode(' + ');
 
-           
+            // ✅ كائن الحلاق كامل
             $barber = $appointment->barber;
             $barberData = null;
             if ($barber) {
@@ -388,10 +388,24 @@ private function getDateRangeByPeriod(string $period, ?string $month = null): ?a
                 ];
             }
 
+          
+            $customer = $appointment->customer;
+            $customerData = null;
+            if ($customer) {
+                $customerData = [
+                    'id' => $customer->id,
+                    'name' => $customer->name,
+                    'phone' => $customer->phone,
+                    // 'email' => $customer->email ?? null,
+                    'avatar' => $customer->getAvatarUrlAttribute(),
+                    'is_active' => $customer->is_active,
+                    'created_at' => $customer->created_at,
+                ];
+            }
+
             return [
                 'id' => $appointment->id,
-                'customer_name' => $appointment->customer->name ?? 'غير معروف',
-                'customer_phone' => $appointment->customer->phone ?? 'غير معروف',
+                'customer' => $customerData,
                 'barber' => $barberData,
                 'services' => $services,
                 'services_summary' => $serviceNames,
@@ -503,7 +517,6 @@ private function getDateRangeByPeriod(string $period, ?string $month = null): ?a
         return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
     }
 }
-
     /**
      * إلغاء حجز بواسطة صاحب الصالون
      */
