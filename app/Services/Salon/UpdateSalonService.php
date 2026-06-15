@@ -201,6 +201,70 @@ class UpdateSalonService
     }
 
     /**
+     * جلب الحلاقين مع Paginate
+     */
+    public function getBarbersPaginated(int $salonId, int $perPage = 10, int $page = 1): AuthResult
+    {
+        try {
+            $salon = Salon::find($salonId);
+
+            if (!$salon) {
+                return AuthResult::error('الصالون غير موجود', null, 404);
+            }
+
+            $barbers = $salon->barbers()
+                ->select('users.id', 'users.name', 'users.phone', 'users.is_active')
+                ->paginate($perPage, ['*'], 'page', $page);
+
+            $barbersData = collect($barbers->items())->map(function ($barber) {
+                $averageRating = $this->getBarberAverageRating($barber->id);
+                $weeklyBookings = $this->getBarberWeeklyBookings($barber->id);
+                $totalBookings = $this->getBarberTotalBookings($barber->id);
+                $completedBookings = $this->getBarberCompletedBookings($barber->id);
+
+                return [
+                    'id' => $barber->id,
+                    'name' => $barber->name,
+                    'phone' => $barber->phone,
+                    'is_active' => $barber->is_active,
+                    'avatar' => $barber->getAvatarUrlAttribute(),
+                    'rating' => [
+                        'average' => $averageRating['average'],
+                        'total' => $averageRating['total'],
+                        'distribution' => $averageRating['distribution'],
+                    ],
+                    'statistics' => [
+                        'weekly_bookings' => $weeklyBookings,
+                        'total_bookings' => $totalBookings,
+                        'completed_bookings' => $completedBookings,
+                    ],
+                ];
+            });
+
+            $paginationData = [
+                'current_page' => $barbers->currentPage(),
+                'data' => $barbersData,
+                'first_page_url' => $barbers->url(1),
+                'from' => $barbers->firstItem(),
+                'last_page' => $barbers->lastPage(),
+                'last_page_url' => $barbers->url($barbers->lastPage()),
+                'next_page_url' => $barbers->nextPageUrl(),
+                'path' => $barbers->path(),
+                'per_page' => $barbers->perPage(),
+                'prev_page_url' => $barbers->previousPageUrl(),
+                'to' => $barbers->lastItem(),
+                'total' => $barbers->total(),
+            ];
+
+            return AuthResult::success('تم جلب الحلاقين بنجاح', $paginationData);
+
+        } catch (\Exception $e) {
+            Log::error('Get barbers paginated error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء جلب الحلاقين', null, 500);
+        }
+    }
+
+    /**
      * جلب الحجوزات مع Paginate
      */
     public function getSalonAppointmentsPaginated(int $salonId, array $filters = [], int $perPage = 10): AuthResult
@@ -300,6 +364,68 @@ class UpdateSalonService
             return AuthResult::error('حدث خطأ أثناء جلب الإحصائيات', null, 500);
         }
     }
+
+    // ===================== دوال مساعدة للحلاقين =====================
+
+    /**
+     * جلب متوسط تقييم الحلاق
+     */
+    private function getBarberAverageRating(int $barberId): array
+    {
+        $ratings = Rating::where('barber_id', $barberId)
+            ->where('is_approved', true)
+            ->get();
+
+        $total = $ratings->count();
+        $average = $total > 0 ? round($ratings->avg('rating'), 1) : 0;
+
+        $distribution = [
+            5 => $ratings->where('rating', 5)->count(),
+            4 => $ratings->where('rating', 4)->count(),
+            3 => $ratings->where('rating', 3)->count(),
+            2 => $ratings->where('rating', 2)->count(),
+            1 => $ratings->where('rating', 1)->count(),
+        ];
+
+        return [
+            'average' => $average,
+            'total' => $total,
+            'distribution' => $distribution,
+        ];
+    }
+
+    /**
+     * جلب عدد حجوزات الحلاق في الأسبوع الحالي
+     */
+    private function getBarberWeeklyBookings(int $barberId): int
+    {
+        $startOfWeek = Carbon::now()->startOfWeek();
+        $endOfWeek = Carbon::now()->endOfWeek();
+
+        return Appointment::where('barber_id', $barberId)
+            ->whereBetween('appointment_date', [$startOfWeek, $endOfWeek])
+            ->count();
+    }
+
+    /**
+     * جلب عدد حجوزات الحلاق الإجمالي
+     */
+    private function getBarberTotalBookings(int $barberId): int
+    {
+        return Appointment::where('barber_id', $barberId)->count();
+    }
+
+    /**
+     * جلب عدد حجوزات الحلاق المكتملة
+     */
+    private function getBarberCompletedBookings(int $barberId): int
+    {
+        return Appointment::where('barber_id', $barberId)
+            ->where('status', 'completed')
+            ->count();
+    }
+
+    // ===================== دوال مساعدة أساسية =====================
 
     /**
      * تحديث الصورة الشخصية
@@ -515,9 +641,7 @@ class UpdateSalonService
         $user->tokens()->delete();
     }
 
-    /**
-     * جلب تقييمات الصالون (بدون Paginate - للإحصائيات)
-     */
+ 
     private function getSalonRatings(int $salonId): array
     {
         // جلب جميع التقييمات للصالون (من خلال الحلاقين)
