@@ -48,154 +48,177 @@ class WorkingHourService
     /**
      * حفظ أو تحديث أوقات العمل (يدعم إضافة أيام جديدة وتعديلها وحذفها)
      */
-  /**
- * حفظ أو تحديث أوقات العمل (يدعم إضافة أيام جديدة وتعديلها وحذفها)
- */
-public function updateWorkingHours(User $barber, array $data): AuthResult
-{
-    try {
-        return DB::transaction(function () use ($barber, $data) {
+    public function updateWorkingHours(User $barber, array $data): AuthResult
+    {
+        try {
+            return DB::transaction(function () use ($barber, $data) {
 
-            if (!$barber->hasRole('barber')) {
-                return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
-            }
-
-            $salon = $barber->salons()->first();
-            if (!$salon) {
-                return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
-            }
-
-            $salonOpenDays = $salon->workingHours()
-                ->where('is_open', true)
-                ->get()
-                ->keyBy('day_of_week');
-
-            if ($salonOpenDays->isEmpty()) {
-                return AuthResult::error('لا يمكن تحديث أوقات العمل لأن الصالون لا يحتوي على أيام عمل مفتوحة', null, 400);
-            }
-
-            // 🔴 دعم كلا التنسيقين: 'working_hours' أو 'days'
-            $workingHours = $data['working_hours'] ?? $data['days'] ?? null;
-
-            if (!$workingHours) {
-                return AuthResult::error('البيانات غير صحيحة. يجب إرسال working_hours أو days', null, 400);
-            }
-
-            $existingDays = $barber->workingHours()
-                ->where('is_open', true)
-                ->pluck('day_of_week')
-                ->toArray();
-
-            $errors = [];
-            $addedDays = [];
-            $updatedDays = [];
-            $deletedDays = [];
-
-            foreach ($workingHours as $hours) {
-                $day = $hours['day'];
-                $dayName = $this->daysInArabic[$day];
-                $isOpen = (bool) ($hours['is_open'] ?? false);
-
-                if (!$salonOpenDays->has($day)) {
-                    $errors[] = "لا يمكن حفظ يوم {$dayName} لأن الصالون مغلق في هذا اليوم";
-                    continue;
+                if (!$barber->hasRole('barber')) {
+                    return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
                 }
 
-                $salonDay = $salonOpenDays->get($day);
-                $salonStart = substr($salonDay->shift1_start, 0, 5);
-                $salonEnd = substr($salonDay->shift1_end, 0, 5);
+                $salon = $barber->salons()->first();
+                if (!$salon) {
+                    return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
+                }
 
-                if (!$isOpen) {
-                    $deleted = WorkingHour::where('workable_type', User::class)
-                        ->where('workable_id', $barber->id)
-                        ->where('day_of_week', $day)
-                        ->delete();
-                    if ($deleted) {
-                        $deletedDays[] = $dayName;
+                $salonOpenDays = $salon->workingHours()
+                    ->where('is_open', true)
+                    ->get()
+                    ->keyBy('day_of_week');
+
+                if ($salonOpenDays->isEmpty()) {
+                    return AuthResult::error('لا يمكن تحديث أوقات العمل لأن الصالون لا يحتوي على أيام عمل مفتوحة', null, 400);
+                }
+
+               
+                $workingHours = $data['working_hours'] ?? null;
+
+                if (!$workingHours || !is_array($workingHours)) {
+                    return AuthResult::error('البيانات غير صحيحة. يجب إرسال working_hours كمصفوفة', null, 400);
+                }
+
+                $existingDays = $barber->workingHours()
+                    ->where('is_open', true)
+                    ->pluck('day_of_week')
+                    ->toArray();
+
+                $errors = [];
+                $addedDays = [];
+                $updatedDays = [];
+                $deletedDays = [];
+
+                // أيام الأسبوع بالعربية
+                $daysInArabic = [
+                    'sunday' => 'الأحد',
+                    'monday' => 'الإثنين',
+                    'tuesday' => 'الثلاثاء',
+                    'wednesday' => 'الأربعاء',
+                    'thursday' => 'الخميس',
+                    'friday' => 'الجمعة',
+                    'saturday' => 'السبت',
+                ];
+
+                foreach ($workingHours as $hours) {
+                    $day = $hours['day'];
+                    $dayName = $daysInArabic[$day] ?? $day;
+                    $isOpen = (bool) ($hours['is_open'] ?? false);
+
+                    // التحقق من أن اليوم مفتوح في الصالون
+                    if (!$salonOpenDays->has($day)) {
+                        $errors[] = "لا يمكن حفظ يوم {$dayName} لأن الصالون مغلق في هذا اليوم";
+                        continue;
                     }
-                    continue;
+
+                    $salonDay = $salonOpenDays->get($day);
+                    $salonStart = substr($salonDay->shift1_start, 0, 5);
+                    $salonEnd = substr($salonDay->shift1_end, 0, 5);
+
+                    // إذا كان اليوم مغلقاً
+                    if (!$isOpen) {
+                        $deleted = WorkingHour::where('workable_type', User::class)
+                            ->where('workable_id', $barber->id)
+                            ->where('day_of_week', $day)
+                            ->delete();
+                        if ($deleted) {
+                            $deletedDays[] = $dayName;
+                        }
+                        continue;
+                    }
+
+
+                    if (empty($hours['shift1_start']) || empty($hours['shift1_end'])) {
+                        $errors[] = "يجب تحديد وقت البدء والنهاية ليوم {$dayName}";
+                        continue;
+                    }
+
+                    $start = substr($hours['shift1_start'], 0, 5);
+                    $end = substr($hours['shift1_end'], 0, 5);
+
+                    // التحقق من أن الوقت ضمن أوقات عمل الصالون
+                    if ($start < $salonStart || $end > $salonEnd) {
+                        $errors[] = "وقت العمل ليوم {$dayName} ({$start} - {$end}) خارج أوقات عمل الصالون ({$salonStart} - {$salonEnd})";
+                        continue;
+                    }
+
+                    // التحقق من أن وقت البدء قبل وقت النهاية
+                    if ($start >= $end) {
+                        $errors[] = "وقت البدء يجب أن يكون قبل وقت النهاية ليوم {$dayName}";
+                        continue;
+                    }
+
+                    $isNewDay = !in_array($day, $existingDays);
+
+
+                    WorkingHour::updateOrCreate(
+                        [
+                            'workable_type' => User::class,
+                            'workable_id' => $barber->id,
+                            'day_of_week' => $day,
+                        ],
+                        [
+                            'is_open' => true,
+                            'shift1_start' => $hours['shift1_start'],
+                            'shift1_end' => $hours['shift1_end'],
+                        ]
+                    );
+
+                    if ($isNewDay) {
+                        $addedDays[] = $dayName . ' (' . $start . ' - ' . $end . ')';
+                    } else {
+                        $updatedDays[] = $dayName . ' (' . $start . ' - ' . $end . ')';
+                    }
                 }
 
-                if (empty($hours['start']) || empty($hours['end'])) {
-                    $errors[] = "يجب تحديد وقت البدء والنهاية ليوم {$dayName}";
-                    continue;
+                // إذا وجدت أخطاء، أرجعها
+                if (!empty($errors)) {
+                    return AuthResult::error('حدثت الأخطاء التالية: ' . implode('، ', $errors), null, 400);
                 }
 
-                $start = substr($hours['start'], 0, 5);
-                $end = substr($hours['end'], 0, 5);
+                // جلب أوقات العمل المحدثة
+                $updatedWorkingHours = $barber->workingHours()
+                    ->where('is_open', true)
+                    ->orderByRaw("FIELD(day_of_week, 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday')")
+                    ->get();
 
-                if ($start < $salonStart || $end > $salonEnd) {
-                    $errors[] = "وقت العمل ليوم {$dayName} ({$start} - {$end}) خارج أوقات عمل الصالون ({$salonStart} - {$salonEnd})";
-                    continue;
+                // بناء رسالة النجاح
+                $successMessages = [];
+                if (!empty($addedDays)) {
+                    $successMessages[] = 'تم إضافة: ' . implode('، ', $addedDays);
+                }
+                if (!empty($updatedDays)) {
+                    $successMessages[] = 'تم تحديث: ' . implode('، ', $updatedDays);
+                }
+                if (!empty($deletedDays)) {
+                    $successMessages[] = 'تم إغلاق: ' . implode('، ', $deletedDays);
                 }
 
-                if ($start >= $end) {
-                    $errors[] = "وقت البدء يجب أن يكون قبل وقت النهاية ليوم {$dayName}";
-                    continue;
+                $message = 'تم تحديث أوقات العمل بنجاح';
+                if (!empty($successMessages)) {
+                    $message .= ' (' . implode('، ', $successMessages) . ')';
                 }
 
-                $isNewDay = !in_array($day, $existingDays);
+                Log::info('Working hours updated', [
+                    'barber_id' => $barber->id,
+                    'added_days' => $addedDays,
+                    'updated_days' => $updatedDays,
+                    'deleted_days' => $deletedDays
+                ]);
 
-                WorkingHour::updateOrCreate(
-                    [
-                        'workable_type' => User::class,
-                        'workable_id' => $barber->id,
-                        'day_of_week' => $day,
-                    ],
-                    [
-                        'is_open' => true,
-                        'shift1_start' => $hours['start'],
-                        'shift1_end' => $hours['end'],
-                    ]
-                );
 
-                if ($isNewDay) {
-                    $addedDays[] = $dayName . ' (' . $start . ' - ' . $end . ')';
-                } else {
-                    $updatedDays[] = $dayName . ' (' . $start . ' - ' . $end . ')';
-                }
-            }
+                $formattedHours = $this->formatWorkingHours($updatedWorkingHours);
 
-            if (!empty($errors)) {
-                return AuthResult::error('حدثت الأخطاء التالية: ' . implode('، ', $errors), null, 400);
-            }
+                return AuthResult::success($message, $formattedHours);
 
-            $updatedWorkingHours = $barber->workingHours()
-                ->where('is_open', true)
-                ->orderByRaw("FIELD(day_of_week, 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday')")
-                ->get();
-
-            $successMessages = [];
-            if (!empty($addedDays)) {
-                $successMessages[] = 'تم إضافة: ' . implode('، ', $addedDays);
-            }
-            if (!empty($updatedDays)) {
-                $successMessages[] = 'تم تحديث: ' . implode('، ', $updatedDays);
-            }
-            if (!empty($deletedDays)) {
-                $successMessages[] = 'تم إغلاق: ' . implode('، ', $deletedDays);
-            }
-
-            $message = 'تم تحديث أوقات العمل بنجاح';
-            if (!empty($successMessages)) {
-                $message .= ' (' . implode('، ', $successMessages) . ')';
-            }
-
-            Log::info('Working hours updated', [
-                'barber_id' => $barber->id,
-                'added_days' => $addedDays,
-                'updated_days' => $updatedDays,
-                'deleted_days' => $deletedDays
-            ]);
-
-            return AuthResult::success($message, $this->formatWorkingHours($updatedWorkingHours));
-
-        });
-    } catch (\Exception $e) {
-        Log::error('Update working hours error: ' . $e->getMessage());
-        return AuthResult::error('حدث خطأ أثناء تحديث أوقات العمل: ' . $e->getMessage(), null, 500);
+            });
+        } catch (\Exception $e) {
+            Log::error('Update working hours error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء تحديث أوقات العمل: ' . $e->getMessage(), null, 500);
+        }
     }
-}
+
+
+
 
     /**
      * إضافة عدة أيام جديدة دفعة واحدة
@@ -290,11 +313,13 @@ public function updateWorkingHours(User $barber, array $data): AuthResult
                     $message .= 'تم إضافة الأيام التالية بنجاح: ' . implode('، ', $successDays);
                 }
                 if (!empty($alreadyExistDays)) {
-                    if (!empty($message)) $message .= '، ';
+                    if (!empty($message))
+                        $message .= '، ';
                     $message .= 'الأيام التالية موجودة مسبقاً: ' . implode('، ', $alreadyExistDays);
                 }
                 if (!empty($errors)) {
-                    if (!empty($message)) $message .= '، ';
+                    if (!empty($message))
+                        $message .= '، ';
                     $message .= 'الأخطاء: ' . implode('، ', $errors);
                 }
 

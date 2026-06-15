@@ -15,26 +15,26 @@ class BarberWorkingHoursUpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'days' => ['required', 'array', 'min:1'],
-            'days.*.day' => ['required', Rule::in(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'])],
-            'days.*.is_open' => ['required', 'boolean'],
-            'days.*.start' => ['required_if:days.*.is_open,true', 'nullable', 'date_format:H:i'],
-            'days.*.end' => ['required_if:days.*.is_open,true', 'nullable', 'date_format:H:i', 'after:days.*.start'],
+            'working_hours' => ['required', 'array', 'min:1'],
+            'working_hours.*.day' => ['required', Rule::in(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'])],
+            'working_hours.*.is_open' => ['required', 'boolean'],
+            'working_hours.*.shift1_start' => ['required_if:working_hours.*.is_open,true', 'nullable', 'date_format:H:i'],
+            'working_hours.*.shift1_end' => ['required_if:working_hours.*.is_open,true', 'nullable', 'date_format:H:i', 'after:working_hours.*.shift1_start'],
         ];
     }
 
     public function messages(): array
     {
         return [
-            'days.required' => 'يجب إدخال يوم واحد على الأقل',
-            'days.array' => 'يجب أن تكون الأيام مصفوفة',
-            'days.min' => 'يجب إدخال يوم واحد على الأقل',
-            'days.*.day.required' => 'اليوم مطلوب',
-            'days.*.day.in' => 'اليوم غير صالح',
-            'days.*.is_open.required' => 'حالة اليوم مطلوبة',
-            'days.*.start.required_if' => 'وقت البدء مطلوب عندما يكون اليوم مفتوحاً',
-            'days.*.end.required_if' => 'وقت النهاية مطلوب عندما يكون اليوم مفتوحاً',
-            'days.*.end.after' => 'وقت النهاية يجب أن يكون بعد وقت البدء',
+            'working_hours.required' => 'يجب إدخال يوم واحد على الأقل',
+            'working_hours.array' => 'يجب أن تكون الأيام مصفوفة',
+            'working_hours.min' => 'يجب إدخال يوم واحد على الأقل',
+            'working_hours.*.day.required' => 'اليوم مطلوب',
+            'working_hours.*.day.in' => 'اليوم غير صالح',
+            'working_hours.*.is_open.required' => 'حالة اليوم مطلوبة',
+            'working_hours.*.shift1_start.required_if' => 'وقت البدء مطلوب عندما يكون اليوم مفتوحاً',
+            'working_hours.*.shift1_end.required_if' => 'وقت النهاية مطلوب عندما يكون اليوم مفتوحاً',
+            'working_hours.*.shift1_end.after' => 'وقت النهاية يجب أن يكون بعد وقت البدء',
         ];
     }
 }
