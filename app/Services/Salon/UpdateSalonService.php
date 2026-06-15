@@ -145,6 +145,163 @@ class UpdateSalonService
     }
 
     /**
+     * الحصول على تقييمات الصالون مع Paginate
+     */
+    public function getSalonRatingsPaginated(int $salonId, int $perPage = 10): AuthResult
+    {
+        try {
+            // جلب جميع التقييمات للصالون (من خلال الحلاقين)
+            $barberIds = User::role('barber')
+                ->whereHas('salons', function ($q) use ($salonId) {
+                    $q->where('salon_id', $salonId);
+                })
+                ->pluck('id')
+                ->toArray();
+
+            $ratings = Rating::whereIn('barber_id', $barberIds)
+                ->where('is_approved', true)
+                ->with('customer')
+                ->orderBy('created_at', 'desc')
+                ->paginate($perPage);
+
+            $formattedRatings = $ratings->getCollection()->map(function ($rating) {
+                return [
+                    'id' => $rating->id,
+                    'customer_name' => $rating->customer->name,
+                    'customer_avatar' => $rating->customer->getAvatarUrlAttribute(),
+                    'rating' => $rating->rating,
+                    'comment' => $rating->comment,
+                    'barber_name' => $rating->barber?->name,
+                    'created_at' => $rating->created_at->diffForHumans(),
+                    'created_at_raw' => $rating->created_at,
+                ];
+            });
+
+            $paginationData = [
+                'current_page' => $ratings->currentPage(),
+                'data' => $formattedRatings,
+                'first_page_url' => $ratings->url(1),
+                'from' => $ratings->firstItem(),
+                'last_page' => $ratings->lastPage(),
+                'last_page_url' => $ratings->url($ratings->lastPage()),
+                'next_page_url' => $ratings->nextPageUrl(),
+                'path' => $ratings->path(),
+                'per_page' => $ratings->perPage(),
+                'prev_page_url' => $ratings->previousPageUrl(),
+                'to' => $ratings->lastItem(),
+                'total' => $ratings->total(),
+            ];
+
+            return AuthResult::success('تم جلب تقييمات الصالون بنجاح', $paginationData);
+
+        } catch (\Exception $e) {
+            Log::error('Get salon ratings paginated error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء جلب التقييمات', null, 500);
+        }
+    }
+
+    /**
+     * جلب الحجوزات مع Paginate
+     */
+    public function getSalonAppointmentsPaginated(int $salonId, array $filters = [], int $perPage = 10): AuthResult
+    {
+        try {
+            $query = Appointment::where('salon_id', $salonId)
+                ->with(['customer', 'barber', 'service']);
+
+            // تطبيق الفلاتر
+            if (!empty($filters['status'])) {
+                $query->where('status', $filters['status']);
+            }
+
+            if (!empty($filters['barber_id'])) {
+                $query->where('barber_id', $filters['barber_id']);
+            }
+
+            if (!empty($filters['date_from'])) {
+                $query->whereDate('appointment_date', '>=', $filters['date_from']);
+            }
+
+            if (!empty($filters['date_to'])) {
+                $query->whereDate('appointment_date', '<=', $filters['date_to']);
+            }
+
+            $appointments = $query->orderBy('appointment_date', 'desc')
+                ->orderBy('appointment_time', 'desc')
+                ->paginate($perPage);
+
+            $formattedAppointments = $appointments->getCollection()->map(function ($appointment) {
+                $services = $this->getAppointmentServices($appointment);
+                $serviceNames = collect($services)->pluck('name')->implode(' + ');
+
+                return [
+                    'id' => $appointment->id,
+                    'customer_name' => $appointment->customer->name ?? 'غير معروف',
+                    'customer_phone' => $appointment->customer->phone ?? 'غير معروف',
+                    'barber_name' => $appointment->barber->name ?? 'غير معروف',
+                    'barber_id' => $appointment->barber->id,
+                    'services_summary' => $serviceNames,
+                    'total_price' => (float) $appointment->total_price,
+                    'date' => $this->formatDate($appointment->appointment_date),
+                    'time' => $this->formatTime($appointment->appointment_time),
+                    'status' => $appointment->status,
+                    'created_at' => $this->formatDateTime($appointment->created_at),
+                ];
+            });
+
+            $paginationData = [
+                'current_page' => $appointments->currentPage(),
+                'data' => $formattedAppointments,
+                'first_page_url' => $appointments->url(1),
+                'from' => $appointments->firstItem(),
+                'last_page' => $appointments->lastPage(),
+                'last_page_url' => $appointments->url($appointments->lastPage()),
+                'next_page_url' => $appointments->nextPageUrl(),
+                'path' => $appointments->path(),
+                'per_page' => $appointments->perPage(),
+                'prev_page_url' => $appointments->previousPageUrl(),
+                'to' => $appointments->lastItem(),
+                'total' => $appointments->total(),
+            ];
+
+            return AuthResult::success('تم جلب الحجوزات بنجاح', $paginationData);
+
+        } catch (\Exception $e) {
+            Log::error('Get salon appointments paginated error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', null, 500);
+        }
+    }
+
+    /**
+     * الحصول على معلومات الحجوزات الإحصائية
+     */
+    public function getAppointmentsStatistics(int $salonId): AuthResult
+    {
+        try {
+            $stats = [
+                'total' => Appointment::where('salon_id', $salonId)->count(),
+                'pending' => Appointment::where('salon_id', $salonId)->where('status', 'pending')->count(),
+                'confirmed' => Appointment::where('salon_id', $salonId)->where('status', 'confirmed')->count(),
+                'completed' => Appointment::where('salon_id', $salonId)->where('status', 'completed')->count(),
+                'cancelled' => Appointment::where('salon_id', $salonId)->where('status', 'cancelled')->count(),
+                'today' => Appointment::where('salon_id', $salonId)->whereDate('appointment_date', Carbon::today())->count(),
+                'this_week' => Appointment::where('salon_id', $salonId)
+                    ->whereBetween('appointment_date', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()])
+                    ->count(),
+                'this_month' => Appointment::where('salon_id', $salonId)
+                    ->whereBetween('appointment_date', [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()])
+                    ->count(),
+            ];
+
+            return AuthResult::success('تم جلب إحصائيات الحجوزات بنجاح', $stats);
+
+        } catch (\Exception $e) {
+            Log::error('Get appointments statistics error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء جلب الإحصائيات', null, 500);
+        }
+    }
+
+    /**
      * تحديث الصورة الشخصية
      */
     private function updateAvatar(User $user, UploadedFile $avatar): void
@@ -170,9 +327,8 @@ class UpdateSalonService
     private function formatUserData(User $user): array
     {
         $roles = $user->getRoleNames()->toArray();
-        $primaryRole = !empty($roles) ? $roles[0] : ($user->role ?? 'customer');
 
-        $data = [
+        return [
             'id' => $user->id,
             'name' => $user->name,
             'phone' => $user->phone,
@@ -184,8 +340,6 @@ class UpdateSalonService
             'notifications_enabled' => (bool) $user->notifications_enabled,
             'works_as_barber' => $user->hasRole('barber'),
         ];
-
-        return $data;
     }
 
     /**
@@ -315,7 +469,7 @@ class UpdateSalonService
     }
 
     /**
-     *  تحديث أوقات العمل (يحذف جميع الأوقات القديمة ويحفظ الأوقات الجديدة فقط)
+     * تحديث أوقات العمل (يحذف جميع الأوقات القديمة ويحفظ الأوقات الجديدة فقط)
      */
     private function updateWorkingHours(Salon $salon, array $workingHours): void
     {
@@ -362,7 +516,7 @@ class UpdateSalonService
     }
 
     /**
-     * جلب تقييمات الصالون
+     * جلب تقييمات الصالون (بدون Paginate - للإحصائيات)
      */
     private function getSalonRatings(int $salonId): array
     {
@@ -390,7 +544,7 @@ class UpdateSalonService
             1 => $ratings->where('rating', 1)->count(),
         ];
 
-        // آخر 5 تقييمات
+        // آخر 5 تقييمات (للبروفايل)
         $recentRatings = Rating::whereIn('barber_id', $barberIds)
             ->where('is_approved', true)
             ->with('customer')
@@ -465,5 +619,49 @@ class UpdateSalonService
             ];
         }
         return $result;
+    }
+
+    /**
+     * تنسيق التاريخ
+     */
+    private function formatDate($date): ?string
+    {
+        if (!$date) return null;
+        return Carbon::parse($date)->format('Y-m-d');
+    }
+
+    /**
+     * تنسيق الوقت
+     */
+    private function formatTime($time): ?string
+    {
+        if (!$time) return null;
+        return Carbon::parse($time)->format('H:i');
+    }
+
+    /**
+     * تنسيق التاريخ والوقت
+     */
+    private function formatDateTime($datetime): ?string
+    {
+        if (!$datetime) return null;
+        return Carbon::parse($datetime)->format('Y-m-d H:i:s');
+    }
+
+    /**
+     * الحصول على خدمات الحجز
+     */
+    private function getAppointmentServices(Appointment $appointment): array
+    {
+        if ($appointment->services_details) {
+            $services = is_array($appointment->services_details)
+                ? $appointment->services_details
+                : json_decode($appointment->services_details, true);
+
+            if (is_array($services) && !empty($services)) {
+                return $services;
+            }
+        }
+        return [];
     }
 }
