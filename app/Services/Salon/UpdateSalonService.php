@@ -315,62 +315,38 @@ class UpdateSalonService
     }
 
     /**
-     * تحديث أوقات العمل (فترة واحدة فقط - الحفاظ على القيم غير المرسلة)
+     *  تحديث أوقات العمل (يحذف جميع الأوقات القديمة ويحفظ الأوقات الجديدة فقط)
      */
     private function updateWorkingHours(Salon $salon, array $workingHours): void
     {
-        // جلب الأوقات الحالية أولاً
-        $currentHours = $salon->workingHours()
-            ->get()
-            ->keyBy('day_of_week');
+        // 1. حذف جميع أوقات العمل الحالية للصالون
+        WorkingHour::where('workable_type', Salon::class)
+            ->where('workable_id', $salon->id)
+            ->delete();
 
-        // معالجة الأوقات الجديدة
+        // 2. إضافة أوقات العمل الجديدة (الأيام المرسلة فقط)
         foreach ($workingHours as $hours) {
             $day = $hours['day'];
             $isOpen = $hours['is_open'] ?? false;
 
-            // الحصول على الوقت الحالي لهذا اليوم إذا كان موجوداً
-            $currentHour = $currentHours->get($day);
-
             // دعم كلا التنسيقين: start/end أو shift1_start/shift1_end
-            $newStart = $hours['start'] ?? $hours['shift1_start'] ?? null;
-            $newEnd = $hours['end'] ?? $hours['shift1_end'] ?? null;
+            $start = $hours['start'] ?? $hours['shift1_start'] ?? null;
+            $end = $hours['end'] ?? $hours['shift1_end'] ?? null;
 
-            if ($isOpen) {
-                // إذا كان اليوم مفتوحاً
-                if ($newStart === null && $currentHour) {
-                    // لم يتم إرسال start، استخدم القيمة الحالية
-                    $finalStart = $currentHour->shift1_start;
-                } else {
-                    $finalStart = $newStart;
-                }
-
-                if ($newEnd === null && $currentHour) {
-                    // لم يتم إرسال end، استخدم القيمة الحالية
-                    $finalEnd = $currentHour->shift1_end;
-                } else {
-                    $finalEnd = $newEnd;
-                }
-            } else {
-                // إذا كان اليوم مغلقاً
-                $finalStart = null;
-                $finalEnd = null;
-            }
-
-            // تحديث أو إنشاء سجل أوقات العمل
-            WorkingHour::updateOrCreate(
-                [
-                    'workable_type' => Salon::class,
-                    'workable_id' => $salon->id,
-                    'day_of_week' => $day,
-                ],
-                [
-                    'is_open' => $isOpen,
-                    'shift1_start' => $finalStart,
-                    'shift1_end' => $finalEnd,
-                ]
-            );
+            WorkingHour::create([
+                'workable_type' => Salon::class,
+                'workable_id' => $salon->id,
+                'day_of_week' => $day,
+                'is_open' => $isOpen,
+                'shift1_start' => $isOpen ? $start : null,
+                'shift1_end' => $isOpen ? $end : null,
+            ]);
         }
+
+        Log::info('Working hours updated (deleted all, saved new)', [
+            'salon_id' => $salon->id,
+            'days_saved' => array_column($workingHours, 'day'),
+        ]);
     }
 
     /**

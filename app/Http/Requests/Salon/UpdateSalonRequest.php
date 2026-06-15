@@ -13,12 +13,12 @@ class UpdateSalonRequest extends FormRequest
         return auth()->user()?->hasRole('salon_owner');
     }
 
-    
+
     protected function prepareForValidation(): void
     {
-        // إذا كان delete_image_ids موجوداً كنص (من query string)، حوله إلى مصفوفة
+      
         if ($this->has('delete_image_ids') && is_string($this->delete_image_ids)) {
-            // إزالة الأقواس [] وتحويل إلى مصفوفة
+
             $value = $this->delete_image_ids;
             $value = trim($value, '[]');
 
