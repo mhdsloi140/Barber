@@ -271,7 +271,7 @@ private function formatAppointmentWithFullObjects(Appointment $appointment): arr
         'date' => $this->formatDate($appointment->appointment_date),
         'time' => $this->formatTime($appointment->appointment_time),
         'end_time' => $this->formatTime($appointment->end_time),
-        'cancelled_by' => $appointment->cancelled_by ?? null,
+        'cancelled_by' => $appointment->cancelled_by ,
         'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
         'status' => $appointment->status,
         'created_at' => $this->formatDateTime($appointment->created_at),
