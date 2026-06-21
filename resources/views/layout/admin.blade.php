@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>نعيما | لوحة تحكم عصرية</title>
+    <title>نعيما | لوحة تحكم </title>
 
     <!-- Tailwind CSS CDN (بديل عن الملفات المسببة للمشكلة) -->
     <script src="https://cdn.tailwindcss.com"></script>

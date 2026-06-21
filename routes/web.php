@@ -20,9 +20,8 @@ use Illuminate\Support\Facades\Route;
 
 
 Route::get('/', function () {
-    return view('layout.app');
+    return redirect()->route('admin.index');
 });
-
 // ===================== Routes المصادقة =====================
 Route::get('login', [AuthController::class, 'index'])->name('admin.index');
 Route::post('login', [AuthController::class, 'login'])->name('admin.login');
