@@ -48,10 +48,8 @@ class UltraMsgService
      */
     public function formatPhoneNumber(string $phone): string
     {
-        // إزالة المسافات والشرطات والأقواس
         $phone = preg_replace('/[^0-9+]/', '', $phone);
 
-        // إذا كان الرقم يبدأ بـ 0 (أرقام عراقية: 077, 078, 079)
         if (str_starts_with($phone, '0')) {
             $phone = '+964' . substr($phone, 1);
         }
@@ -174,14 +172,8 @@ class UltraMsgService
      */
     public function sendOTP(string $phone, string $otpCode, int $expiresInMinutes = 10): array
     {
-        $message = " *رمز التحقق الخاص بك*\n\n" .
-            "مرحباً بك في تطبيقنا!\n\n" .
-            "رمز التحقق الخاص بحسابك هو:\n\n" .
-            "{$otpCode}\n\n" .
-            " هذا الرمز صالح لمدة {$expiresInMinutes} دقائق فقط.\n" .
-            " لا تشارك هذا الرمز مع أي شخص.\n\n" .
-            "إذا لم تطلب هذا الرمز، يمكنك تجاهل هذه الرسالة.";
-
+        $message = " *رمز التحقق الخاص بك في تطبيق نعيما هو *\n\n" .
+            "{$otpCode}\n\n" ;
         return $this->sendMessage($phone, $message, 5); // أولوية أعلى لـ OTP
     }
 
@@ -301,10 +293,8 @@ class UltraMsgService
                  . "كلمة المرور: {$password}\n"
                  . "----------------------------------------\n\n"
                  . "تنبيه: يرجى تغيير كلمة المرور بعد أول تسجيل دخول.\n\n"
-                 . "رابط التطبيق: {$appUrl}/login\n\n"
                  . "شكراً لانضمامك إلينا.";
 
-        // إضافة تعليمات خاصة للحلاقين
         if ($type === 'barber') {
             $message .= "\n\nملاحظة: يمكنك إدارة مواعيدك وعمولاتك من لوحة التحكم الخاصة بك.";
         }
@@ -401,10 +391,8 @@ class UltraMsgService
  */
 public function validateIraqiPhone($phone)
 {
-    // إزالة المسافات والشرطات
     $phone = preg_replace('/[^0-9]/', '', $phone);
 
-    // التحقق من الطول
     if (strlen($phone) != 11) {
         return [
             'valid' => false,

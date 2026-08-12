@@ -23,7 +23,7 @@ return new class extends Migration {
             $table->string('verification_code')->nullable();
             $table->timestamp('verification_expires_at')->nullable();
             $table->rememberToken();
-              $table->softDeletes(); 
+            //   $table->softDeletes(); 
             $table->timestamps();
         });
     }

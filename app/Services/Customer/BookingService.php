@@ -1060,53 +1060,57 @@ class BookingService
         }
     }
 
-    /**
-     * إلغاء حجز
-     */
-    public function cancelAppointment(User $customer, int $appointmentId, ?string $reason = null): AuthResult
-    {
-        try {
-            return DB::transaction(function () use ($customer, $appointmentId, $reason) {
-                $appointment = Appointment::where('customer_id', $customer->id)
-                    ->where('id', $appointmentId)
-                    ->first();
 
-                if (!$appointment) {
-                    return AuthResult::error('الحجز غير موجود', null, 404);
-                }
+public function cancelAppointmentByCustomer(User $customer, int $appointmentId, ?string $reason = null): AuthResult
+{
+    try {
+        return DB::transaction(function () use ($customer, $appointmentId, $reason) {
 
-                if (!in_array($appointment->status, ['pending', 'confirmed'])) {
-                    return AuthResult::error("لا يمكن إلغاء هذا الحجز، حالته الحالية: {$appointment->status}", null, 400);
-                }
+            $appointment = Appointment::where('customer_id', $customer->id)
+                ->where('id', $appointmentId)
+                ->first();
 
-                $appointment->status = 'cancelled';
-                $appointment->cancelled_by='customer';
-                $appointment->save();
-                try {
-                    $notificationService = app(FirebaseNotificationService::class);
-                    $notificationService->notifyAppointmentCancelledToBarber($appointment);
+            if (!$appointment) {
+                return AuthResult::error('الحجز غير موجود', null, 404);
+            }
 
-                } catch (\Exception $e) {
-                    Log::error('Failed to send cancellation notification to barber: ' . $e->getMessage());
-                }
+            if (!$appointment->canBeCancelled()) {
+                return AuthResult::error("لا يمكن إلغاء هذا الحجز، حالته الحالية: {$appointment->status}", null, 400);
+            }
 
-                return AuthResult::success('تم إلغاء الحجز بنجاح', [
-                    'id' => $appointment->id,
-                    'status' => $appointment->status,
-                    'status_text' => $this->getStatusText($appointment->status),
-                    'cancelled_by' => $appointment->cancelled_by ??null,
+            $appointment->cancel('customer', $reason);
 
-                ]);
-            });
-        } catch (\Exception $e) {
-            Log::error('Cancel appointment error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء إلغاء الحجز: ' . $e->getMessage(), null, 500);
-        }
+            $isAvailable = Appointment::isTimeSlotAvailable(
+                $appointment->barber_id,
+                $appointment->appointment_date,
+                $appointment->appointment_time,
+                $appointment->id
+            );
+
+            try {
+                $notificationService = app(FirebaseNotificationService::class);
+                $notificationService->notifyAppointmentCancelledToBarber($appointment, $reason);
+            } catch (\Exception $e) {
+                Log::error('Failed to send cancellation notification: ' . $e->getMessage());
+            }
+
+         
+            return AuthResult::success('تم إلغاء الحجز بنجاح، الوقت أصبح متاحاً للحجز مرة أخرى', [
+                'id' => $appointment->id,
+                'status' => $appointment->status,
+                'cancelled_by' => $appointment->cancelled_by,
+                'cancelled_at' => $appointment->cancelled_at,
+                'is_available' => $isAvailable,
+                'message' => 'تم إلغاء الحجز، يمكن حجز هذا الوقت مرة أخرى'
+            ]);
+
+        });
+    } catch (\Exception $e) {
+        Log::error('Cancel appointment error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء إلغاء الحجز: ' . $e->getMessage(), null, 500);
     }
-/**
- * جلب أقرب حجز للزبون (الحجز القادم)
- * GET /api/customer/appointments/upcoming
- */
+}
+
 public function getUpcomingAppointment(User $customer): AuthResult
 {
     try {
@@ -1299,7 +1303,6 @@ private function getTimeRemaining(Appointment $appointment): ?array
             $totalDuration = $appointment->duration_minutes;
             $serviceNames = collect($services)->pluck('name')->implode(' + ');
 
-         
             $fullAppointment = [
                 'id' => $appointment->id,
                 'customer' => [

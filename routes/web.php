@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\CentersController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ProfileController;
+use App\Http\Controllers\Admin\NotificationController; // ✅ إضافة
 use App\Http\Controllers\FcmTokenController;
 use App\Services\ultraMessage\UltraMsgService;
 use Illuminate\Support\Facades\Route;
@@ -15,20 +16,19 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-
-
-
-
 Route::get('/', function () {
     return redirect()->route('admin.index');
 });
+
 // ===================== Routes المصادقة =====================
 Route::get('login', [AuthController::class, 'index'])->name('admin.index');
 Route::post('login', [AuthController::class, 'login'])->name('admin.login');
 Route::post('/admin/logout', [AuthController::class, 'logout'])->name('admin.logout')->middleware('auth');
+
 Route::middleware(['auth'])->group(function () {
     Route::post('/fcm-token', [FcmTokenController::class, 'update'])->name('fcm.token.update');
 });
+
 // ===================== Routes إعادة تعيين كلمة المرور للمدير =====================
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('forgot-password', [AuthController::class, 'showForgotPasswordForm'])->name('forgot-password.form');
@@ -36,10 +36,19 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('reset-password/{userId}', [AuthController::class, 'showResetPasswordForm'])->name('reset-password.form');
     Route::post('reset-password', [AuthController::class, 'resetPassword'])->name('reset-password.reset');
 });
+
 // ===================== Routes المحمية =====================
 Route::middleware(['auth'])->group(function () {
-    //  Route لحفظ FCM Token (المطلوب من JavaScript)
+    // Route لحفظ FCM Token
     Route::post('/admin/fcm/token', [FcmTokenController::class, 'update'])->name('admin.fcm.token');
+
+    // ===================== Routes الإشعارات =====================
+    Route::prefix('admin/notifications')->name('admin.notifications.')->group(function () {
+        Route::get('/', [NotificationController::class, 'index'])->name('index');
+        Route::get('/unread', [NotificationController::class, 'unread'])->name('unread');
+        Route::put('/mark-read/{id}', [NotificationController::class, 'markAsRead'])->name('mark-read');
+        Route::put('/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+    });
 
     // Routes الإدارة (دور admin)
     Route::middleware(['role:admin'])->group(function () {
@@ -62,4 +71,3 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/ads/{ad}/json', [AdvertisementController::class, 'getJson'])->name('admin.ads.json');
     });
 });
-

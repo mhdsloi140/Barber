@@ -8,7 +8,6 @@ use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\ResetPasswordRequest;
 use App\Http\Requests\VerifyOTPRequest;
-
 use App\Services\AuthAllUserServices;
 use Illuminate\Http\Request;
 use App\Models\User;
@@ -25,33 +24,28 @@ class AuthController extends Controller
     public function login(LoginRequest $request)
     {
         $result = $this->authService->login($request->validated());
-
         return response()->json(
             $result->toArray(),
             $result->success ? 200 : 401
         );
     }
+
     public function resetPassword(ResetPasswordRequest $request)
-{
-    $result = $this->authService->resetPassword(
-        $request->phone,
-        $request->code,
-        $request->password
-    );
+    {
+        $result = $this->authService->resetPassword(
+            $request->phone,
+            $request->code,
+            $request->password
+        );
+        return response()->json(
+            $result->toArray(),
+            $result->success ? 200 : 400
+        );
+    }
 
-    return response()->json(
-        $result->toArray(),
-        $result->success ? 200 : 400
-    );
-}
-
-    /**
-     * تسجيل جديد (حفظ البيانات + إرسال OTP)
-     */
     public function register(RegisterRequest $request)
     {
         $result = $this->authService->register($request);
-
         return response()->json(
             $result->toArray(),
             $result->success ? 201 : 422
@@ -59,12 +53,12 @@ class AuthController extends Controller
     }
 
     /**
-     *  التحقق من OTP وتفعيل الحساب
+     * التحقق من OTP وتفعيل الحساب (باستخدام رقم الهاتف)
      */
     public function verifyOTP(VerifyOTPRequest $request)
     {
         $result = $this->authService->verifyOTPAndActivate(
-            $request->user_id,
+            $request->phone,  
             $request->code
         );
 
@@ -74,45 +68,38 @@ class AuthController extends Controller
         );
     }
 
-    /**
-     *  إعادة إرسال OTP
-     */
-
     public function forgotPassword(ForgotPasswordRequest $request)
-{
-    $result = $this->authService->forgotPassword($request->phone);
+    {
+        $result = $this->authService->forgotPassword($request->phone);
+        return response()->json(
+            $result->toArray(),
+            $result->success ? 200 : 400
+        );
+    }
 
-    return response()->json(
-        $result->toArray(),
-        $result->success ? 200 : 400
-    );
-}
-/**
- * إعادة إرسال رمز التحقق OTP
- */
-public function resendOTP(Request $request)
-{
-    $request->validate([
-        'user_id' => 'required|integer|exists:users,id',
-    ]);
 
-    $result = $this->authService->resendOTP($request->user_id);
+    public function resendOTP(Request $request)
+    {
+        $request->validate([
+            'phone' => 'required|string|exists:users,phone',
+        ]);
 
-    return response()->json(
-        $result->toArray(),
-        $result->success ? 200 : 400
-    );
-}
-    /**
-     *  التحقق من صلاحية رمز OTP (دون تفعيل)
-     */
+        $result = $this->authService->resendOTP($request->phone);
+
+        return response()->json(
+            $result->toArray(),
+            $result->success ? 200 : 400
+        );
+    }
+
+
     public function checkOTPStatus(Request $request)
     {
         $request->validate([
-            'user_id' => 'required|integer|exists:users,id',
+            'phone' => 'required|string|exists:users,phone',
         ]);
 
-        $result = $this->authService->checkOTPStatus($request->user_id);
+        $result = $this->authService->checkOTPStatus($request->phone);
 
         return response()->json(
             $result->toArray(),
@@ -120,57 +107,39 @@ public function resendOTP(Request $request)
         );
     }
 
-    /**
-     * تسجيل الخروج
-     */
     public function logout(Request $request)
     {
         $result = $this->authService->logout($request->user());
-
         return response()->json(
             $result->toArray(),
             $result->success ? 200 : 400
         );
     }
 
-    /**
-     * تسجيل الخروج من جميع الأجهزة
-     */
     public function logoutFromAllDevices(Request $request)
     {
         $result = $this->authService->logoutFromAllDevices($request->user());
-
         return response()->json(
             $result->toArray(),
             $result->success ? 200 : 400
         );
     }
 
-    /**
-     * الحصول على المستخدم الحالي
-     */
     public function me(Request $request)
     {
         $result = $this->authService->getCurrentUser($request->user());
-
         return response()->json(
             $result->toArray(),
             $result->success ? 200 : 404
         );
     }
 
-    /**
-     * تحديث التوكن
-     */
     public function refresh(Request $request)
     {
         $result = $this->authService->refreshToken($request->user());
-
         return response()->json(
             $result->toArray(),
             $result->success ? 200 : 400
         );
     }
-
-
 }

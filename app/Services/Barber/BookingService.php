@@ -67,6 +67,7 @@ class BookingService
 
                 $appointment = Appointment::where('barber_id', $barber->id)
                     ->where('id', $appointmentId)
+                    ->with(['customer', 'salon', 'barber'])
                     ->first();
 
                 if (!$appointment) {
@@ -79,20 +80,95 @@ class BookingService
 
                 $appointment->status = 'confirmed';
                 $appointment->save();
+
                 try {
                     $notificationService = app(FirebaseNotificationService::class);
                     $notificationService->notifyAppointmentApprovedToCustomer($appointment);
                 } catch (\Exception $e) {
                     Log::error('Failed to send approval notification: ' . $e->getMessage());
                 }
-
-                return AuthResult::success('تم تأكيد الحجز بنجاح', $this->formatAppointment($appointment));
+                return AuthResult::success('تم تأكيد الحجز بنجاح', $this->formatAppointmentWithFullObjects($appointment));
 
             });
         } catch (\Exception $e) {
             Log::error('Approve appointment error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء تأكيد الحجز', null, 500);
         }
+    }
+
+
+    private function formatAppointmentWithFullObjects(Appointment $appointment): array
+    {
+        $services = $this->getAppointmentServices($appointment);
+        $totalPrice = $this->calculateTotalPrice($appointment, $services);
+        $totalDuration = $this->calculateTotalDuration($appointment, $services);
+        $serviceNames = collect($services)->pluck('name')->implode(' + ');
+
+
+        $customer = $appointment->customer;
+        $customerData = null;
+        if ($customer) {
+            $customerData = [
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'phone' => $customer->phone,
+                'email' => $customer->email ?? null,
+                'avatar' => $customer->getAvatarUrlAttribute(),
+                'is_active' => $customer->is_active,
+                'created_at' => $customer->created_at,
+            ];
+        }
+
+
+        $barber = $appointment->barber;
+        $barberData = null;
+        if ($barber) {
+            $barberData = [
+                'id' => $barber->id,
+                'name' => $barber->name,
+                'phone' => $barber->phone,
+                'email' => $barber->email ?? null,
+                'avatar' => $barber->getAvatarUrlAttribute(),
+                'is_active' => $barber->is_active,
+                'created_at' => $barber->created_at,
+            ];
+        }
+
+
+        $salon = $appointment->salon;
+        $salonData = null;
+        if ($salon) {
+            $salonData = [
+                'id' => $salon->id,
+                'name' => $salon->name,
+                'address' => $salon->address,
+                'phone' => $salon->phone,
+                'latitude' => $salon->latitude,
+                'longitude' => $salon->longitude,
+                'images' => $salon->getImagesUrlsAttribute(),
+                'is_active' => $salon->is_active,
+            ];
+        }
+
+        return [
+            'id' => $appointment->id,
+            'customer' => $customerData,
+            'barber' => $barberData,
+            'salon' => $salonData,
+            'services' => $services,
+            'services_summary' => $serviceNames,
+            'total_price' => $totalPrice,
+            'total_duration' => $totalDuration,
+            'service_name' => $services[0]['name'] ?? null,
+            'service_price' => $services[0]['price'] ?? null,
+            'date' => $this->formatDate($appointment->appointment_date),
+            'time' => $this->formatTime($appointment->appointment_time),
+            'end_time' => $this->formatTime($appointment->end_time),
+            'cancelled_by' => $appointment->cancelled_by ?? null,
+            'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
+            'status' => $appointment->status,
+            'created_at' => $this->formatDateTime($appointment->created_at),
+        ];
     }
 
     /**
@@ -138,238 +214,238 @@ class BookingService
     /**
      * جلب جميع حجوزات الحلاق مع الإحصائيات
      */
-public function getBarberAppointments(User $barber, ?string $date = null, int $perPage = 10): AuthResult
-{
-    try {
-        if (!$barber->hasRole('barber')) {
-            return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
+    public function getBarberAppointments(User $barber, ?string $date = null, int $perPage = 10): AuthResult
+    {
+        try {
+            if (!$barber->hasRole('barber')) {
+                return AuthResult::error('هذه الخدمة متاحة للحلاقين فقط', null, 403);
+            }
+
+            // تحديد التاريخ المستهدف
+            $targetDate = $date ? Carbon::parse($date)->format('Y-m-d') : Carbon::today()->format('Y-m-d');
+
+            // بناء الاستعلام
+            $query = Appointment::where('barber_id', $barber->id)
+                ->with(['customer', 'salon', 'barber']);
+
+            if ($date) {
+                $query->whereDate('appointment_date', $targetDate);
+            } else {
+                $query->whereIn('status', ['pending', 'confirmed'])
+                    ->whereDate('appointment_date', '>=', $targetDate);
+            }
+
+            $appointments = $query->orderBy('appointment_date', 'asc')
+                ->orderBy('appointment_time', 'asc')
+                ->paginate($perPage);
+
+            $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
+                return $this->formatAppointmentWithFullObjects($appointment);
+            });
+
+            $statsQuery = Appointment::where('barber_id', $barber->id);
+
+            if ($date) {
+                $statsQuery->whereDate('appointment_date', $targetDate);
+            } else {
+                $statsQuery->whereIn('status', ['pending', 'confirmed'])
+                    ->whereDate('appointment_date', '>=', $targetDate);
+            }
+
+            $statsFromDatabase = [
+                'total' => (clone $statsQuery)->count(),
+                'pending' => (clone $statsQuery)->where('status', 'pending')->count(),
+                'confirmed' => (clone $statsQuery)->where('status', 'confirmed')->count(),
+                'completed' => (clone $statsQuery)->where('status', 'completed')->count(),
+                'cancelled' => (clone $statsQuery)->where('status', 'cancelled')->count(),
+                'today' => Appointment::where('barber_id', $barber->id)->whereDate('appointment_date', now()->toDateString())->count(),
+            ];
+
+            $paginationData = [
+                'current_page' => $appointments->currentPage(),
+                'data' => $formattedAppointments,
+                'first_page_url' => $appointments->url(1),
+                'from' => $appointments->firstItem(),
+                'last_page' => $appointments->lastPage(),
+                'last_page_url' => $appointments->url($appointments->lastPage()),
+                'next_page_url' => $appointments->nextPageUrl(),
+                'path' => $appointments->path(),
+                'per_page' => $appointments->perPage(),
+                'prev_page_url' => $appointments->previousPageUrl(),
+                'to' => $appointments->lastItem(),
+                'total' => $appointments->total(),
+            ];
+
+            $response = [
+                'date' => $targetDate,
+                'is_filtered_by_date' => !is_null($date),
+                'statistics' => $statsFromDatabase,
+                'appointments' => $paginationData,
+            ];
+
+            return AuthResult::success('تم جلب الحجوزات بنجاح', $response);
+
+        } catch (\Exception $e) {
+            Log::error('Get barber appointments error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * تنسيق الحجز مع إرجاع كائن الحلاق والزبون كاملين
+     */
+    // private function formatAppointmentWithFullObjects(Appointment $appointment): array
+// {
+//     $services = $this->getAppointmentServices($appointment);
+//     $totalPrice = $this->calculateTotalPrice($appointment, $services);
+//     $totalDuration = $this->calculateTotalDuration($appointment, $services);
+//     $serviceNames = collect($services)->pluck('name')->implode(' + ');
+
+
+    //     $customer = $appointment->customer;
+//     $customerData = null;
+//     if ($customer) {
+//         $customerData = [
+//             'id' => $customer->id,
+//             'name' => $customer->name,
+//             'phone' => $customer->phone,
+//             // 'email' => $customer->email ?? null,
+//             'avatar' => $customer->getAvatarUrlAttribute(),
+//             'is_active' => $customer->is_active,
+//             'created_at' => $customer->created_at,
+//         ];
+//     }
+
+    //     $barber = $appointment->barber;
+//     $barberData = null;
+//     if ($barber) {
+//         $barberData = [
+//             'id' => $barber->id,
+//             'name' => $barber->name,
+//             'phone' => $barber->phone,
+//             // 'email' => $barber->email ?? null,
+//             'avatar' => $barber->getAvatarUrlAttribute(),
+//             'is_active' => $barber->is_active,
+//             'created_at' => $barber->created_at,
+//         ];
+//     }
+
+
+    //     $salonName = $appointment->salon->name ?? 'غير معروف';
+
+    //     return [
+//         'id' => $appointment->id,
+//         'customer' => $customerData,
+//         'barber' => $barberData,
+//         'salon_name' => $salonName,
+//         'services' => $services,
+//         'services_summary' => $serviceNames,
+//         'total_price' => $totalPrice,
+//         'total_duration' => $totalDuration,
+//         'service_name' => $services[0]['name'] ?? null,
+//         'service_price' => $services[0]['price'] ?? null,
+//         'date' => $this->formatDate($appointment->appointment_date),
+//         'time' => $this->formatTime($appointment->appointment_time),
+//         'end_time' => $this->formatTime($appointment->end_time),
+//         'cancelled_by' => $appointment->cancelled_by ,
+//         'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
+//         'status' => $appointment->status,
+//         'created_at' => $this->formatDateTime($appointment->created_at),
+//     ];
+// }
+
+    /**
+     * تنسيق الحجز مع إرجاع كائن الزبون كامل
+     */
+    private function formatAppointmentWithCustomerObject(Appointment $appointment): array
+    {
+        $services = $this->getAppointmentServices($appointment);
+        $totalPrice = $this->calculateTotalPrice($appointment, $services);
+        $totalDuration = $this->calculateTotalDuration($appointment, $services);
+        $serviceNames = collect($services)->pluck('name')->implode(' + ');
+
+
+        $customer = $appointment->customer;
+        $customerData = null;
+        if ($customer) {
+            $customerData = [
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'phone' => $customer->phone,
+                'email' => $customer->email ?? null,
+                'avatar' => $customer->getAvatarUrlAttribute(),
+                'is_active' => $customer->is_active,
+                'created_at' => $customer->created_at,
+            ];
         }
 
-        // تحديد التاريخ المستهدف
-        $targetDate = $date ? Carbon::parse($date)->format('Y-m-d') : Carbon::today()->format('Y-m-d');
+        return [
+            'id' => $appointment->id,
+            'customer' => $customerData,
+            'barber_name' => $appointment->barber->name ?? 'غير معروف',
+            'salon_name' => $appointment->salon->name ?? 'غير معروف',
+            'services' => $services,
+            'services_summary' => $serviceNames,
+            'total_price' => $totalPrice,
+            'total_duration' => $totalDuration,
+            'service_name' => $services[0]['name'] ?? null,
+            'service_price' => $services[0]['price'] ?? null,
+            'date' => $this->formatDate($appointment->appointment_date),
+            'time' => $this->formatTime($appointment->appointment_time),
+            'end_time' => $this->formatTime($appointment->end_time),
+            'cancelled_by' => $appointment->cancelled_by ?? null,
+            'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
+            'status' => $appointment->status,
+            'created_at' => $this->formatDateTime($appointment->created_at),
+        ];
+    }
 
-        // بناء الاستعلام
-        $query = Appointment::where('barber_id', $barber->id)
-            ->with(['customer', 'salon', 'barber']);
+    /**
+     * تنسيق الحجز مع إرجاع كائن الحلاق كامل
+     */
+    private function formatAppointmentWithBarberObject(Appointment $appointment): array
+    {
+        $services = $this->getAppointmentServices($appointment);
+        $totalPrice = $this->calculateTotalPrice($appointment, $services);
+        $totalDuration = $this->calculateTotalDuration($appointment, $services);
+        $serviceNames = collect($services)->pluck('name')->implode(' + ');
 
-        if ($date) {
-            $query->whereDate('appointment_date', $targetDate);
-        } else {
-            $query->whereIn('status', ['pending', 'confirmed'])
-                ->whereDate('appointment_date', '>=', $targetDate);
+
+        $barber = $appointment->barber;
+        $barberData = null;
+        if ($barber) {
+            $barberData = [
+                'id' => $barber->id,
+                'name' => $barber->name,
+                'phone' => $barber->phone,
+                'email' => $barber->email ?? null,
+                'avatar' => $barber->getAvatarUrlAttribute(),
+                'is_active' => $barber->is_active,
+                'created_at' => $barber->created_at,
+            ];
         }
 
-        $appointments = $query->orderBy('appointment_date', 'asc')
-            ->orderBy('appointment_time', 'asc')
-            ->paginate($perPage);
-
-        $formattedAppointments = collect($appointments->items())->map(function ($appointment) {
-            return $this->formatAppointmentWithFullObjects($appointment);
-        });
-
-        $statsQuery = Appointment::where('barber_id', $barber->id);
-
-        if ($date) {
-            $statsQuery->whereDate('appointment_date', $targetDate);
-        } else {
-            $statsQuery->whereIn('status', ['pending', 'confirmed'])
-                ->whereDate('appointment_date', '>=', $targetDate);
-        }
-
-        $statsFromDatabase = [
-            'total' => (clone $statsQuery)->count(),
-            'pending' => (clone $statsQuery)->where('status', 'pending')->count(),
-            'confirmed' => (clone $statsQuery)->where('status', 'confirmed')->count(),
-            'completed' => (clone $statsQuery)->where('status', 'completed')->count(),
-            'cancelled' => (clone $statsQuery)->where('status', 'cancelled')->count(),
-            'today' => Appointment::where('barber_id', $barber->id)->whereDate('appointment_date', now()->toDateString())->count(),
-        ];
-
-        $paginationData = [
-            'current_page' => $appointments->currentPage(),
-            'data' => $formattedAppointments,
-            'first_page_url' => $appointments->url(1),
-            'from' => $appointments->firstItem(),
-            'last_page' => $appointments->lastPage(),
-            'last_page_url' => $appointments->url($appointments->lastPage()),
-            'next_page_url' => $appointments->nextPageUrl(),
-            'path' => $appointments->path(),
-            'per_page' => $appointments->perPage(),
-            'prev_page_url' => $appointments->previousPageUrl(),
-            'to' => $appointments->lastItem(),
-            'total' => $appointments->total(),
-        ];
-
-        $response = [
-            'date' => $targetDate,
-            'is_filtered_by_date' => !is_null($date),
-            'statistics' => $statsFromDatabase,
-            'appointments' => $paginationData,
-        ];
-
-        return AuthResult::success('تم جلب الحجوزات بنجاح', $response);
-
-    } catch (\Exception $e) {
-        Log::error('Get barber appointments error: ' . $e->getMessage());
-        return AuthResult::error('حدث خطأ أثناء جلب الحجوزات', $e->getMessage(), 500);
-    }
-}
-
-/**
- * تنسيق الحجز مع إرجاع كائن الحلاق والزبون كاملين
- */
-private function formatAppointmentWithFullObjects(Appointment $appointment): array
-{
-    $services = $this->getAppointmentServices($appointment);
-    $totalPrice = $this->calculateTotalPrice($appointment, $services);
-    $totalDuration = $this->calculateTotalDuration($appointment, $services);
-    $serviceNames = collect($services)->pluck('name')->implode(' + ');
-
-
-    $customer = $appointment->customer;
-    $customerData = null;
-    if ($customer) {
-        $customerData = [
-            'id' => $customer->id,
-            'name' => $customer->name,
-            'phone' => $customer->phone,
-            // 'email' => $customer->email ?? null,
-            'avatar' => $customer->getAvatarUrlAttribute(),
-            'is_active' => $customer->is_active,
-            'created_at' => $customer->created_at,
+        return [
+            'id' => $appointment->id,
+            'customer_name' => $appointment->customer->name ?? 'غير معروف',
+            'customer_phone' => $appointment->customer->phone ?? 'غير معروف',
+            'barber' => $barberData,
+            'salon_name' => $appointment->salon->name ?? 'غير معروف',
+            'services' => $services,
+            'services_summary' => $serviceNames,
+            'total_price' => $totalPrice,
+            'total_duration' => $totalDuration,
+            'service_name' => $services[0]['name'] ?? null,
+            'service_price' => $services[0]['price'] ?? null,
+            'date' => $this->formatDate($appointment->appointment_date),
+            'time' => $this->formatTime($appointment->appointment_time),
+            'end_time' => $this->formatTime($appointment->end_time),
+            'cancelled_by' => $appointment->cancelled_by ?? null,
+            'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
+            'status' => $appointment->status,
+            'created_at' => $this->formatDateTime($appointment->created_at),
         ];
     }
-
-    $barber = $appointment->barber;
-    $barberData = null;
-    if ($barber) {
-        $barberData = [
-            'id' => $barber->id,
-            'name' => $barber->name,
-            'phone' => $barber->phone,
-            // 'email' => $barber->email ?? null,
-            'avatar' => $barber->getAvatarUrlAttribute(),
-            'is_active' => $barber->is_active,
-            'created_at' => $barber->created_at,
-        ];
-    }
-
-
-    $salonName = $appointment->salon->name ?? 'غير معروف';
-
-    return [
-        'id' => $appointment->id,
-        'customer' => $customerData,
-        'barber' => $barberData,
-        'salon_name' => $salonName,
-        'services' => $services,
-        'services_summary' => $serviceNames,
-        'total_price' => $totalPrice,
-        'total_duration' => $totalDuration,
-        'service_name' => $services[0]['name'] ?? null,
-        'service_price' => $services[0]['price'] ?? null,
-        'date' => $this->formatDate($appointment->appointment_date),
-        'time' => $this->formatTime($appointment->appointment_time),
-        'end_time' => $this->formatTime($appointment->end_time),
-        'cancelled_by' => $appointment->cancelled_by ,
-        'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
-        'status' => $appointment->status,
-        'created_at' => $this->formatDateTime($appointment->created_at),
-    ];
-}
-
-/**
- * تنسيق الحجز مع إرجاع كائن الزبون كامل
- */
-private function formatAppointmentWithCustomerObject(Appointment $appointment): array
-{
-    $services = $this->getAppointmentServices($appointment);
-    $totalPrice = $this->calculateTotalPrice($appointment, $services);
-    $totalDuration = $this->calculateTotalDuration($appointment, $services);
-    $serviceNames = collect($services)->pluck('name')->implode(' + ');
-
-
-    $customer = $appointment->customer;
-    $customerData = null;
-    if ($customer) {
-        $customerData = [
-            'id' => $customer->id,
-            'name' => $customer->name,
-            'phone' => $customer->phone,
-            'email' => $customer->email ?? null,
-            'avatar' => $customer->getAvatarUrlAttribute(),
-            'is_active' => $customer->is_active,
-            'created_at' => $customer->created_at,
-        ];
-    }
-
-    return [
-        'id' => $appointment->id,
-        'customer' => $customerData,
-        'barber_name' => $appointment->barber->name ?? 'غير معروف',
-        'salon_name' => $appointment->salon->name ?? 'غير معروف',
-        'services' => $services,
-        'services_summary' => $serviceNames,
-        'total_price' => $totalPrice,
-        'total_duration' => $totalDuration,
-        'service_name' => $services[0]['name'] ?? null,
-        'service_price' => $services[0]['price'] ?? null,
-        'date' => $this->formatDate($appointment->appointment_date),
-        'time' => $this->formatTime($appointment->appointment_time),
-        'end_time' => $this->formatTime($appointment->end_time),
-        'cancelled_by' => $appointment->cancelled_by ?? null,
-        'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
-        'status' => $appointment->status,
-        'created_at' => $this->formatDateTime($appointment->created_at),
-    ];
-}
-
-/**
- * تنسيق الحجز مع إرجاع كائن الحلاق كامل
- */
-private function formatAppointmentWithBarberObject(Appointment $appointment): array
-{
-    $services = $this->getAppointmentServices($appointment);
-    $totalPrice = $this->calculateTotalPrice($appointment, $services);
-    $totalDuration = $this->calculateTotalDuration($appointment, $services);
-    $serviceNames = collect($services)->pluck('name')->implode(' + ');
-
-
-    $barber = $appointment->barber;
-    $barberData = null;
-    if ($barber) {
-        $barberData = [
-            'id' => $barber->id,
-            'name' => $barber->name,
-            'phone' => $barber->phone,
-            'email' => $barber->email ?? null,
-            'avatar' => $barber->getAvatarUrlAttribute(),
-            'is_active' => $barber->is_active,
-            'created_at' => $barber->created_at,
-        ];
-    }
-
-    return [
-        'id' => $appointment->id,
-        'customer_name' => $appointment->customer->name ?? 'غير معروف',
-        'customer_phone' => $appointment->customer->phone ?? 'غير معروف',
-        'barber' => $barberData,
-        'salon_name' => $appointment->salon->name ?? 'غير معروف',
-        'services' => $services,
-        'services_summary' => $serviceNames,
-        'total_price' => $totalPrice,
-        'total_duration' => $totalDuration,
-        'service_name' => $services[0]['name'] ?? null,
-        'service_price' => $services[0]['price'] ?? null,
-        'date' => $this->formatDate($appointment->appointment_date),
-        'time' => $this->formatTime($appointment->appointment_time),
-        'end_time' => $this->formatTime($appointment->end_time),
-        'cancelled_by' => $appointment->cancelled_by ?? null,
-        'day' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('l') : null,
-        'status' => $appointment->status,
-        'created_at' => $this->formatDateTime($appointment->created_at),
-    ];
-}
     /**
      * إلغاء حجز بواسطة الحلاق
      */

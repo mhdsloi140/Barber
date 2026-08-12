@@ -785,8 +785,40 @@
         }
     }
 
-    function confirmDeleteAction() {
+    function confirmDeleteAction() {function confirmDeleteAction() {
+    if (!currentSalonId) return;
+
+     
+    const url = `/admin/centers/${currentSalonId}`;
+
+    fetch(url, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            cancelDelete();
+            closeModal();
+
+            location.reload();
+        } else {
+            alert('حدث خطأ أثناء حذف الصالون: ' + (data.message || 'خطأ غير معروف'));
+            cancelDelete();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('حدث خطأ في الاتصال بالخادم');
+        cancelDelete();
+    });
+}
         if (!currentSalonId) return;
+        const url = `/admin/centers/${currentSalonId}`;
         fetch(`/admin/centers/${currentSalonId}`, {
             method: 'DELETE',
             headers: {

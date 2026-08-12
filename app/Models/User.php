@@ -12,7 +12,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 
 class User extends Authenticatable implements HasMedia
 {
-    use HasApiTokens, Notifiable, HasRoles, SoftDeletes, InteractsWithMedia;
+    use HasApiTokens, Notifiable, HasRoles,  InteractsWithMedia;
     protected $guard_name = 'api';
     protected $fillable = [
         'name',

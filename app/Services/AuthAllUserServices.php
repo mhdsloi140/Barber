@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\UploadedFile;
-
 use Illuminate\Support\Facades\Cache;
 
 class AuthAllUserServices
@@ -26,98 +25,124 @@ class AuthAllUserServices
         $this->whatsappService = $whatsappService;
         $this->otpService = $otpService;
     }
+
     /**
- *  إرسال OTP لمستخدم (للاختبار)
- */
-public function sendOTPToUser(int $userId): array
-{
-    try {
-        $user = User::find($userId);
+     * إرسال OTP لمستخدم (للاختبار)
+     */
+    public function sendOTPToUser(int $userId): array
+    {
+        try {
+            $user = User::find($userId);
 
-        if (!$user) {
-            return ['success' => false, 'error' => 'User not found'];
+            if (!$user) {
+                return ['success' => false, 'error' => 'User not found'];
+            }
+
+            return $this->otpService->sendOTP($user->phone, $userId);
+        } catch (\Exception $e) {
+            Log::error('Send OTP error: ' . $e->getMessage());
+            return ['success' => false, 'error' => $e->getMessage()];
         }
-
-        return $this->otpService->sendOTP($user->phone, $userId);
-
-    } catch (\Exception $e) {
-        Log::error('Send OTP error: ' . $e->getMessage());
-        return ['success' => false, 'error' => $e->getMessage()];
     }
-}
 
-/**
- *  التحقق من صلاحية OTP (بدون تفعيل)
- */
-public function checkOTPStatus(int $userId): AuthResult
-{
-    try {
-        $user = User::find($userId);
+    /**
+     * التحقق من صلاحية OTP (باستخدام رقم الهاتف)
+     */
+    public function checkOTPStatus(string $phone): AuthResult
+    {
+        try {
+            $user = User::where('phone', $phone)->first();
 
-        if (!$user) {
-            return AuthResult::error('المستخدم غير موجود', null, 404);
+            if (!$user) {
+                return AuthResult::error('المستخدم غير موجود', null, 404);
+            }
+
+            $cacheKey = "otp_user_{$user->id}";
+            $otpData = Cache::get($cacheKey);
+
+            if (!$otpData) {
+                return AuthResult::error('لا يوجد رمز فعال', null, 404);
+            }
+
+            $remainingAttempts = 3 - $otpData['attempts'];
+            $remainingSeconds = now()->diffInSeconds($otpData['created_at']->addMinutes(2));
+
+            return AuthResult::success('الرمز فعال', [
+                'has_active_otp' => true,
+                'remaining_attempts' => $remainingAttempts,
+                'remaining_seconds' => $remainingSeconds,
+                'expires_at' => $otpData['created_at']->addMinutes(10)->toISOString(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Check OTP status error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ', null, 500);
         }
-
-        $cacheKey = "otp_user_{$userId}";
-        $otpData = Cache::get($cacheKey);
-
-        if (!$otpData) {
-            return AuthResult::error('لا يوجد رمز فعال', null, 404);
-        }
-
-        $remainingAttempts = 3 - $otpData['attempts'];
-        $remainingSeconds = now()->diffInSeconds($otpData['created_at']->addMinutes(2));
-
-        return AuthResult::success('الرمز فعال', [
-            'has_active_otp' => true,
-            'remaining_attempts' => $remainingAttempts,
-            'remaining_seconds' => $remainingSeconds,
-            'expires_at' => $otpData['created_at']->addMinutes(10)->toISOString(),
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Check OTP status error: ' . $e->getMessage());
-        return AuthResult::error('حدث خطأ', null, 500);
     }
-}
 
     /**
      * تسجيل الدخول
      */
-    public function login(array $credentials): AuthResult
-    {
-        try {
-            $user = User::where('phone', $credentials['phone'])->first();
-
-            if (!$user || !Hash::check($credentials['password'], $user->password)) {
-                return AuthResult::error(
-                    'رقم الهاتف أو كلمة المرور غير صحيحة',
-                    null,
-                    401
-                );
-            }
-
-            if (!$user->is_active) {
-                return AuthResult::error(
-                    'الحساب غير مفعل. يجب تفعيل الحساب من قبل المدير',
-                    ['user_id' => $user->id, 'requires_verification' => true],
-                    403
-                );
-            }
-
-            $this->loadUserRelations($user);
-            $token = $this->generateToken($user);
-            $userData = $this->formatUserData($user, $token);
-
-            Log::info('User logged in', ['user_id' => $user->id]);
-
-            return AuthResult::success('تم تسجيل الدخول بنجاح', $userData);
-
-        } catch (\Exception $e) {
-            Log::error('Login error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء تسجيل الدخول', config('app.debug') ? $e->getMessage() : null, 500);
+ public function login(array $credentials): AuthResult
+{
+    try {
+        $user = User::where('phone', $credentials['phone'])->first();
+        if (!$user) {
+            return AuthResult::error(
+                'ليس لديك حساب. يرجى التسجيل أولاً',
+                null,
+                404
+            );
         }
+        if (!Hash::check($credentials['password'], $user->password)) {
+            return AuthResult::error(
+                'كلمة المرور أو رقم الهاتف غير صحيحة',
+                null,
+                401
+            );
+        }
+        if (!$user->is_active) {
+            return AuthResult::error(
+                'الحساب غير مفعل. يجب تفعيل الحساب من قبل المدير',
+                ['user_id' => $user->id, 'requires_verification' => true],
+                403
+            );
+        }
+        $roles = $user->getRoleNames()->toArray();
+        $validRoles = ['barber', 'customer', 'salon_owner'];
+        $hasValidRole = !empty(array_intersect($roles, $validRoles));
+
+        if (!$hasValidRole) {
+
+            return AuthResult::error(
+                'ليس لديك صلاحية للدخول إلى التطبيق',
+                [
+                    'user_id' => $user->id,
+                    'roles' => $roles,
+                    'required_roles' => $validRoles
+                ],
+                403
+            );
+        }
+
+        $this->loadUserRelations($user);
+        $token = $this->generateToken($user);
+        $userData = $this->formatUserData($user, $token);
+
+        return AuthResult::success('تم تسجيل الدخول بنجاح', $userData);
+
+    } catch (\Exception $e) {
+        Log::error('Login error: ' . $e->getMessage(), [
+            'phone' => $credentials['phone'] ?? 'unknown',
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return AuthResult::error(
+            'حدث خطأ أثناء تسجيل الدخول',
+            config('app.debug') ? $e->getMessage() : null,
+            500
+        );
     }
+}
 
     /**
      * تسجيل مستخدم جديد (مع إرسال OTP)
@@ -132,7 +157,6 @@ public function checkOTPStatus(int $userId): AuthResult
             }
 
             return DB::transaction(function () use ($request) {
-
                 $userType = $this->determineUserType($request);
 
                 // إنشاء المستخدم (غير مفعل)
@@ -155,7 +179,6 @@ public function checkOTPStatus(int $userId): AuthResult
                 $otpResult = $this->otpService->sendOTP($user->phone, $user->id);
 
                 if (!$otpResult['success']) {
-                    // إذا فشل إرسال OTP، نحذف المستخدم
                     $user->delete();
                     return AuthResult::error('فشل إرسال رمز التحقق، يرجى المحاولة لاحقاً', null, 500);
                 }
@@ -163,10 +186,8 @@ public function checkOTPStatus(int $userId): AuthResult
                 Log::info('User registered, OTP sent', [
                     'user_id' => $user->id,
                     'phone' => $user->phone,
-                    // 'otp' => $otpResult['otp'] // أزل التعليق للتجربة فقط
                 ]);
 
-                // إرجاع نجاح مع طلب التحقق
                 return AuthResult::success('تم إنشاء الحساب بنجاح. تم إرسال رمز التحقق إلى واتساب.', [
                     'user_id' => $user->id,
                     'phone' => $user->phone,
@@ -174,7 +195,6 @@ public function checkOTPStatus(int $userId): AuthResult
                     'expires_in' => $otpResult['expires_in'],
                 ], 201);
             });
-
         } catch (\Illuminate\Validation\ValidationException $e) {
             return AuthResult::error('خطأ في البيانات المدخلة', $e->errors(), 422);
         } catch (\Exception $e) {
@@ -183,25 +203,20 @@ public function checkOTPStatus(int $userId): AuthResult
         }
     }
 
-    /**
-     * التحقق من OTP وتفعيل الحساب
-     */
-    public function verifyOTPAndActivate(int $userId, string $otpCode): AuthResult
+    public function verifyOTPAndActivate(string $phone, string $otpCode): AuthResult
     {
         try {
-            $user = User::find($userId);
+            $user = User::where('phone', $phone)->first();
 
             if (!$user) {
                 return AuthResult::error('المستخدم غير موجود', null, 404);
             }
 
-            // إذا كان الحساب مفعلاً بالفعل
             if ($user->is_active) {
                 return AuthResult::error('الحساب مفعل بالفعل', null, 400);
             }
 
-            // التحقق من OTP
-            $verification = $this->otpService->verifyOTP($userId, $otpCode);
+            $verification = $this->otpService->verifyOTP($phone, $otpCode);
 
             if (!$verification['success']) {
                 $data = [];
@@ -211,35 +226,69 @@ public function checkOTPStatus(int $userId): AuthResult
                 return AuthResult::error($verification['error'], $data, 400);
             }
 
-            // تفعيل الحساب
-            $user->update(['is_active' => true]);
+            $roles = $user->getRoleNames()->toArray();
+            $isCustomer = in_array('customer', $roles) || $user->role === 'customer';
+            $isSalonOwner = in_array('salon_owner', $roles) || $user->role === 'salon_owner';
 
-            // تحميل العلاقات
-            $this->loadUserRelations($user);
 
-            // إنشاء توكن
-            $token = $this->generateToken($user);
+            if ($isCustomer) {
+                $user->update(['is_active' => true]);
 
-            // تنسيق بيانات المستخدم
-            $userData = $this->formatUserData($user, $token);
+                $this->loadUserRelations($user);
+                $token = $this->generateToken($user);
+                $userData = $this->formatUserData($user, $token);
 
-            Log::info('User activated via OTP', ['user_id' => $user->id]);
+                Log::info('Customer activated via OTP', [
+                    'user_id' => $user->id,
+                    'phone' => $phone,
+                    'role' => 'customer'
+                ]);
 
-            return AuthResult::success('تم تفعيل الحساب بنجاح', $userData, 200);
+                return AuthResult::success('تم تفعيل حسابك بنجاح', $userData, 200);
+            }
 
+
+            if ($isSalonOwner) {
+                $user->update([
+                    'is_active' => false,
+                    'phone_verified_at' => now(),
+                ]);
+
+                $this->loadUserRelations($user);
+                $userData = $this->formatUserData($user, null);
+
+                Log::info('Salon owner OTP verified, pending admin approval', [
+                    'user_id' => $user->id,
+                    'phone' => $phone,
+                    'role' => 'salon_owner'
+                ]);
+
+                return AuthResult::success(
+                    'تم التحقق من رمز OTP بنجاح. حسابك ينتظر موافقة المدير.',
+                    [
+                        'user_id' => $user->id,
+                        'phone' => $user->phone,
+                        'is_active' => false,
+                        'requires_admin_approval' => true,
+                        'status' => 'pending_approval',
+                        'role' => 'salon_owner'
+                    ],
+                    200
+                );
+            }
+
+            return AuthResult::error('نوع المستخدم غير معروف', null, 400);
         } catch (\Exception $e) {
             Log::error('OTP verification error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء التحقق', config('app.debug') ? $e->getMessage() : null, 500);
         }
     }
 
-    /**
-     * إعادة إرسال OTP
-     */
-    public function resendOTP(int $userId): AuthResult
+
+    public function resendOTP(string $phone): AuthResult
     {
         try {
-            $user = User::find($userId);
+            $user = User::where('phone', $phone)->first();
 
             if (!$user) {
                 return AuthResult::error('المستخدم غير موجود', null, 404);
@@ -251,17 +300,16 @@ public function checkOTPStatus(int $userId): AuthResult
             }
 
             // إعادة إرسال OTP
-            $result = $this->otpService->resendOTP($user->phone, $userId);
+            $result = $this->otpService->resendOTP($user->phone, $user->id);
 
             if ($result['success']) {
-                Log::info('OTP resent', ['user_id' => $userId]);
+                Log::info('OTP resent', ['user_id' => $user->id, 'phone' => $phone]);
                 return AuthResult::success('تم إعادة إرسال رمز التحقق بنجاح', [
                     'expires_in' => $result['expires_in']
                 ]);
             }
 
             return AuthResult::error('فشل إعادة إرسال رمز التحقق', null, 500);
-
         } catch (\Exception $e) {
             Log::error('Resend OTP error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء إعادة الإرسال', null, 500);
@@ -283,7 +331,6 @@ public function checkOTPStatus(int $userId): AuthResult
             Log::info('User logged out', ['user_id' => $user->id]);
 
             return AuthResult::success('تم تسجيل الخروج بنجاح');
-
         } catch (\Exception $e) {
             Log::error('Logout error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء تسجيل الخروج', config('app.debug') ? $e->getMessage() : null, 500);
@@ -305,7 +352,6 @@ public function checkOTPStatus(int $userId): AuthResult
             Log::info('User logged out from all devices', ['user_id' => $user->id]);
 
             return AuthResult::success('تم تسجيل الخروج من جميع الأجهزة بنجاح');
-
         } catch (\Exception $e) {
             Log::error('Logout from all devices error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء تسجيل الخروج', config('app.debug') ? $e->getMessage() : null, 500);
@@ -323,12 +369,10 @@ public function checkOTPStatus(int $userId): AuthResult
             }
 
             $this->loadUserRelations($user);
-
             $token = $user->currentAccessToken()?->plainTextToken;
             $userData = $this->formatUserData($user, $token);
 
             return AuthResult::success('تم جلب البيانات بنجاح', $userData);
-
         } catch (\Exception $e) {
             Log::error('Get current user error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء جلب البيانات', config('app.debug') ? $e->getMessage() : null, 500);
@@ -345,18 +389,13 @@ public function checkOTPStatus(int $userId): AuthResult
                 return AuthResult::error('المستخدم غير موجود', null, 404);
             }
 
-            // حذف التوكن الحالي
             $user->currentAccessToken()->delete();
-
-            // إنشاء توكن جديد
             $token = $this->generateToken($user);
-
             $userData = $this->formatUserData($user, $token);
 
             Log::info('Token refreshed', ['user_id' => $user->id]);
 
             return AuthResult::success('تم تحديث التوكن بنجاح', $userData);
-
         } catch (\Exception $e) {
             Log::error('Refresh token error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء تحديث التوكن', config('app.debug') ? $e->getMessage() : null, 500);
@@ -387,13 +426,14 @@ public function checkOTPStatus(int $userId): AuthResult
         return 'avatar_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
     }
 
-    /**
-     * تنسيق بيانات المستخدم
-     */
+
     private function formatUserData(User $user, ?string $token = null): array
     {
         $roles = $user->getRoleNames()->toArray();
-        $primaryRole = !empty($roles) ? $roles[0] : ($user->role ?? 'customer');
+
+
+        $avatar = $user->getFirstMediaUrl('avatar');
+        $avatar = !empty($avatar) ? $avatar : null;
 
         $data = [
             'id' => $user->id,
@@ -401,7 +441,7 @@ public function checkOTPStatus(int $userId): AuthResult
             'phone' => $user->phone,
             'roles' => $roles,
             'is_active' => $user->is_active,
-            'avatar' => $user->getAvatarUrlAttribute(),
+            'avatar' => $avatar,
             'created_at' => $user->created_at,
             'updated_at' => $user->updated_at,
         ];
@@ -411,23 +451,27 @@ public function checkOTPStatus(int $userId): AuthResult
             $data['token_type'] = 'Bearer';
         }
 
-        // إذا كان المستخدم صاحب صالون
+
         if (in_array('salon_owner', $roles)) {
             $salon = $user->ownedSalon;
             if ($salon) {
+
+                $salonImage = $salon->getFirstMediaUrl('salon_images');
+                $salonImage = !empty($salonImage) ? $salonImage : null;
+
                 $data['salon'] = [
                     'id' => $salon->id,
                     'name' => $salon->name,
                     'address' => $salon->address,
                     'phone' => $salon->phone,
-                    'image' => $salon->getMainImageUrlAttribute(),
+                    'image' => $salonImage,
                 ];
             }
         }
 
         // إذا كان المستخدم حلاق
         if (in_array('barber', $roles)) {
-            $data['salons'] = $user->salons->map(function($salon) {
+            $data['salons'] = $user->salons->map(function ($salon) {
                 return [
                     'id' => $salon->id,
                     'name' => $salon->name,
@@ -451,7 +495,7 @@ public function checkOTPStatus(int $userId): AuthResult
             'phone' => $request->phone,
             'password' => Hash::make($request->password),
             'role' => $userType,
-            'is_active' => false, // غير مفعل حتى يتم التحقق
+            'is_active' => false,
         ]);
     }
 
@@ -472,25 +516,18 @@ public function checkOTPStatus(int $userId): AuthResult
         ]);
     }
 
-    /**
-     * تعيين الدور للمستخدم
-     */
+
     private function assignRole(User $user, string $userType): void
     {
         $user->assignRole($userType);
     }
 
-    /**
-     * تحديد نوع المستخدم
-     */
     private function determineUserType(RegisterRequest $request): string
     {
         return $request->has('salon_name') ? 'salon_owner' : 'customer';
     }
 
-    /**
-     * إنشاء توكن
-     */
+
     private function generateToken(User $user): string
     {
         return $user->createToken('auth_token')->plainTextToken;
@@ -526,173 +563,159 @@ public function checkOTPStatus(int $userId): AuthResult
         return 'تم تسجيل العميل بنجاح';
     }
 
-/**
- *  طلب إعادة تعيين كلمة المرور (إرسال OTP)
- */
-public function forgotPassword(string $phone): AuthResult
-{
-    try {
-        $user = User::where('phone', $phone)->first();
+    /**
+     * طلب إعادة تعيين كلمة المرور (إرسال OTP)
+     */
+    public function forgotPassword(string $phone): AuthResult
+    {
+        try {
+            $user = User::where('phone', $phone)->first();
 
-        if (!$user) {
-            return AuthResult::error('لا يوجد حساب مرتبط بهذا الرقم', null, 404);
+            if (!$user) {
+                return AuthResult::error('لا يوجد حساب مرتبط بهذا الرقم', null, 404);
+            }
+
+            $otpCode = $this->otpService->generateOTP();
+
+            $cacheKey = "password_reset_{$user->id}";
+            Cache::put($cacheKey, [
+                'otp' => $otpCode,
+                'attempts' => 0,
+                'type' => 'reset_password',
+                'created_at' => now(),
+            ], now()->addMinutes(10));
+
+            $message = " *إعادة تعيين كلمة المرور*\n\n" .
+                "مرحباً {$user->name}،\n\n" .
+                "لقد طلبت إعادة تعيين كلمة المرور.\n\n" .
+                "رمز التحقق الخاص بك هو:\n\n" .
+                "*{$otpCode}*\n\n" .
+                " هذا الرمز صالح لمدة 10 دقائق فقط.\n" .
+                "إذا لم تطلب هذا، يمكنك تجاهل هذه الرسالة.";
+
+            $result = $this->whatsappService->sendMessage($phone, $message, 1);
+
+            if (!$result['success']) {
+                return AuthResult::error('فشل إرسال رمز التحقق، يرجى المحاولة لاحقاً', null, 500);
+            }
+
+            Log::info('Password reset OTP sent', [
+                'user_id' => $user->id,
+                'phone' => $phone,
+            ]);
+
+            return AuthResult::success('تم إرسال رمز التحقق إلى رقم واتساب الخاص بك', [
+                'user_id' => $user->id,
+                'phone' => $user->phone,
+                'expires_in' => 600,
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Forgot password error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء إرسال رمز التحقق', null, 500);
         }
-
-        // توليد OTP
-        $otpCode = $this->otpService->generateOTP();
-
-        // تخزين OTP مع نوع العملية (reset_password)
-        $cacheKey = "password_reset_{$user->id}";
-        Cache::put($cacheKey, [
-            'otp' => $otpCode,
-            'attempts' => 0,
-            'type' => 'reset_password',
-            'created_at' => now(),
-        ], now()->addMinutes(10));
-
-        // إرسال OTP عبر واتساب
-        $message = " *إعادة تعيين كلمة المرور*\n\n" .
-                   "مرحباً {$user->name}،\n\n" .
-                   "لقد طلبت إعادة تعيين كلمة المرور.\n\n" .
-                   "رمز التحقق الخاص بك هو:\n\n" .
-                   "*{$otpCode}*\n\n" .
-                   " هذا الرمز صالح لمدة 10 دقائق فقط.\n" .
-                   "إذا لم تطلب هذا، يمكنك تجاهل هذه الرسالة.";
-
-        $result = $this->whatsappService->sendMessage($phone, $message, 1);
-
-        if (!$result['success']) {
-            return AuthResult::error('فشل إرسال رمز التحقق، يرجى المحاولة لاحقاً', null, 500);
-        }
-
-        Log::info('Password reset OTP sent', [
-            'user_id' => $user->id,
-            'phone' => $phone,
-        ]);
-
-        return AuthResult::success('تم إرسال رمز التحقق إلى رقم واتساب الخاص بك', [
-            'user_id' => $user->id,
-            'phone' => $user->phone,
-            'expires_in' => 600,
-        ], 200);
-
-    } catch (\Exception $e) {
-        Log::error('Forgot password error: ' . $e->getMessage());
-        return AuthResult::error('حدث خطأ أثناء إرسال رمز التحقق', null, 500);
     }
-}
 
-/**
- * التحقق من OTP وإعادة تعيين كلمة المرور
- */
-public function resetPassword(string $phone, string $otpCode, string $newPassword): AuthResult
-{
-    try {
-        $user = User::where('phone', $phone)->first();
+    /**
+     * التحقق من OTP وإعادة تعيين كلمة المرور
+     */
+    public function resetPassword(string $phone, string $otpCode, string $newPassword): AuthResult
+    {
+        try {
+            $user = User::where('phone', $phone)->first();
 
-        if (!$user) {
-            return AuthResult::error('المستخدم غير موجود', null, 404);
-        }
+            if (!$user) {
+                return AuthResult::error('المستخدم غير موجود', null, 404);
+            }
 
-        $cacheKey = "password_reset_{$user->id}";
-        $resetData = Cache::get($cacheKey);
+            $cacheKey = "password_reset_{$user->id}";
+            $resetData = Cache::get($cacheKey);
 
-        if (!$resetData) {
-            return AuthResult::error('رمز التحقق منتهي الصلاحية أو غير موجود، يرجى طلب رمز جديد', null, 400);
-        }
+            if (!$resetData) {
+                return AuthResult::error('رمز التحقق منتهي الصلاحية أو غير موجود، يرجى طلب رمز جديد', null, 400);
+            }
 
-        // التحقق من عدد المحاولات
-        if ($resetData['attempts'] >= 3) {
+            if ($resetData['attempts'] >= 3) {
+                Cache::forget($cacheKey);
+                return AuthResult::error('تم تجاوز عدد المحاولات المسموح به، يرجى طلب رمز جديد', null, 400);
+            }
+
+            if ($resetData['otp'] !== $otpCode) {
+                $resetData['attempts']++;
+                Cache::put($cacheKey, $resetData, now()->diffInSeconds($resetData['created_at']->addMinutes(10)));
+
+                $remainingAttempts = 3 - $resetData['attempts'];
+                return AuthResult::error("رمز التحقق غير صحيح. محاولات متبقية: {$remainingAttempts}", null, 400);
+            }
+
+            $user->update([
+                'password' => Hash::make($newPassword),
+            ]);
+
+            $user->tokens()->delete();
             Cache::forget($cacheKey);
-            return AuthResult::error('تم تجاوز عدد المحاولات المسموح به، يرجى طلب رمز جديد', null, 400);
-        }
 
-        // التحقق من صحة الرمز
-        if ($resetData['otp'] !== $otpCode) {
-            $resetData['attempts']++;
-            Cache::put($cacheKey, $resetData, now()->diffInSeconds($resetData['created_at']->addMinutes(10)));
+            $this->sendPasswordChangedConfirmation($user);
+
+            Log::info('Password reset successfully', [
+                'user_id' => $user->id,
+                'phone' => $phone,
+            ]);
+
+            $token = $this->generateToken($user);
+            $userData = $this->formatUserData($user, $token);
+
+            return AuthResult::success('تم إعادة تعيين كلمة المرور بنجاح', $userData, 200);
+        } catch (\Exception $e) {
+            Log::error('Reset password error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء إعادة تعيين كلمة المرور', null, 500);
+        }
+    }
+
+    /**
+     * إرسال رسالة تأكيد تغيير كلمة المرور
+     */
+    private function sendPasswordChangedConfirmation(User $user): void
+    {
+        $message = " *تم تغيير كلمة المرور بنجاح* \n\n" .
+            "مرحباً {$user->name}،\n\n" .
+            "تم تغيير كلمة المرور الخاصة بحسابك بنجاح.\n\n" .
+            "إذا لم تقم بذلك، يرجى التواصل مع الدعم فوراً.\n\n" .
+            "يمكنك الآن تسجيل الدخول باستخدام كلمة المرور الجديدة.";
+
+        $this->whatsappService->sendMessage($user->phone, $message, 1);
+    }
+
+    /**
+     * التحقق من صلاحية رمز إعادة التعيين (اختياري)
+     */
+    public function checkResetOTPStatus(int $userId): AuthResult
+    {
+        try {
+            $user = User::find($userId);
+
+            if (!$user) {
+                return AuthResult::error('المستخدم غير موجود', null, 404);
+            }
+
+            $cacheKey = "password_reset_{$userId}";
+            $resetData = Cache::get($cacheKey);
+
+            if (!$resetData) {
+                return AuthResult::error('لا يوجد رمز فعال لإعادة التعيين', null, 404);
+            }
 
             $remainingAttempts = 3 - $resetData['attempts'];
-            return AuthResult::error("رمز التحقق غير صحيح. محاولات متبقية: {$remainingAttempts}", null, 400);
+            $remainingSeconds = now()->diffInSeconds($resetData['created_at']->addMinutes(10));
+
+            return AuthResult::success('رمز إعادة التعيين فعال', [
+                'has_active_code' => true,
+                'remaining_attempts' => $remainingAttempts,
+                'remaining_seconds' => $remainingSeconds,
+                'expires_at' => $resetData['created_at']->addMinutes(10)->toISOString(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Check reset OTP status error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ', null, 500);
         }
-
-        // تحديث كلمة المرور
-        $user->update([
-            'password' => Hash::make($newPassword),
-        ]);
-
-        // حذف جميع التوكنات القديمة (تسجيل الخروج من جميع الأجهزة)
-        $user->tokens()->delete();
-
-        // تنظيف الـ Cache
-        Cache::forget($cacheKey);
-
-        // إرسال رسالة تأكيد عبر واتساب
-        $this->sendPasswordChangedConfirmation($user);
-
-        Log::info('Password reset successfully', [
-            'user_id' => $user->id,
-            'phone' => $phone,
-        ]);
-
-        // إنشاء توكن جديد للمستخدم (اختياري)
-        $token = $this->generateToken($user);
-        $userData = $this->formatUserData($user, $token);
-
-        return AuthResult::success('تم إعادة تعيين كلمة المرور بنجاح', $userData, 200);
-
-    } catch (\Exception $e) {
-        Log::error('Reset password error: ' . $e->getMessage());
-        return AuthResult::error('حدث خطأ أثناء إعادة تعيين كلمة المرور', null, 500);
     }
-}
-
-/**
- *  إرسال رسالة تأكيد تغيير كلمة المرور
- */
-private function sendPasswordChangedConfirmation(User $user): void
-{
-    $message = " *تم تغيير كلمة المرور بنجاح* \n\n" .
-               "مرحباً {$user->name}،\n\n" .
-               "تم تغيير كلمة المرور الخاصة بحسابك بنجاح.\n\n" .
-               "إذا لم تقم بذلك، يرجى التواصل مع الدعم فوراً.\n\n" .
-               "يمكنك الآن تسجيل الدخول باستخدام كلمة المرور الجديدة.";
-
-    $this->whatsappService->sendMessage($user->phone, $message, 1);
-}
-
-/**
- *  التحقق من صلاحية رمز إعادة التعيين (اختياري)
- */
-public function checkResetOTPStatus(int $userId): AuthResult
-{
-    try {
-        $user = User::find($userId);
-
-        if (!$user) {
-            return AuthResult::error('المستخدم غير موجود', null, 404);
-        }
-
-        $cacheKey = "password_reset_{$userId}";
-        $resetData = Cache::get($cacheKey);
-
-        if (!$resetData) {
-            return AuthResult::error('لا يوجد رمز فعال لإعادة التعيين', null, 404);
-        }
-
-        $remainingAttempts = 3 - $resetData['attempts'];
-        $remainingSeconds = now()->diffInSeconds($resetData['created_at']->addMinutes(10));
-
-        return AuthResult::success('رمز إعادة التعيين فعال', [
-            'has_active_code' => true,
-            'remaining_attempts' => $remainingAttempts,
-            'remaining_seconds' => $remainingSeconds,
-            'expires_at' => $resetData['created_at']->addMinutes(10)->toISOString(),
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Check reset OTP status error: ' . $e->getMessage());
-        return AuthResult::error('حدث خطأ', null, 500);
-    }
-}
 }

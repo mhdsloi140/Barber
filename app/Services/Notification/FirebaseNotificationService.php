@@ -59,34 +59,40 @@ class FirebaseNotificationService
             return false;
         }
 
-        // التحقق من وجود FCM Token
-        $token = $user->fcm_token;
-        if (empty($token)) {
-            Log::info('No FCM token found for user', ['user_id' => $user->id]);
-            return false;
-        }
-
-        // التحقق من تفعيل الإشعارات للمستخدم
-        if (isset($user->notifications_enabled) && !$user->notifications_enabled) {
-            Log::info('User has notifications disabled', ['user_id' => $user->id]);
-            return false;
-        }
-
-        // تخزين الإشعار في قاعدة البيانات
         try {
             $this->storeNotification($user, $title, $body, $data, $imageUrl);
+            Log::info('Notification stored in database', [
+                'user_id' => $user->id,
+                'title' => $title,
+            ]);
         } catch (\Exception $e) {
-            Log::error('Failed to store notification', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            Log::error('Failed to store notification', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
         }
 
-        // التحقق من وجود Firebase Messaging
+        $token = $user->fcm_token;
+        if (empty($token)) {
+            Log::info('No FCM token found, notification stored only in DB', [
+                'user_id' => $user->id,
+            ]);
+            return true;
+        }
+
+        if (isset($user->notifications_enabled) && !$user->notifications_enabled) {
+            Log::info('User has notifications disabled, notification stored only in DB', [
+                'user_id' => $user->id,
+            ]);
+            return true;
+        }
+
         if (!$this->messaging) {
             Log::warning('Firebase messaging not available', ['user_id' => $user->id]);
-            return false;
+            return true;
         }
 
         try {
-            // إنشاء الإشعار
             $notification = Notification::create($title, $body);
 
             $message = CloudMessage::withTarget('token', $token)
@@ -130,7 +136,7 @@ class FirebaseNotificationService
 
             $this->messaging->send($message);
 
-            Log::info('Push notification sent', [
+            Log::info('Push notification sent successfully', [
                 'user_id' => $user->id,
                 'title' => $title,
             ]);
@@ -148,12 +154,11 @@ class FirebaseNotificationService
                 str_contains($e->getMessage(), 'UNREGISTERED') ||
                 str_contains($e->getMessage(), 'Invalid argument')
             ) {
-
                 $user->update(['fcm_token' => null]);
                 Log::info('Invalid FCM token removed', ['user_id' => $user->id]);
             }
 
-            return false;
+            return true; 
         }
     }
 
@@ -163,20 +168,28 @@ class FirebaseNotificationService
     private function storeNotification(User $user, string $title, string $body, array $data = [], ?string $imageUrl = null): void
     {
         try {
-            NotificationModel::create([
-                'user_id' => $user->id,
-                'title' => $title,
-                'body' => $body,
-                'type' => $data['type'] ?? null,
-                'data' => $data,
-                'image_url' => $imageUrl,
-                'is_read' => false,
+     
+            \Illuminate\Support\Facades\DB::table('notifications')->insert([
+                'type' => $data['type'] ?? 'info',
+                'notifiable_type' => 'App\Models\User',
+                'notifiable_id' => $user->id,
+                'data' => json_encode([
+                    'title' => $title,
+                    'message' => $body,
+                    'type' => $data['type'] ?? 'info',
+                    'image_url' => $imageUrl,
+                    ...$data
+                ]),
+                'read_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
 
-            Log::debug('Notification stored in database', [
+            Log::debug('Notification stored successfully', [
                 'user_id' => $user->id,
                 'type' => $data['type'] ?? null,
             ]);
+
         } catch (\Exception $e) {
             Log::error('Failed to store notification', [
                 'user_id' => $user->id,
@@ -187,49 +200,53 @@ class FirebaseNotificationService
 
     // ===================== دوال الإشعارات العادية =====================
 
-
     /**
      * إرسال إشعار للحلاق عند إلغاء الحجز
      */
     public function notifyAppointmentCancelledToBarber(Appointment $appointment, ?string $reason = null): void
     {
-        $barber = $appointment->barber;
-        $customer = $appointment->customer;
+        try {
+            $barber = $appointment->barber;
+            $customer = $appointment->customer;
 
-        if (!$barber) {
-            Log::error('Barber not found for appointment cancellation', ['appointment_id' => $appointment->id]);
-            return;
+            if (!$barber) {
+                Log::error('Barber not found for appointment cancellation', ['appointment_id' => $appointment->id]);
+                return;
+            }
+
+            $appointmentTime = $this->formatTime($appointment->appointment_time);
+            $appointmentDate = $this->formatDate($appointment->appointment_date);
+            $services = $this->getServicesNames($appointment);
+
+            $title = 'تم إلغاء حجز';
+            $body = "تم إلغاء حجز {$customer->name} في {$appointmentTime}";
+
+            $data = [
+                'type' => 'appointment_cancelled_by_customer',
+                'appointment_id' => (string) $appointment->id,
+                'customer_name' => $customer->name,
+                'customer_phone' => $customer->phone,
+                'appointment_time' => $appointmentTime,
+                'appointment_date' => $appointmentDate,
+                'services' => $services,
+                'total_price' => (string) $appointment->total_price,
+                'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                'screen' => 'appointment_details',
+            ];
+            
+            $this->sendPushNotification($barber, $title, $body, $data);
+
+            Log::info('Cancellation notification sent to barber', [
+                'appointment_id' => $appointment->id,
+                'barber_id' => $barber->id,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to notify barber about cancellation: ' . $e->getMessage(), [
+                'appointment_id' => $appointment->id ?? null,
+                'barber_id' => $appointment->barber_id ?? null,
+            ]);
         }
-
-        $appointmentTime = $this->formatTime($appointment->appointment_time);
-        $appointmentDate = $this->formatDate($appointment->appointment_date);
-        $services = $this->getServicesNames($appointment);
-
-        $title = ' تم إلغاء حجز';
-        $body = "تم إلغاء حجز {$customer->name} في {$appointmentTime}";
-
-
-
-        $data = [
-            'type' => 'appointment_cancelled_by_customer',
-            'appointment_id' => (string) $appointment->id,
-            'customer_name' => $customer->name,
-            'customer_phone' => $customer->phone,
-            'appointment_time' => $appointmentTime,
-            'appointment_date' => $appointmentDate,
-            'services' => $services,
-            'total_price' => (string) $appointment->total_price,
-            // 'reason' => $reason ?? '',
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'appointment_details',
-        ];
-
-        $this->sendPushNotification($barber, $title, $body, $data);
-
-        Log::info('Cancellation notification sent to barber', [
-            'appointment_id' => $appointment->id,
-            'barber_id' => $barber->id,
-        ]);
     }
 
     /**
@@ -237,91 +254,110 @@ class FirebaseNotificationService
      */
     public function notifySalonOwnerAboutCancelledAppointment(Appointment $appointment, ?string $reason = null): void
     {
-        $salon = $appointment->salon;
+        try {
+            $salon = $appointment->salon;
 
-        if (!$salon) {
-            Log::error('Salon not found for appointment', ['appointment_id' => $appointment->id]);
-            return;
+            if (!$salon) {
+                Log::error('Salon not found for appointment', ['appointment_id' => $appointment->id]);
+                return;
+            }
+
+            $salonOwner = $salon->owner;
+            $customer = $appointment->customer;
+            $barber = $appointment->barber;
+
+            if (!$salonOwner) {
+                Log::warning('Salon owner not found', ['salon_id' => $appointment->salon_id]);
+                return;
+            }
+
+            $appointmentTime = $this->formatTime($appointment->appointment_time);
+            $appointmentDate = $this->formatDate($appointment->appointment_date);
+            $services = $this->getServicesNames($appointment);
+
+            $title = 'تم إلغاء حجز في صالونك';
+            $body = "تم إلغاء حجز {$customer->name} مع {$barber->name} في {$appointmentTime}";
+
+            $data = [
+                'type' => 'appointment_cancelled_owner',
+                'appointment_id' => (string) $appointment->id,
+                'customer_name' => $customer->name,
+                'customer_phone' => $customer->phone,
+                'barber_name' => $barber->name,
+                'barber_id' => (string) $barber->id,
+                'salon_name' => $salon->name,
+                'appointment_time' => $appointmentTime,
+                'appointment_date' => $appointmentDate,
+                'services' => $services,
+                'total_price' => (string) $appointment->total_price,
+                'reason' => $reason ?? '',
+                'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                'screen' => 'appointment_details',
+            ];
+
+            $this->sendPushNotification($salonOwner, $title, $body, $data);
+
+            Log::info('Cancellation notification sent to salon owner', [
+                'appointment_id' => $appointment->id,
+                'salon_id' => $salon->id,
+                'owner_id' => $salonOwner->id,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to notify salon owner about cancelled appointment: ' . $e->getMessage(), [
+                'appointment_id' => $appointment->id ?? null,
+                'salon_id' => $salon->id ?? null,
+            ]);
         }
-
-        $salonOwner = $salon->owner;
-        $customer = $appointment->customer;
-        $barber = $appointment->barber;
-
-        if (!$salonOwner) {
-            Log::warning('Salon owner not found', ['salon_id' => $appointment->salon_id]);
-            return;
-        }
-
-        $appointmentTime = $this->formatTime($appointment->appointment_time);
-        $appointmentDate = $this->formatDate($appointment->appointment_date);
-        $services = $this->getServicesNames($appointment);
-
-        $title = ' تم إلغاء حجز في صالونك';
-        $body = "تم إلغاء حجز {$customer->name} مع {$barber->name} في {$appointmentTime}";
-
-
-
-        $data = [
-            'type' => 'appointment_cancelled_owner',
-            'appointment_id' => (string) $appointment->id,
-            'customer_name' => $customer->name,
-            'customer_phone' => $customer->phone,
-            'barber_name' => $barber->name,
-            'barber_id' => (string) $barber->id,
-            'salon_name' => $salon->name,
-            'appointment_time' => $appointmentTime,
-            'appointment_date' => $appointmentDate,
-            'services' => $services,
-            'total_price' => (string) $appointment->total_price,
-            'reason' => $reason ?? '',
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'appointment_details',
-        ];
-
-        $this->sendPushNotification($salonOwner, $title, $body, $data);
-
-        Log::info('Cancellation notification sent to salon owner', [
-            'appointment_id' => $appointment->id,
-            'salon_id' => $salon->id,
-            'owner_id' => $salonOwner->id,
-        ]);
     }
 
     /**
      * إرسال إشعار للحلاق عند إنشاء حجز جديد
      */
-
     public function notifyNewAppointmentToBarber(Salon $salon, Appointment $appointment): void
     {
-        $barber = $appointment->barber;
-        $customer = $appointment->customer;
+        try {
+            $barber = $appointment->barber;
+            $customer = $appointment->customer;
 
-        if (!$barber) {
-            Log::error('Barber not found', ['appointment_id' => $appointment->id]);
-            return;
+            if (!$barber) {
+                Log::error('Barber not found', ['appointment_id' => $appointment->id]);
+                return;
+            }
+
+            $appointmentTime = $this->formatTime($appointment->appointment_time);
+            $services = $this->getServicesNames($appointment);
+
+            $title = 'لديك حجز';
+            $body = "لديك حجز جديد من {$customer->name} في {$appointmentTime}";
+
+            $data = [
+                'type' => 'new_appointment',
+                'appointment_id' => (string) $appointment->id,
+                'customer_name' => $customer->name,
+                'customer_phone' => $customer->phone,
+                'appointment_time' => $appointmentTime,
+                'appointment_date' => $this->formatDate($appointment->appointment_date),
+                'services' => $services,
+                'total_price' => (string) $appointment->total_price,
+                'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                'screen' => 'appointment_details',
+            ];
+
+            $this->sendPushNotification($barber, $title, $body, $data);
+
+            Log::info('New appointment notification sent to barber', [
+                'barber_id' => $barber->id,
+                'appointment_id' => $appointment->id,
+                'salon_id' => $salon->id,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to notify barber about new appointment: ' . $e->getMessage(), [
+                'barber_id' => $appointment->barber_id ?? null,
+                'appointment_id' => $appointment->id ?? null,
+            ]);
         }
-
-        $appointmentTime = $this->formatTime($appointment->appointment_time);
-        $services = $this->getServicesNames($appointment);
-
-        $title = 'لديك حجز';
-        $body = "لديك حجز جدي من {$customer->name} في {$appointmentTime}";
-
-        $data = [
-            'type' => 'new_appointment',
-            'appointment_id' => (string) $appointment->id,
-            'customer_name' => $customer->name,
-            'customer_phone' => $customer->phone,
-            'appointment_time' => $appointmentTime,
-            'appointment_date' => $this->formatDate($appointment->appointment_date),
-            'services' => $services,
-            'total_price' => (string) $appointment->total_price,
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'appointment_details',
-        ];
-
-        $this->sendPushNotification($barber, $title, $body, $data);
     }
 
     /**
@@ -329,38 +365,52 @@ class FirebaseNotificationService
      */
     public function notifySalonOwnerAboutNewAppointment(Salon $salon, Appointment $appointment): void
     {
-        $salonOwner = $salon->owner;
+        try {
+            $salonOwner = $salon->owner;
 
-        if (!$salonOwner) {
-            Log::warning('Salon owner not found', ['salon_id' => $salon->id]);
-            return;
+            if (!$salonOwner) {
+                Log::warning('Salon owner not found', ['salon_id' => $salon->id]);
+                return;
+            }
+
+            $customer = $appointment->customer;
+            $barber = $appointment->barber;
+            $appointmentTime = $this->formatTime($appointment->appointment_time);
+            $services = $this->getServicesNames($appointment);
+
+            $title = 'حجز جديد في صالونك';
+            $body = "حجز جديد من {$customer->name} مع {$barber->name} في {$appointmentTime}";
+
+            $data = [
+                'type' => 'new_appointment_owner',
+                'appointment_id' => (string) $appointment->id,
+                'customer_name' => $customer->name,
+                'customer_phone' => $customer->phone,
+                'barber_name' => $barber->name,
+                'salon_name' => $salon->name,
+                'appointment_time' => $appointmentTime,
+                'appointment_date' => $this->formatDate($appointment->appointment_date),
+                'services' => $services,
+                'total_price' => (string) $appointment->total_price,
+                'status' => $appointment->status,
+                'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                'screen' => 'appointment_details',
+            ];
+
+            $this->sendPushNotification($salonOwner, $title, $body, $data);
+
+            Log::info('New appointment notification sent to salon owner', [
+                'salon_id' => $salon->id,
+                'appointment_id' => $appointment->id,
+                'salon_owner_id' => $salonOwner->id,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to notify salon owner about new appointment: ' . $e->getMessage(), [
+                'salon_id' => $salon->id ?? null,
+                'appointment_id' => $appointment->id ?? null,
+            ]);
         }
-
-        $customer = $appointment->customer;
-        $barber = $appointment->barber;
-        $appointmentTime = $this->formatTime($appointment->appointment_time);
-        $services = $this->getServicesNames($appointment);
-
-        $title = ' حجز جديد في صالونك';
-        $body = "حجز جديد من {$customer->name} مع {$barber->name} في {$appointmentTime}";
-
-        $data = [
-            'type' => 'new_appointment_owner',
-            'appointment_id' => (string) $appointment->id,
-            'customer_name' => $customer->name,
-            'customer_phone' => $customer->phone,
-            'barber_name' => $barber->name,
-            'salon_name' => $salon->name,
-            'appointment_time' => $appointmentTime,
-            'appointment_date' => $this->formatDate($appointment->appointment_date),
-            'services' => $services,
-            'total_price' => (string) $appointment->total_price,
-            'status' => $appointment->status,
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'appointment_details',
-        ];
-
-        $this->sendPushNotification($salonOwner, $title, $body, $data);
     }
 
     /**
@@ -368,82 +418,47 @@ class FirebaseNotificationService
      */
     public function notifyAppointmentApprovedToCustomer(Appointment $appointment): void
     {
-        $customer = $appointment->customer;
+        try {
+            $customer = $appointment->customer;
 
-        if (!$customer) {
-            return;
-        }
-
-        $barber = $appointment->barber;
-        $appointmentTime = $this->formatTime($appointment->appointment_time);
-        $services = $this->getServicesNames($appointment);
-
-        $title = ' تم قبول حجزك';
-        $body = "تم قبول حجزك مع {$barber->name} في {$appointmentTime}";
-
-        $data = [
-            'type' => 'appointment_approved',
-            'appointment_id' => (string) $appointment->id,
-            'status' => 'confirmed',
-            'barber_name' => $barber->name,
-            'appointment_time' => $appointmentTime,
-            'appointment_date' => $this->formatDate($appointment->appointment_date),
-            'services' => $services,
-            'total_price' => (string) $appointment->total_price,
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'appointment_details',
-        ];
-
-        $this->sendPushNotification($customer, $title, $body, $data);
-    }
-    /**
-     * إرسال إشعار لجميع المديرين (Web) عند إنشاء حساب صالون جديد
-     */
-    public function notifyAdminsAboutNewSalonOwnerWeb(User $salonOwner, Salon $salon): void
-    {
-        // جلب جميع المستخدمين الذين لديهم دور admin
-        $admins = User::role('admin')
-            ->whereNotNull('fcm_token')
-            ->get();
-
-        if ($admins->isEmpty()) {
-            Log::info('No admins found with FCM token to notify about new salon owner');
-            return;
-        }
-
-        $title = ' حساب صالون جديد';
-        $body = "تم إنشاء حساب جديد: {$salon->name} بواسطة {$salonOwner->name}";
-
-        $data = [
-            'type' => 'new_salon_owner_web',
-            'salon_id' => (string) $salon->id,
-            'salon_name' => $salon->name,
-            'salon_phone' => $salon->phone,
-            'salon_address' => $salon->address,
-            'owner_id' => (string) $salonOwner->id,
-            'owner_name' => $salonOwner->name,
-            'owner_phone' => $salonOwner->phone,
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'admin_salon_details',
-            'url' => route('admin.salons.show', $salon->id), // رابط للويب
-        ];
-
-        $sentCount = 0;
-
-        foreach ($admins as $admin) {
-            if ($this->sendPushNotification($admin, $title, $body, $data)) {
-                $sentCount++;
+            if (!$customer) {
+                Log::error('Customer not found for appointment', ['appointment_id' => $appointment->id]);
+                return;
             }
-            usleep(50000);
-        }
 
-        Log::info('Web admin notifications sent for new salon owner', [
-            'salon_id' => $salon->id,
-            'salon_name' => $salon->name,
-            'owner_id' => $salonOwner->id,
-            'admins_count' => $admins->count(),
-            'sent_count' => $sentCount,
-        ]);
+            $barber = $appointment->barber;
+            $appointmentTime = $this->formatTime($appointment->appointment_time);
+            $services = $this->getServicesNames($appointment);
+
+            $title = 'تم قبول حجزك';
+            $body = "تم قبول حجزك مع {$barber->name} في {$appointmentTime}";
+
+            $data = [
+                'type' => 'appointment_approved',
+                'appointment_id' => (string) $appointment->id,
+                'status' => 'confirmed',
+                'barber_name' => $barber->name,
+                'appointment_time' => $appointmentTime,
+                'appointment_date' => $this->formatDate($appointment->appointment_date),
+                'services' => $services,
+                'total_price' => (string) $appointment->total_price,
+                'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                'screen' => 'appointment_details',
+            ];
+
+            $this->sendPushNotification($customer, $title, $body, $data);
+
+            Log::info('Appointment approved notification sent to customer', [
+                'appointment_id' => $appointment->id,
+                'customer_id' => $customer->id,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to notify customer about appointment approval: ' . $e->getMessage(), [
+                'appointment_id' => $appointment->id ?? null,
+                'customer_id' => $appointment->customer_id ?? null,
+            ]);
+        }
     }
 
     /**
@@ -451,63 +466,52 @@ class FirebaseNotificationService
      */
     public function notifyAppointmentRejectedToCustomer(Appointment $appointment, ?string $reason = null): void
     {
-        $customer = $appointment->customer;
+        try {
+            $customer = $appointment->customer;
 
-        if (!$customer) {
-            Log::error('Customer not found', ['appointment_id' => $appointment->id]);
-            return;
+            if (!$customer) {
+                Log::error('Customer not found', ['appointment_id' => $appointment->id]);
+                return;
+            }
+
+            $barber = $appointment->barber;
+            $appointmentTime = $this->formatTime($appointment->appointment_time);
+            $appointmentDate = $this->formatDate($appointment->appointment_date);
+            $services = $this->getServicesNames($appointment);
+
+            $title = 'تم إلغاء حجزك';
+            $body = "تم إلغاء حجزك مع {$barber->name} في {$appointmentTime}";
+
+            if ($reason) {
+                $body .= " بسبب: {$reason}";
+            }
+
+            $data = [
+                'type' => 'appointment_rejected',
+                'appointment_id' => (string) $appointment->id,
+                'status' => 'cancelled',
+                'reason' => $reason ?? '',
+                'barber_name' => $barber->name,
+                'appointment_time' => $appointmentTime,
+                'appointment_date' => $appointmentDate,
+                'services' => $services,
+                'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                'screen' => 'appointment_details',
+            ];
+
+            $this->sendPushNotification($customer, $title, $body, $data);
+
+            Log::info('Appointment rejected notification sent to customer', [
+                'appointment_id' => $appointment->id,
+                'customer_id' => $customer->id,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to notify customer about appointment rejection: ' . $e->getMessage(), [
+                'appointment_id' => $appointment->id ?? null,
+                'customer_id' => $appointment->customer_id ?? null,
+            ]);
         }
-
-        Log::info('Attempting to send rejection notification to customer', [
-            'customer_id' => $customer->id,
-            'customer_name' => $customer->name,
-            'has_fcm_token' => !empty($customer->fcm_token),
-            'notifications_enabled' => $customer->notifications_enabled,
-        ]);
-
-
-        if (empty($customer->fcm_token)) {
-            Log::warning('Customer has no FCM token', ['customer_id' => $customer->id]);
-            return;
-        }
-
-
-        if (!$customer->notifications_enabled) {
-            Log::info('Customer notifications disabled', ['customer_id' => $customer->id]);
-            return;
-        }
-
-        $barber = $appointment->barber;
-        $appointmentTime = $this->formatTime($appointment->appointment_time);
-        $appointmentDate = $this->formatDate($appointment->appointment_date);
-        $services = $this->getServicesNames($appointment);
-
-        $title = ' تم الغاء حجزك';
-        $body = "تم الغاء حجزك مع {$barber->name} في {$appointmentTime}";
-
-        if ($reason) {
-            $body .= " بسبب: {$reason}";
-        }
-
-        $data = [
-            'type' => 'appointment_rejected',
-            'appointment_id' => (string) $appointment->id,
-            'status' => 'cancelled',
-            'reason' => $reason ?? '',
-            'barber_name' => $barber->name,
-            'appointment_time' => $appointmentTime,
-            'appointment_date' => $appointmentDate,
-            'services' => $services,
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'appointment_details',
-        ];
-
-        $result = $this->sendPushNotification($customer, $title, $body, $data);
-
-        Log::info('Rejection notification result', [
-            'customer_id' => $customer->id,
-            'result' => $result,
-        ]);
     }
 
     /**
@@ -523,7 +527,7 @@ class FirebaseNotificationService
 
         $barber = $appointment->barber;
 
-        $title = ' اكتمل حجزك';
+        $title = 'اكتمل حجزك';
         $body = "شكراً لك، نأمل أن تكون راضياً عن الخدمة مع {$barber->name}";
 
         $data = [
@@ -546,7 +550,7 @@ class FirebaseNotificationService
         $barber = $appointment->barber;
         $appointmentTime = $this->formatTime($appointment->appointment_time);
 
-        $title = ' تذكير بموعدك';
+        $title = 'تذكير بموعدك';
         $body = "لديك موعد بعد 30 دقيقة مع {$barber->name}";
 
         $data = [
@@ -577,8 +581,8 @@ class FirebaseNotificationService
         $oldTime = $appointment->getOriginal('appointment_time');
         $oldDate = $appointment->getOriginal('appointment_date');
 
-        $title = ' تم تعديل موعد';
-        $body = "تم تعديل موعد {$customer->name} إلى {$newTime} بتاريخ {$newDate}";
+        $title = 'تم تعديل الحجز';
+        $body = "   تم تعديل حجز  {$customer->name}   بتاريخ {$newDate}";
 
         $data = [
             'type' => 'appointment_updated',
@@ -594,145 +598,6 @@ class FirebaseNotificationService
         ];
 
         $this->sendPushNotification($barber, $title, $body, $data);
-    }
-
-    /**
-     * إرسال إشعار لجميع المديرين (Admin) عند إنشاء صالون جديد
-     */
-    // public function notifyAdminsAboutNewSalon(Salon $salon, User $owner): void
-    // {
-    //     $admins = User::role('admin')
-    //         ->whereNotNull('fcm_token')
-    //         ->get();
-
-    //     if ($admins->isEmpty()) {
-    //         Log::info('No admins found with FCM token to notify about new salon');
-    //         return;
-    //     }
-
-    //     $title = ' صالون جديد';
-    //     $body = "تم إنشاء صالون جديد: {$salon->name} بواسطة {$owner->name}";
-
-    //     $data = [
-    //         'type' => 'new_salon',
-    //         'salon_id' => (string) $salon->id,
-    //         'salon_name' => $salon->name,
-    //         'salon_phone' => $salon->phone,
-    //         'salon_address' => $salon->address,
-    //         'owner_id' => (string) $owner->id,
-    //         'owner_name' => $owner->name,
-    //         'owner_phone' => $owner->phone,
-    //         'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-    //         'screen' => 'admin_salon_details',
-    //     ];
-
-    //     $sentCount = 0;
-
-    //     foreach ($admins as $admin) {
-    //         if ($this->sendPushNotification($admin, $title, $body, $data)) {
-    //             $sentCount++;
-    //         }
-    //         usleep(50000);
-    //     }
-
-    //     Log::info('Admin notifications sent for new salon', [
-    //         'salon_id' => $salon->id,
-    //         'salon_name' => $salon->name,
-    //         'admins_count' => $admins->count(),
-    //         'sent_count' => $sentCount,
-    //     ]);
-    // }
-
-    /**
-     * إرسال إشعار لجميع الزبائن عند إضافة خدمة جديدة
-     */
-    public function notifyAllCustomersAboutNewService(BarberService $service, User $barber): void
-    {
-        $title = ' خدمة جديدة متاحة';
-        $body = "{$barber->name} أضاف خدمة جديدة: {$service->name} بسعر {$service->price}";
-
-        $data = [
-            'type' => 'new_service',
-            'service_id' => (string) $service->id,
-            'barber_id' => (string) $barber->id,
-            'barber_name' => $barber->name,
-            'service_name' => $service->name,
-            'service_price' => (string) $service->price,
-            'duration_minutes' => (string) $service->duration_minutes,
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'services_list',
-        ];
-
-        $this->sendToTopic($this->getAllCustomersTopic(), $title, $body, $data);
-    }
-
-    /**
-     * إرسال إشعار لزبائن صالون محدد عند إضافة خدمة جديدة
-     */
-    public function notifySalonCustomersAboutNewService(BarberService $service, User $barber, Salon $salon): void
-    {
-        $title = ' خدمة جديدة في ' . $salon->name;
-        $body = "تمت إضافة خدمة جديدة: {$service->name} بسعر {$service->price}  بواسطة {$barber->name}";
-
-        $data = [
-            'type' => 'new_service',
-            'service_id' => (string) $service->id,
-            'barber_id' => (string) $barber->id,
-            'salon_id' => (string) $salon->id,
-            'salon_name' => $salon->name,
-            'barber_name' => $barber->name,
-            'service_name' => $service->name,
-            'service_price' => (string) $service->price,
-            'duration_minutes' => (string) $service->duration_minutes,
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'services_list',
-        ];
-
-        $topic = $this->getSalonCustomersTopic($salon->id);
-        $this->sendToTopic($topic, $title, $body, $data);
-
-        Log::info('New service notification sent to salon topic', [
-            'service_id' => $service->id,
-            'salon_id' => $salon->id,
-            'topic' => $topic,
-        ]);
-    }
-
-    /**
-     * إرسال إشعار لمدير الصالون عند إضافة خدمة جديدة
-     */
-    public function notifySalonOwnerAboutNewService(BarberService $service, User $barber, Salon $salon): void
-    {
-        $salonOwner = $salon->owner;
-
-        if (!$salonOwner) {
-            Log::warning('Salon owner not found', ['salon_id' => $salon->id]);
-            return;
-        }
-
-        if (!$salonOwner->fcm_token) {
-            Log::info('Salon owner has no FCM token', ['owner_id' => $salonOwner->id]);
-            return;
-        }
-
-        $title = ' خدمة جديدة مضافة';
-        $body = "أضاف {$barber->name} خدمة جديدة: {$service->name} بسعر {$service->price} ";
-
-        $data = [
-            'type' => 'new_service_for_owner',
-            'service_id' => (string) $service->id,
-            'barber_id' => (string) $barber->id,
-            'barber_name' => $barber->name,
-            'salon_id' => (string) $salon->id,
-            'salon_name' => $salon->name,
-            'service_name' => $service->name,
-            'service_price' => (string) $service->price,
-            'duration_minutes' => (string) $service->duration_minutes,
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            'screen' => 'services_management',
-        ];
-
-        $this->sendPushNotification($salonOwner, $title, $body, $data);
     }
 
     // ===================== دوال Topics =====================
@@ -797,7 +662,7 @@ class FirebaseNotificationService
             'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
         ];
 
-        $title = $action === 'subscribe' ? ' اشتراك في التنبيهات' : ' إلغاء الاشتراك';
+        $title = $action === 'subscribe' ? 'اشتراك في التنبيهات' : 'إلغاء الاشتراك';
         $body = $action === 'subscribe'
             ? "تم الاشتراك في تنبيهات {$topic}"
             : "تم إلغاء الاشتراك من {$topic}";
@@ -810,8 +675,6 @@ class FirebaseNotificationService
      */
     public function sendToTopic(string $topic, string $title, string $body, array $data = []): bool
     {
-
-
         if (!$this->messaging) {
             Log::warning('Firebase messaging not available');
             return false;
@@ -939,70 +802,142 @@ class FirebaseNotificationService
         return $this->sendToTopic($this->getOffersTopic(), $offerTitle, $offerBody, $data);
     }
 
-
-
     /**
-     * الحصول على أسماء الخدمات كنص
+     * إرسال إشعار لجميع الزبائن عند إضافة خدمة جديدة
      */
-    private function getServicesNames(Appointment $appointment): string
+    public function notifyAllCustomersAboutNewService(BarberService $service, User $barber): void
     {
-        if ($appointment->services_details) {
-            $services = json_decode($appointment->services_details, true);
-            if (is_array($services) && !empty($services)) {
-                $names = array_column($services, 'name');
-                return implode(' + ', $names);
+        try {
+            $price = number_format($service->price, 0);
+
+            $title = 'خدمة جديدة متاحة';
+            $body = "{$barber->name} أضاف خدمة جديدة: {$service->name} بسعر {$price}";
+
+            $data = [
+                'type' => 'new_service',
+                'service_id' => (string) $service->id,
+                'barber_id' => (string) $barber->id,
+                'barber_name' => $barber->name,
+                'service_name' => $service->name,
+                'service_price' => $price,
+                'duration_minutes' => (string) $service->duration_minutes,
+                'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                'screen' => 'services_list',
+            ];
+
+            $this->sendToTopic($this->getAllCustomersTopic(), $title, $body, $data);
+
+            $customers = User::where('role', 'customer')->where('is_active', true)->get();
+            
+            foreach ($customers as $customer) {
+                $this->sendPushNotification($customer, $title, $body, $data);
             }
-        }
 
-        if ($appointment->services) {
-            $serviceIds = json_decode($appointment->services, true);
-            if (is_array($serviceIds) && !empty($serviceIds)) {
-                $services = BarberService::whereIn('id', $serviceIds)->get();
-                return $services->pluck('name')->implode(' + ');
-            }
-        }
+            Log::info('New service notification sent to all customers', [
+                'service_id' => $service->id,
+                'customers_count' => $customers->count(),
+            ]);
 
-        if ($appointment->service) {
-            return $appointment->service->name;
+        } catch (\Exception $e) {
+            Log::error('Failed to notify all customers about new service: ' . $e->getMessage(), [
+                'service_id' => $service->id ?? null,
+            ]);
         }
-
-        return 'خدمات الحلاقة';
     }
 
     /**
-     * تنسيق الوقت
+     * إرسال إشعار لزبائن صالون محدد عند إضافة خدمة جديدة
      */
-    private function formatTime($time): string
+    public function notifySalonCustomersAboutNewService(BarberService $service, User $barber, Salon $salon): void
     {
-        if (!$time)
-            return '';
-        if ($time instanceof \Carbon\Carbon) {
-            return $time->format('g:i A');
-        }
-        return \Carbon\Carbon::parse($time)->format('g:i A');
+        $title = 'خدمة جديدة في ' . $salon->name;
+        $body = "تمت إضافة خدمة جديدة: {$service->name} بسعر {$service->price} بواسطة {$barber->name}";
+
+        $data = [
+            'type' => 'new_service',
+            'service_id' => (string) $service->id,
+            'barber_id' => (string) $barber->id,
+            'salon_id' => (string) $salon->id,
+            'salon_name' => $salon->name,
+            'barber_name' => $barber->name,
+            'service_name' => $service->name,
+            'service_price' => (string) $service->price,
+            'duration_minutes' => (string) $service->duration_minutes,
+            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+            'screen' => 'services_list',
+        ];
+
+        $topic = $this->getSalonCustomersTopic($salon->id);
+        $this->sendToTopic($topic, $title, $body, $data);
+
+        Log::info('New service notification sent to salon topic', [
+            'service_id' => $service->id,
+            'salon_id' => $salon->id,
+            'topic' => $topic,
+        ]);
     }
 
     /**
-     * تنسيق التاريخ
+     * إرسال إشعار لمدير الصالون عند إضافة خدمة جديدة
      */
-    private function formatDate($date): string
+    private function formatPrice($price): string
     {
-        if (!$date)
-            return '';
-        if ($date instanceof \Carbon\Carbon) {
-            return $date->format('Y-m-d');
+        $price = (float) $price;
+        if (floor($price) == $price) {
+            return (string) intval($price);
         }
-        return \Carbon\Carbon::parse($date)->format('Y-m-d');
+        return number_format($price, 2);
+    }
 
+    public function notifySalonOwnerAboutNewService(BarberService $service, User $barber, Salon $salon): void
+    {
+        try {
+            $salonOwner = $salon->owner;
+
+            if (!$salonOwner) {
+                Log::warning('Salon owner not found', ['salon_id' => $salon->id]);
+                return;
+            }
+
+            $formattedPrice = $this->formatPrice($service->price);
+
+            $title = 'خدمة جديدة مضافة';
+            $body = "أضاف {$barber->name} خدمة جديدة: {$service->name} بسعر {$formattedPrice}";
+
+            $data = [
+                'type' => 'new_service_for_owner',
+                'service_id' => (string) $service->id,
+                'barber_id' => (string) $barber->id,
+                'barber_name' => $barber->name,
+                'salon_id' => (string) $salon->id,
+                'salon_name' => $salon->name,
+                'service_name' => $service->name,
+                'service_price' => $formattedPrice,
+                'duration_minutes' => (string) ($service->duration_minutes ?? 30),
+                'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                'screen' => 'services_management',
+            ];
+
+            $this->sendPushNotification($salonOwner, $title, $body, $data);
+
+            Log::info('New service notification sent to salon owner', [
+                'service_id' => $service->id,
+                'salon_id' => $salon->id,
+                'salon_owner_id' => $salonOwner->id,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to notify salon owner about new service: ' . $e->getMessage(), [
+                'service_id' => $service->id ?? null,
+                'salon_id' => $salon->id ?? null,
+            ]);
         }
-            // ===================== إشعارات الصالون الجديد للمديرين =====================
+    }
 
-    /**
-     * إرسال إشعار لجميع المديرين عند إنشاء صالون جديد (Push Notification)
-     */
+    // ===================== إشعارات الصالون الجديد للمديرين =====================
+
     public function notifyAdminsAboutNewSalon(Salon $salon, User $owner): void
     {
-        // جلب جميع المستخدمين الذين لديهم دور admin
         $admins = User::role('admin')->get();
 
         if ($admins->isEmpty()) {
@@ -1030,10 +965,12 @@ class FirebaseNotificationService
         $sentCount = 0;
 
         foreach ($admins as $admin) {
+            $admin->notify(new \App\Notifications\NewSalonAdminNotification($salon, $owner));
+
             if ($this->sendPushNotification($admin, $title, $body, $data)) {
                 $sentCount++;
             }
-            usleep(50000); // تأخير 50ms بين الإشعارات
+            usleep(50000);
         }
 
         Log::info('Admin notifications sent for new salon', [
@@ -1044,6 +981,55 @@ class FirebaseNotificationService
         ]);
     }
 
+    /**
+     * إرسال إشعار لجميع المديرين (Web) عند إنشاء حساب صالون جديد
+     */
+    public function notifyAdminsAboutNewSalonOwnerWeb(User $salonOwner, Salon $salon): void
+    {
+        $admins = User::role('admin')->get();
+
+        if ($admins->isEmpty()) {
+            Log::info('No admins found to notify about new salon owner');
+            return;
+        }
+
+        $title = ' حساب صالون جديد ينتظر الموافقة';
+        $body = "تم إنشاء حساب جديد:\n"
+              . "الصالون: {$salon->name}\n"
+              . "المالك: {$salonOwner->name}\n"
+              . "رقم الهاتف: {$salonOwner->phone}";
+
+        $data = [
+            'type' => 'new_salon_owner_web',
+            'salon_id' => (string) $salon->id,
+            'salon_name' => $salon->name,
+            'salon_phone' => $salon->phone ?? '',
+            'salon_address' => $salon->address ?? '',
+            'owner_id' => (string) $salonOwner->id,
+            'owner_name' => $salonOwner->name,
+            'owner_phone' => $salonOwner->phone,
+            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+            'screen' => 'admin_pending_salons',
+            'url' => route('admin.centers.show', $salon->id),
+        ];
+
+        $sentCount = 0;
+
+        foreach ($admins as $admin) {
+            if ($this->sendPushNotification($admin, $title, $body, $data)) {
+                $sentCount++;
+            }
+            usleep(50000);
+        }
+
+        Log::info('Web admin notifications sent for new salon owner', [
+            'salon_id' => $salon->id,
+            'salon_name' => $salon->name,
+            'owner_id' => $salonOwner->id,
+            'admins_count' => $admins->count(),
+            'sent_count' => $sentCount,
+        ]);
+    }
 
     /**
      * إرسال إشعار عند تفعيل حساب صالون بواسطة المدير
@@ -1085,8 +1071,8 @@ class FirebaseNotificationService
             return;
         }
 
-        $title = ' تم رفع طلب تسجيل صالونك';
-        $body = "نأسف لإبلاغك أنه تم رفع طلب تسجيل صالونك.\n";
+        $title = ' تم رفض طلب تسجيل صالونك';
+        $body = "نأسف لإبلاغك أنه تم رفض طلب تسجيل صالونك.\n";
 
         if ($reason) {
             $body .= "السبب: {$reason}\n";
@@ -1105,5 +1091,136 @@ class FirebaseNotificationService
             'owner_id' => $salonOwner->id,
             'reason' => $reason,
         ]);
+    }
+
+    // ===================== دوال مساعدة =====================
+
+    /**
+     * الحصول على أسماء الخدمات كنص
+     */
+    private function getServicesNames(Appointment $appointment): string
+    {
+        if ($appointment->services_details) {
+            $services = json_decode($appointment->services_details, true);
+            if (is_array($services) && !empty($services)) {
+                $names = array_column($services, 'name');
+                return implode(' + ', $names);
+            }
+        }
+
+        if ($appointment->services) {
+            $serviceIds = json_decode($appointment->services, true);
+            if (is_array($serviceIds) && !empty($serviceIds)) {
+                $services = BarberService::whereIn('id', $serviceIds)->get();
+                return $services->pluck('name')->implode(' + ');
+            }
+        }
+
+        if ($appointment->service) {
+            return $appointment->service->name;
+        }
+
+        return 'خدمات الحلاقة';
+    }
+
+    /**
+     * تنسيق الوقت
+     */
+    public function formatTime($time): string
+    {
+        if (!$time) return '';
+        if ($time instanceof \Carbon\Carbon) {
+            return $time->format('g:i A');
+        }
+        return \Carbon\Carbon::parse($time)->format('g:i A');
+    }
+
+    /**
+     * تنسيق التاريخ
+     */
+    public function formatDate($date): string
+    {
+        if (!$date) return '';
+        if ($date instanceof \Carbon\Carbon) {
+            return $date->format('Y-m-d');
+        }
+        return \Carbon\Carbon::parse($date)->format('Y-m-d');
+    }
+
+    /**
+     * إرسال إشعار عند إلغاء حجز بواسطة مدير الصالون
+     */
+    public function notifyAppointmentCancelledByOwner(Appointment $appointment, ?string $reason = null): void
+    {
+        try {
+            $barber = $appointment->barber;
+            $customer = $appointment->customer;
+
+            if ($barber) {
+                $appointmentTime = $this->formatTime($appointment->appointment_time);
+                
+                $title = 'تم إلغاء حجز بواسطة المدير';
+                $body = "تم إلغاء حجز {$customer->name} في {$appointmentTime} بواسطة مدير الصالون";
+                if ($reason) {
+                    $body .= "\nالسبب: {$reason}";
+                }
+                
+                $data = [
+                    'type' => 'appointment_cancelled_by_owner',
+                    'appointment_id' => (string) $appointment->id,
+                    'customer_name' => $customer->name ?? '',
+                    'customer_phone' => $customer->phone ?? '',
+                    'appointment_time' => $appointmentTime,
+                    'appointment_date' => $this->formatDate($appointment->appointment_date),
+                    'cancelled_by' => 'salon_owner',
+                    'reason' => $reason ?? '',
+                    'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                    'screen' => 'appointment_details',
+                ];
+                
+                $this->sendPushNotification($barber, $title, $body, $data);
+                
+                Log::info('Cancellation notification for barber', [
+                    'appointment_id' => $appointment->id,
+                    'barber_id' => $barber->id,
+                ]);
+            }
+
+            if ($customer) {
+                $appointmentTime = $this->formatTime($appointment->appointment_time);
+                $barber = $appointment->barber;
+                
+                $title = 'تم إلغاء حجزك';
+                $body = "تم إلغاء حجزك مع {$barber->name} في {$appointmentTime} بواسطة إدارة الصالون";
+                if ($reason) {
+                    $body .= "\nالسبب: {$reason}";
+                }
+                
+                $data = [
+                    'type' => 'appointment_cancelled_by_owner',
+                    'appointment_id' => (string) $appointment->id,
+                    'barber_name' => $barber->name ?? '',
+                    'appointment_time' => $appointmentTime,
+                    'appointment_date' => $this->formatDate($appointment->appointment_date),
+                    'cancelled_by' => 'salon_owner',
+                    'reason' => $reason ?? '',
+                    'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                    'screen' => 'appointment_details',
+                ];
+                
+                $this->sendPushNotification($customer, $title, $body, $data);
+                
+                Log::info('Cancellation notification for customer', [
+                    'appointment_id' => $appointment->id,
+                    'customer_id' => $customer->id,
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Failed to send cancellation notifications: ' . $e->getMessage(), [
+                'appointment_id' => $appointment->id ?? null,
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
     }
 }

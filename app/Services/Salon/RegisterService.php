@@ -44,8 +44,17 @@ class RegisterService
             // إنشاء كود تحقق عشوائي (6 أرقام)
             $otpCode = sprintf("%06d", rand(0, 999999));
 
-            // تخزين البيانات المؤقتة في Cache
-            $this->storeTemporaryData($phone, $data);
+
+            $dataForCache = $data;
+            unset($dataForCache['avatar']);
+            unset($dataForCache['images']);
+
+            // إضافة معلومات عن وجود ملفات
+            $dataForCache['has_avatar'] = isset($data['avatar']);
+            $dataForCache['has_images'] = isset($data['images']) && is_array($data['images']);
+
+            // تخزين البيانات المؤقتة في Cache (بدون ملفات)
+            $this->storeTemporaryData($phone, $dataForCache);
 
             // تخزين كود التحقق
             $this->storeOtpCode($phone, $otpCode);
@@ -121,53 +130,122 @@ class RegisterService
             if (!$storedCode || $storedCode !== $code) {
                 return AuthResult::error('رمز التحقق غير صحيح أو منتهي الصلاحية', null, 422);
             }
-
-            // استرجاع البيانات المؤقتة
             $data = $this->getTemporaryData($phone);
             if (!$data) {
                 return AuthResult::error('انتهت صلاحية الجلسة، يرجى إعادة المحاولة', null, 422);
             }
+            $isCustomer = isset($data['user_type']) && $data['user_type'] === 'customer';
+            $isSalonOwner = isset($data['user_type']) && $data['user_type'] === 'salon_owner';
 
-            // إنشاء الحساب
-            $result = $this->createSalonOwnerAccount($data);
 
-            if ($result->success) {
+            if ($isCustomer) {
+                $result = $this->createCustomerAccount($data);
 
-                try {
-                    $notificationService = app(FirebaseNotificationService::class);
+                if ($result->success) {
+                   
+                    $this->clearTemporaryData($phone);
+                    $this->clearOtpCode($phone);
 
-                    // جلب الصالون الذي تم إنشاؤه
-                    $salon = Salon::where('owner_id', $result->data['user']['id'])->first();
-                    $user =User::find($result->data['user']['id']);
-
-                    if ($salon && $user) {
-                        $notificationService->notifyAdminsAboutNewSalonOwnerWeb($user, $salon);
-                        Log::info('Firebase admin notification sent for new salon owner', [
-                            'salon_id' => $salon->id,
-                            'owner_id' => $user->id,
-                        ]);
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Failed to send Firebase admin notification: ' . $e->getMessage());
+                    Log::info('Customer account created and activated', [
+                        'user_id' => $result->data['user']['id'] ?? null,
+                        'phone' => $phone
+                    ]);
                 }
 
-                // حذف البيانات المؤقتة
-                $this->clearTemporaryData($phone);
-                $this->clearOtpCode($phone);
-
-                Log::info('Salon owner account created', [
-                    'user_id' => $result->data['user']['id'] ?? null,
-                    'phone' => $phone
-                ]);
+                return $result;
             }
 
-            return $result;
+            if ($isSalonOwner) {
+                $result = $this->createSalonOwnerAccount($data);
+
+                if ($result->success) {
+                    try {
+                        $notificationService = app(FirebaseNotificationService::class);
+                        $salon = Salon::where('owner_id', $result->data['user']['id'])->first();
+                        $user = User::find($result->data['user']['id']);
+
+                        if ($salon && $user) {
+                            $notificationService->notifyAdminsAboutNewSalonOwnerWeb($user, $salon);
+                            Log::info('Firebase admin notification sent for new salon owner', [
+                                'salon_id' => $salon->id,
+                                'owner_id' => $user->id,
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        Log::error('Failed to send Firebase admin notification: ' . $e->getMessage());
+                    }
+                    $this->clearTemporaryData($phone);
+                    $this->clearOtpCode($phone);
+
+                    Log::info('Salon owner account created (pending approval)', [
+                        'user_id' => $result->data['user']['id'] ?? null,
+                        'phone' => $phone
+                    ]);
+                }
+
+                return $result;
+            }
+
+
+            return AuthResult::error('نوع المستخدم غير معروف', null, 400);
 
         } catch (\Exception $e) {
             Log::error('Verify code error: ' . $e->getMessage());
             return AuthResult::error('حدث خطأ أثناء التحقق: ' . $e->getMessage(), null, 500);
         }
     }
+
+    private function createCustomerAccount(array $data): AuthResult
+    {
+        try {
+            return DB::transaction(function () use ($data) {
+
+
+                $user = User::create([
+                    'name' => $data['name'],
+                    'phone' => $data['phone'],
+                    'password' => Hash::make($data['password']),
+                    'role' => 'customer',
+                    'is_active' => true,
+                ]);
+
+                // 2. رفع الصورة الشخصية إذا وجدت
+                if (isset($data['avatar']) && $data['avatar'] instanceof UploadedFile) {
+                    $this->uploadAvatar($user, $data['avatar']);
+                }
+
+                // 3. تعيين الدور
+                $user->assignRole('customer');
+
+                // 4. إنشاء توكن
+                $token = $user->createToken('auth_token')->plainTextToken;
+
+                $result = [
+                    'user' => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'phone' => $user->phone,
+                        'role' => 'customer',
+                        'roles' => $user->getRoleNames(),
+                        'avatar' => $user->getAvatarUrlAttribute(),
+                        'is_active' => true,
+                        'token' => $token,
+                        'token_type' => 'Bearer',
+                        'status' => 'active'
+                    ],
+                    'message' => 'تم إنشاء حساب الزبون بنجاح'
+                ];
+
+                Log::info('Customer account created', ['user_id' => $user->id, 'phone' => $user->phone]);
+
+                return AuthResult::success('تم إنشاء حساب الزبون بنجاح', $result, 201);
+            });
+        } catch (\Exception $e) {
+            Log::error('Create customer account error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء إنشاء حساب الزبون: ' . $e->getMessage(), null, 500);
+        }
+    }
+
     /**
      * إنشاء حساب صاحب الصالون (غير مفعل - ينتظر موافقة المدير)
      */
@@ -331,8 +409,13 @@ class RegisterService
 
             // حذف المستخدم والبيانات المرتبطة
             if ($salon) {
+                // حذف صور الصالون من Spatie Media Library
+                $salon->clearMediaCollection('salon_images');
                 $salon->delete();
             }
+
+            // حذف الصورة الشخصية من Spatie Media Library
+            $user->clearMediaCollection('avatar');
             $user->delete();
 
             // إرسال إشعار الرفض للمستخدم
@@ -481,7 +564,8 @@ class RegisterService
     {
         try {
             $user->addMedia($avatar)
-                ->usingFileName($this->generateAvatarFileName($avatar))
+                ->usingFileName($this->generateFileName($avatar))
+                ->usingName('avatar_' . $user->id)
                 ->toMediaCollection('avatar');
             Log::info('Avatar uploaded for user', ['user_id' => $user->id]);
         } catch (\Exception $e) {
@@ -489,9 +573,25 @@ class RegisterService
         }
     }
 
-    private function generateAvatarFileName(UploadedFile $file): string
+    private function uploadMultipleImages(Salon $salon, array $images): void
     {
-        return 'avatar_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+        foreach ($images as $image) {
+            if ($image instanceof UploadedFile) {
+                try {
+                    $salon->addMedia($image)
+                        ->usingFileName($this->generateFileName($image))
+                        ->usingName('salon_image_' . $salon->id)
+                        ->toMediaCollection('salon_images');
+                } catch (\Exception $e) {
+                    Log::error('Image upload failed: ' . $e->getMessage());
+                }
+            }
+        }
+    }
+
+    private function generateFileName(UploadedFile $file): string
+    {
+        return time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
     }
 
     private function assignRoles(User $user, array $data): void
@@ -510,21 +610,6 @@ class RegisterService
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-    }
-
-    private function uploadMultipleImages(Salon $salon, array $images): void
-    {
-        foreach ($images as $image) {
-            if ($image instanceof UploadedFile) {
-                try {
-                    $salon->addMedia($image)
-                        ->usingFileName('salon_' . time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension())
-                        ->toMediaCollection('salon_images');
-                } catch (\Exception $e) {
-                    Log::error('Image upload failed: ' . $e->getMessage());
-                }
-            }
-        }
     }
 
     private function saveWorkingHours(Salon $salon, array $workingHours): void

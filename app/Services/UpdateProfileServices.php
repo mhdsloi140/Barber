@@ -46,134 +46,124 @@ class UpdateProfileServices
     /**
      * تحديث الملف الشخصي (شامل الصورة وكلمة المرور والإعدادات)
      */
-    public function updateProfile(UpdateProfileRequest $request): AuthResult
-    {
-        try {
-            $user = auth()->user();
+public function updateProfile(UpdateProfileRequest $request): AuthResult
+{
+    try {
+        $user = auth()->user();
 
-            if (!$user) {
-                return AuthResult::error('المستخدم غير موجود', null, 404);
-            }
-
-            $passwordChanged = false;
-            $token = null;
-
-            // ========== 1. التحقق من كلمة المرور الحالية إذا تم تغيير كلمة المرور ==========
-            if ($request->filled('password')) {
-                if (!Hash::check($request->current_password, $user->password)) {
-                    return AuthResult::error('كلمة المرور الحالية غير صحيحة', null, 400);
-                }
-                $user->password = Hash::make($request->password);
-                $passwordChanged = true;
-            }
-
-            // ========== 2. تحديث البيانات الأساسية ==========
-            $updateData = [];
-
-            if ($request->filled('name')) {
-                $updateData['name'] = $request->name;
-            }
-
-            if ($request->filled('phone')) {
-                // التحقق من عدم تكرار رقم الهاتف
-                $existingUser = User::where('phone', $request->phone)
-                    ->where('id', '!=', $user->id)
-                    ->first();
-
-                if ($existingUser) {
-                    return AuthResult::error('رقم الهاتف مستخدم من قبل', null, 422);
-                }
-                $updateData['phone'] = $request->phone;
-            }
-
-            if ($request->has('notifications_enabled')) {
-                $user->notifications_enabled = $request->boolean('notifications_enabled');
-                $user->save();
-                Log::info('Notification settings updated', [
-                    'user_id' => $user->id,
-                    'enabled' => $request->boolean('notifications_enabled')
-                ]);
-            }
-
-            if (!empty($updateData)) {
-                $user->update($updateData);
-            }
-
-            // ========== 3. معالجة الصورة الشخصية ==========
-            // 3.1 إذا طلب حذف الصورة
-            if ($request->boolean('delete_avatar')) {
-                $user->clearMediaCollection('avatar');
-                Log::info('Avatar deleted on update', ['user_id' => $user->id]);
-            }
-
-            // 3.2 إذا تم رفع صورة جديدة
-            if ($request->hasFile('avatar')) {
-                // حذف الصورة القديمة
-                $user->clearMediaCollection('avatar');
-                // إضافة الصورة الجديدة
-                $user->addMedia($request->file('avatar'))
-                    ->usingFileName($this->generateFileName($request->file('avatar')))
-                    ->toMediaCollection('avatar');
-                Log::info('Avatar updated on profile update', ['user_id' => $user->id]);
-            }
-
-            // ========== 4. تحديث إعدادات الإشعارات ==========
-            if ($request->has('notifications_enabled')) {
-                $user->notifications_enabled = $request->boolean('notifications_enabled');
-                $user->save();
-                Log::info('Notification settings updated', [
-                    'user_id' => $user->id,
-                    'enabled' => $request->boolean('notifications_enabled')
-                ]);
-            }
-
-            // ========== 5. تحديث بيانات الصالون (لصاحب الصالون) ==========
-            if ($user->hasRole('salon_owner') && $user->ownedSalon) {
-                $this->updateSalonData($user, $request);
-            }
-
-            // ========== 6. تحديث بيانات الحلاق ==========
-            if ($user->hasRole('barber')) {
-                $this->updateBarberData($user, $request);
-            }
-
-            // ========== 7. إنشاء توكن جديد إذا تم تغيير كلمة المرور ==========
-            if ($passwordChanged) {
-                // حذف جميع التوكنات القديمة
-                $user->tokens()->delete();
-                // إنشاء توكن جديد
-                $token = $this->generateToken($user);
-            }
-
-            Log::info('Profile updated successfully', [
-                'user_id' => $user->id,
-                'password_changed' => $passwordChanged
-            ]);
-
-
-            $userData = UserResource::make($user->fresh());
-
-            // إضافة التوكن الجديد إذا تم تغيير كلمة المرور
-            if ($passwordChanged && $token) {
-                $responseData = $userData->toArray(request());
-                $responseData['token'] = $token;
-                $responseData['token_type'] = 'Bearer';
-
-                return AuthResult::success('تم تحديث الملف الشخصي بنجاح، تم تغيير كلمة المرور', $responseData);
-            }
-
-            return AuthResult::success('تم تحديث الملف الشخصي بنجاح', $userData);
-
-        } catch (\Exception $e) {
-            Log::error('Update profile error: ' . $e->getMessage());
-
-            return AuthResult::error(
-                'حدث خطأ أثناء تحديث الملف الشخصي',
-                config('app.debug') ? $e->getMessage() : null,
-                500
-            );
+        if (!$user) {
+            return AuthResult::error('المستخدم غير موجود', null, 404);
         }
+
+        $passwordChanged = false;
+        $token = null;
+
+        // ========== 1. تحديث كلمة المرور ==========
+        if ($request->filled('password')) {
+            $user->password = Hash::make($request->password);
+            $passwordChanged = true;
+        }
+
+        // ========== 2. تحديث البيانات الأساسية ==========
+        $updateData = [];
+
+        if ($request->filled('name')) {
+            $updateData['name'] = $request->name;
+        }
+
+        if ($request->filled('phone')) {
+            $existingUser = User::where('phone', $request->phone)
+                ->where('id', '!=', $user->id)
+                ->first();
+
+            if ($existingUser) {
+                return AuthResult::error('رقم الهاتف مستخدم من قبل', null, 422);
+            }
+            $updateData['phone'] = $request->phone;
+        }
+
+        if ($request->has('notifications_enabled')) {
+            $user->notifications_enabled = $request->boolean('notifications_enabled');
+            $user->save();
+            Log::info('Notification settings updated', [
+                'user_id' => $user->id,
+                'enabled' => $request->boolean('notifications_enabled')
+            ]);
+        }
+
+        if (!empty($updateData)) {
+            $user->update($updateData);
+        }
+
+        if ($request->boolean('delete_avatar')) {
+            $user->clearMediaCollection('avatar');
+            Log::info('Avatar deleted on update', ['user_id' => $user->id]);
+        }
+
+        // 3.2 إذا تم رفع صورة جديدة
+        if ($request->hasFile('avatar')) {
+            // حذف الصورة القديمة
+            $user->clearMediaCollection('avatar');
+            // إضافة الصورة الجديدة
+            $user->addMedia($request->file('avatar'))
+                ->usingFileName($this->generateFileName($request->file('avatar')))
+                ->toMediaCollection('avatar');
+            Log::info('Avatar updated on profile update', ['user_id' => $user->id]);
+        }
+
+        // ========== 4. تحديث إعدادات الإشعارات ==========
+        if ($request->has('notifications_enabled')) {
+            $user->notifications_enabled = $request->boolean('notifications_enabled');
+            $user->save();
+            Log::info('Notification settings updated', [
+                'user_id' => $user->id,
+                'enabled' => $request->boolean('notifications_enabled')
+            ]);
+        }
+
+        // ========== 5. تحديث بيانات الصالون (لصاحب الصالون) ==========
+        if ($user->hasRole('salon_owner') && $user->ownedSalon) {
+            $this->updateSalonData($user, $request);
+        }
+
+        // ========== 6. تحديث بيانات الحلاق ==========
+        if ($user->hasRole('barber')) {
+            $this->updateBarberData($user, $request);
+        }
+
+        if ($passwordChanged) {
+            $token = $this->generateToken($user);
+        }
+
+        Log::info('Profile updated successfully', [
+            'user_id' => $user->id,
+            'password_changed' => $passwordChanged
+        ]);
+
+        $userData = UserResource::make($user->fresh());
+
+        if ($passwordChanged && $token) {
+            $responseData = $userData->toArray(request());
+            $responseData['token'] = $token;
+            $responseData['token_type'] = 'Bearer';
+
+            $responseData['old_token'] = $user->currentAccessToken()?->plainTextToken;
+
+            return AuthResult::success('تم تحديث الملف الشخصي بنجاح، تم تغيير كلمة المرور', $responseData);
+        }
+
+        return AuthResult::success('تم تحديث الملف الشخصي بنجاح', $userData);
+
+    } catch (\Exception $e) {
+        Log::error('Update profile error: ' . $e->getMessage());
+
+        return AuthResult::error(
+            'حدث خطأ أثناء تحديث الملف الشخصي',
+            config('app.debug') ? $e->getMessage() : null,
+            500
+        );
     }
+}
 
     /**
      * تحديث الصورة الشخصية فقط (منفصل - للتوافق مع الإصدارات القديمة)

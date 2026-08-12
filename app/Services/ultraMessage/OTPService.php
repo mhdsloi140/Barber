@@ -29,38 +29,32 @@ class OTPService
     }
 
     /**
-     * تخزين OTP للمستخدم
+     * إرسال OTP عبر واتساب (باستخدام رقم الهاتف كمفتاح)
      */
-    public function storeOTP(int $userId, string $otpCode): void
+    public function sendOTP(string $phone, int $userId = null): array
     {
-        $cacheKey = "otp_user_{$userId}";
+        // توليد رمز جديد
+        $otpCode = $this->generateOTP();
 
+        $cacheKey = "otp_phone_{$phone}";
         Cache::put($cacheKey, [
             'otp' => $otpCode,
             'attempts' => 0,
             'created_at' => now(),
         ], now()->addMinutes($this->expiresInMinutes));
 
-        Log::debug('OTP stored', ['user_id' => $userId, 'expires_in' => $this->expiresInMinutes]);
-    }
-
-    /**
-     * إرسال OTP عبر واتساب
-     */
-    public function sendOTP(string $phone, int $userId): array
-    {
-        // توليد رمز جديد
-        $otpCode = $this->generateOTP();
-
-        // تخزين الرمز
-        $this->storeOTP($userId, $otpCode);
+        Log::info('OTP stored in OTPService', [
+            'phone' => $phone,
+            'otp' => $otpCode,
+            'key' => $cacheKey,
+            'expires_in' => $this->expiresInMinutes
+        ]);
 
         // إرسال عبر واتساب
         $result = $this->whatsappService->sendOTP($phone, $otpCode, $this->expiresInMinutes);
 
         if (!$result['success']) {
             Log::error('Failed to send OTP', [
-                'user_id' => $userId,
                 'phone' => $phone,
                 'error' => $result['error'] ?? 'unknown'
             ]);
@@ -68,19 +62,40 @@ class OTPService
 
         return [
             'success' => $result['success'],
-            'otp' => $otpCode, // يمكن إزالته في الإنتاج (للتجربة فقط)
+            'otp' => $otpCode,
             'expires_in' => $this->expiresInMinutes * 60,
             'error' => $result['error'] ?? null
         ];
     }
 
     /**
-     * التحقق من صحة OTP
+     * إعادة إرسال OTP
      */
-    public function verifyOTP(int $userId, string $otpCode): array
+    public function resendOTP(string $phone, int $userId = null): array
     {
-        $cacheKey = "otp_user_{$userId}";
+        // حذف الـ OTP القديم
+        $cacheKey = "otp_phone_{$phone}";
+        Cache::forget($cacheKey);
+
+        // إرسال OTP جديد
+        return $this->sendOTP($phone);
+    }
+
+    /**
+     * التحقق من صحة OTP (باستخدام رقم الهاتف فقط)
+     */
+    public function verifyOTP(string $phone, string $otpCode): array
+    {
+        $cacheKey = "otp_phone_{$phone}";
         $otpData = Cache::get($cacheKey);
+
+        Log::info('Verifying OTP', [
+            'phone' => $phone,
+            'input_otp' => $otpCode,
+            'cached_otp' => $otpData['otp'] ?? null,
+            'cache_key' => $cacheKey,
+            'data_exists' => $otpData ? 'yes' : 'no'
+        ]);
 
         if (!$otpData) {
             return [
@@ -122,18 +137,5 @@ class OTPService
             'success' => true,
             'code' => 'VERIFIED'
         ];
-    }
-
-    /**
-     * إعادة إرسال OTP
-     */
-    public function resendOTP(string $phone, int $userId): array
-    {
-        // حذف الـ OTP القديم
-        $cacheKey = "otp_user_{$userId}";
-        Cache::forget($cacheKey);
-
-        // إرسال OTP جديد
-        return $this->sendOTP($phone, $userId);
     }
 }

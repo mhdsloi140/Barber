@@ -27,16 +27,7 @@ class SalonController extends Controller
         ], $result->statusCode);
     }
 
-    /**
-     * عرض صالون محدد
-     * GET /api/customer/salons/{id}
-     *
-     * @queryParam barber_id int optional - معرف الحلاق لجلب أوقات الفراغ
-     * @queryParam date string optional - التاريخ المطلوب (Y-m-d)
-     * @queryParam service_id int optional - معرف الخدمة
-     * @queryParam latitude float optional - خط العرض لحساب المسافة
-     * @queryParam longitude float optional - خط الطول لحساب المسافة
-     */
+   
     public function show($id, Request $request)
     {
         $result = $this->salonService->getSalon(

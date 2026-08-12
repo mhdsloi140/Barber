@@ -58,7 +58,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // FCM Token
     Route::post('/fcm-token', [FcmTokenController::class, 'update']);
     Route::delete('/fcm-token', [FcmTokenController::class, 'destroy']);
-    // إعدادات الإشعارات
     Route::prefix('notifications/settings')->name('notifications.settings.')->group(function () {
         Route::get('/', [NotificationSettingsController::class, 'getStatus'])->name('status');
         Route::post('/enable', [NotificationSettingsController::class, 'enable'])->name('enable');
@@ -194,7 +193,7 @@ Route::prefix('ratings')->group(function () {
     });
 });
 
-// ===================== Routes لاختبار Topics =====================
+
 Route::prefix('test/topics')->group(function () {
     Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
         Route::post('/all-customers', [TestTopicsController::class, 'sendToAllCustomers']);

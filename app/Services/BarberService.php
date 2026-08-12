@@ -23,14 +23,30 @@ class BarberService
         $this->ultraMsg = $ultraMsg;
     }
 
-    /**
-     * إنشاء كلمة مرور بسيطة (6 أرقام)
-     */
-    protected function generateSimplePassword(): string
+
+    protected function generateStrongPassword(): string
     {
-        return (string) rand(100000, 999999);
+        $length = rand(8, 12);
+
+        $letters = 'abcdefghijklmnopqrstuvwxyz';
+        $uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $numbers = '0123456789';
+        $password = $uppercase[rand(0, strlen($uppercase) - 1)];
+        $password .= $letters[rand(0, strlen($letters) - 1)];
+        $password .= $numbers[rand(0, strlen($numbers) - 1)];
+        $all = $letters . $uppercase . $numbers;
+        for ($i = 3; $i < $length; $i++) {
+            $password .= $all[rand(0, strlen($all) - 1)];
+        }
+
+        return str_shuffle($password);
     }
 
+
+    protected function generateSimplePassword(): string
+    {
+        return $this->generateStrongPassword();
+    }
     /**
      * إضافة حلاق جديد
      */
@@ -44,8 +60,8 @@ class BarberService
                     return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
                 }
 
-                // إنشاء كلمة مرور عشوائية
-                $plainPassword = $this->generateSimplePassword();
+
+                $plainPassword = $this->generateStrongPassword();
                 $hashedPassword = Hash::make($plainPassword);
 
                 $barber = User::create([
@@ -84,73 +100,69 @@ class BarberService
         }
     }
 
-    /**
-     * جلب كل الحلاقين التابعين لصاحب الصالون مع تقييماتهم وإحصائياتهم
-     */
-/**
- * جلب الحلاقين مع Pagination
- */
-public function getBarbers(User $salonOwner, int $perPage = 10, int $page = 1): AuthResult
-{
-    try {
-        $salon = $salonOwner->ownedSalon;
 
-        if (!$salon) {
-            return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
-        }
 
-        $barbers = $salon->barbers()
-            ->select('users.id', 'users.name', 'users.phone', 'users.is_active')
-            ->paginate($perPage, ['*'], 'page', $page);
+    public function getBarbers(User $salonOwner, int $perPage = 10, int $page = 1): AuthResult
+    {
+        try {
+            $salon = $salonOwner->ownedSalon;
 
-        $barbersData = collect($barbers->items())->map(function($barber) {
-            $averageRating = $this->getBarberAverageRating($barber->id);
-            $weeklyBookings = $this->getBarberWeeklyBookings($barber->id);
-            $totalBookings = $this->getBarberTotalBookings($barber->id);
-            $completedBookings = $this->getBarberCompletedBookings($barber->id);
+            if (!$salon) {
+                return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
+            }
 
-            return [
-                'id' => $barber->id,
-                'name' => $barber->name,
-                'phone' => $barber->phone,
-                'is_active' => $barber->is_active,
-                'avatar' => $barber->getAvatarUrlAttribute(),
-                'rating' => [
-                    'average' => $averageRating['average'],
-                    'total' => $averageRating['total'],
-                    'distribution' => $averageRating['distribution'],
-                ],
-                'statistics' => [
-                    'weekly_bookings' => $weeklyBookings,
-                    'total_bookings' => $totalBookings,
-                    'completed_bookings' => $completedBookings,
-                ],
+            $barbers = $salon->barbers()
+                ->select('users.id', 'users.name', 'users.phone', 'users.is_active')
+                ->paginate($perPage, ['*'], 'page', $page);
+
+            $barbersData = collect($barbers->items())->map(function ($barber) {
+                $averageRating = $this->getBarberAverageRating($barber->id);
+                $weeklyBookings = $this->getBarberWeeklyBookings($barber->id);
+                $totalBookings = $this->getBarberTotalBookings($barber->id);
+                $completedBookings = $this->getBarberCompletedBookings($barber->id);
+
+                return [
+                    'id' => $barber->id,
+                    'name' => $barber->name,
+                    'phone' => $barber->phone,
+                    'is_active' => $barber->is_active,
+                    'avatar' => $barber->getAvatarUrlAttribute(),
+                    'rating' => [
+                        'average' => $averageRating['average'],
+                        'total' => $averageRating['total'],
+                        'distribution' => $averageRating['distribution'],
+                    ],
+                    'statistics' => [
+                        'weekly_bookings' => $weeklyBookings,
+                        'total_bookings' => $totalBookings,
+                        'completed_bookings' => $completedBookings,
+                    ],
+                ];
+            });
+
+            $paginationData = [
+                'current_page' => $barbers->currentPage(),
+                'data' => $barbersData,
+                'first_page_url' => $barbers->url(1),
+                'from' => $barbers->firstItem(),
+                'last_page' => $barbers->lastPage(),
+                'last_page_url' => $barbers->url($barbers->lastPage()),
+                'next_page_url' => $barbers->nextPageUrl(),
+                'path' => $barbers->path(),
+                'per_page' => $barbers->perPage(),
+                'prev_page_url' => $barbers->previousPageUrl(),
+                'to' => $barbers->lastItem(),
+                'total' => $barbers->total(),
             ];
-        });
 
-    
-        $paginationData = [
-            'current_page' => $barbers->currentPage(),
-            'data' => $barbersData,
-            'first_page_url' => $barbers->url(1),
-            'from' => $barbers->firstItem(),
-            'last_page' => $barbers->lastPage(),
-            'last_page_url' => $barbers->url($barbers->lastPage()),
-            'next_page_url' => $barbers->nextPageUrl(),
-            'path' => $barbers->path(),
-            'per_page' => $barbers->perPage(),
-            'prev_page_url' => $barbers->previousPageUrl(),
-            'to' => $barbers->lastItem(),
-            'total' => $barbers->total(),
-        ];
+            return AuthResult::success('تم جلب الحلاقين بنجاح', $paginationData);
 
-        return AuthResult::success('تم جلب الحلاقين بنجاح', $paginationData);
-
-    } catch (\Exception $e) {
-        Log::error('Get barbers error: ' . $e->getMessage());
-        return AuthResult::error('حدث خطأ أثناء جلب الحلاقين: ' . $e->getMessage(), null, 500);
+        } catch (\Exception $e) {
+            Log::error('Get barbers error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء جلب الحلاقين: ' . $e->getMessage(), null, 500);
+        }
     }
-}
+
 
     /**
      * جلب بيانات حلاق معين مع تقييمه وإحصائياته
@@ -399,58 +411,100 @@ public function getBarbers(User $salonOwner, int $perPage = 10, int $page = 1): 
         }
     }
 
-    /**
-     * حذف حلاق (Soft Delete)
-     */
 
-public function deleteBarber(User $salonOwner, int $barberId): AuthResult
-{
-    try {
-        // 1. التحقق من وجود الصالون
-        $salon = $salonOwner->ownedSalon;
-        if (!$salon) {
-            return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
-        }
 
-        // 2. جلب الحلاق من الصالون
-        $barber = $salon->barbers()->where('users.id', $barberId)->first();
-        if (!$barber) {
-            return AuthResult::error('الحلاق غير موجود', null, 404);
-        }
-
-        // 3. التحقق من صلاحيات الحلاق
-        $roles = $barber->getRoleNames()->toArray();
-        $isSalonOwner = ($barber->id === $salonOwner->id);
-        $hasSalonOwnerRole = in_array('salon_owner', $roles);
-        $hasOnlyBarberRole = (count($roles) === 1 && in_array('barber', $roles));
-
-        // 4. حالة: الحلاق هو صاحب الصالون نفسه
-        if ($isSalonOwner) {
-            if ($hasSalonOwnerRole) {
-                // إزالة صلاحية barber فقط (لا يتم حذف الحساب)
-                $barber->removeRole('barber');
-                $barber->salons()->detach($salon->id);
-
-                Log::info('تم إزالة صلاحية الحلاق من صاحب الصالون', [
-                    'user_id' => $barber->id,
-                    'salon_id' => $salon->id,
-                    'remaining_roles' => $barber->getRoleNames()
-                ]);
-
-                return AuthResult::success('تم إزالة صلاحية الحلاق من صاحب الصالون بنجاح', [
-                    'id' => $barber->id,
-                    'name' => $barber->name,
-                    'phone' => $barber->phone,
-                    'action' => 'role_removed',
-                    'remaining_roles' => $barber->getRoleNames(),
-                ]);
+    public function deleteBarber(User $salonOwner, int $barberId): AuthResult
+    {
+        try {
+            // 1. التحقق من وجود الصالون
+            $salon = $salonOwner->ownedSalon;
+            if (!$salon) {
+                return AuthResult::error('لا يوجد صالون تابع لك', null, 404);
             }
 
-            if ($hasOnlyBarberRole) {
-                // حذف الحساب نهائياً (حالة نادرة)
-                $barber->delete();
+            // 2. جلب الحلاق من الصالون
+            $barber = $salon->barbers()->where('users.id', $barberId)->first();
+            if (!$barber) {
+                return AuthResult::error('الحلاق غير موجود', null, 404);
+            }
 
-                Log::info('تم حذف صاحب الصالون (لديه صلاحية barber فقط)', [
+            // 3. التحقق من وجود حجوزات مرتبطة بالحلاق
+            $hasAppointments = Appointment::where('barber_id', $barberId)
+                ->whereIn('status', ['pending', 'confirmed', 'completed'])
+                ->exists();
+
+            if ($hasAppointments) {
+                Log::warning('محاولة حذف حلاق لديه حجوزات', [
+                    'barber_id' => $barberId,
+                    'salon_id' => $salon->id,
+                    'appointments_count' => Appointment::where('barber_id', $barberId)->count()
+                ]);
+
+                return AuthResult::error(
+                    'لا يمكن حذف هذا الحلاق لأنه لديه حجوزات. قم بنقل الحجوزات إلى حلاق آخر أولاً.',
+                    [
+                        'barber_id' => $barberId,
+                        'appointments_count' => Appointment::where('barber_id', $barberId)->count(),
+                        'pending_appointments' => Appointment::where('barber_id', $barberId)->where('status', 'pending')->count(),
+                        'confirmed_appointments' => Appointment::where('barber_id', $barberId)->where('status', 'confirmed')->count(),
+                        'completed_appointments' => Appointment::where('barber_id', $barberId)->where('status', 'completed')->count(),
+                    ],
+                    422
+                );
+            }
+
+            // 4. التحقق من صلاحيات الحلاق
+            $roles = $barber->getRoleNames()->toArray();
+            $isSalonOwner = ($barber->id === $salonOwner->id);
+            $hasSalonOwnerRole = in_array('salon_owner', $roles);
+            $hasOnlyBarberRole = (count($roles) === 1 && in_array('barber', $roles));
+
+            // 5. حالة: الحلاق هو صاحب الصالون نفسه
+            if ($isSalonOwner) {
+                if ($hasSalonOwnerRole) {
+                    // إزالة صلاحية barber فقط (لا يتم حذف الحساب)
+                    $barber->removeRole('barber');
+                    $barber->salons()->detach($salon->id);
+
+                    Log::info('تم إزالة صلاحية الحلاق من صاحب الصالون', [
+                        'user_id' => $barber->id,
+                        'salon_id' => $salon->id,
+                        'remaining_roles' => $barber->getRoleNames()
+                    ]);
+
+                    return AuthResult::success('تم إزالة صلاحية الحلاق من صاحب الصالون بنجاح', [
+                        'id' => $barber->id,
+                        'name' => $barber->name,
+                        'phone' => $barber->phone,
+                        'action' => 'role_removed',
+                        'remaining_roles' => $barber->getRoleNames(),
+                    ]);
+                }
+
+                if ($hasOnlyBarberRole) {
+
+                    $this->forceDeleteUser($barber);
+
+                    Log::info('تم حذف صاحب الصالون (لديه صلاحية barber فقط)', [
+                        'user_id' => $barber->id,
+                        'salon_id' => $salon->id,
+                    ]);
+
+                    return AuthResult::success('تم حذف الحلاق بنجاح', [
+                        'id' => $barber->id,
+                        'name' => $barber->name,
+                        'phone' => $barber->phone,
+                        'action' => 'deleted',
+                    ]);
+                }
+            }
+
+
+            if ($hasOnlyBarberRole) {
+
+                $this->forceDeleteUser($barber);
+
+                Log::info('تم حذف حلاق عادي (يملك صلاحية barber فقط)', [
                     'user_id' => $barber->id,
                     'salon_id' => $salon->id,
                 ]);
@@ -462,49 +516,58 @@ public function deleteBarber(User $salonOwner, int $barberId): AuthResult
                     'action' => 'deleted',
                 ]);
             }
-        }
 
-        // 5. حالة: حلاق عادي (ليس صاحب الصالون)
-        if ($hasOnlyBarberRole) {
-            // حذف الحساب نهائياً
-            $barber->delete();
+            // 7. حالة: الحلاق لديه صلاحيات أخرى (ليس فقط barber)
+            // فقط قم بإزالة العلاقة مع الصالون (لا يتم حذف المستخدم)
+            $barber->salons()->detach($salon->id);
 
-            Log::info('تم حذف حلاق عادي', [
+            Log::info('تم إزالة الحلاق من الصالون (مع الاحتفاظ بالحساب)', [
                 'user_id' => $barber->id,
                 'salon_id' => $salon->id,
+                'roles' => $roles,
             ]);
 
-            return AuthResult::success('تم حذف الحلاق بنجاح', [
+            return AuthResult::success('تم إزالة الحلاق من الصالون بنجاح', [
                 'id' => $barber->id,
                 'name' => $barber->name,
                 'phone' => $barber->phone,
-                'action' => 'deleted',
+                'action' => 'removed_from_salon',
+                'roles' => $roles,
             ]);
+
+        } catch (\Exception $e) {
+            Log::error('Delete barber error: ' . $e->getMessage());
+            return AuthResult::error('حدث خطأ أثناء حذف الحلاق', config('app.debug') ? $e->getMessage() : null, 500);
         }
-
-        // 6. حالة: الحلاق لديه صلاحيات أخرى (ليس فقط barber)
-        // فقط قم بإزالة العلاقة مع الصالون
-        $barber->salons()->detach($salon->id);
-
-        Log::info('تم إزالة الحلاق من الصالون (مع الاحتفاظ بالحساب)', [
-            'user_id' => $barber->id,
-            'salon_id' => $salon->id,
-            'roles' => $roles,
-        ]);
-
-        return AuthResult::success('تم إزالة الحلاق من الصالون بنجاح', [
-            'id' => $barber->id,
-            'name' => $barber->name,
-            'phone' => $barber->phone,
-            'action' => 'removed_from_salon',
-            'roles' => $roles,
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Delete barber error: ' . $e->getMessage());
-        return AuthResult::error('حدث خطأ أثناء حذف الحلاق', config('app.debug') ? $e->getMessage() : null, 500);
     }
-}
+
+
+    /**
+     * حذف المستخدم نهائياً مع جميع بياناته المرتبطة
+     */
+    private function forceDeleteUser(User $user): void
+    {
+        // 1. حذف العلاقات مع الصالونات
+        $user->salons()->detach();
+
+        // 2. حذف جميع الصلاحيات (roles)
+        $user->syncRoles([]);
+
+        // 3. حذف جميع التوكنات
+        $user->tokens()->delete();
+
+        // 4. حذف الصور المرتبطة (media)
+        $user->clearMediaCollection('avatar');
+
+        // 5. حذف المستخدم نهائياً (force delete)
+        $user->forceDelete();
+
+        Log::info('User force deleted', [
+            'user_id' => $user->id,
+            'name' => $user->name,
+            'phone' => $user->phone,
+        ]);
+    }
     /**
      * إضافة أوقات العمل (يقوم بها الحلاق بعد تسجيل الدخول)
      */

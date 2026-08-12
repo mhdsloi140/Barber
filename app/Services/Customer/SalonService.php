@@ -180,73 +180,117 @@ public function getSalons(array $filters): AuthResult
         return AuthResult::error('حدث خطأ أثناء جلب الصالونات', config('app.debug') ? $e->getMessage() : null, 500);
     }
 }
+/**
+ * جلب بيانات الحلاقين مع التقييمات والخدمات
+ */
+private function getBarbersDataWithRatingsAndServices(Salon $salon): array
+{
+    return $salon->barbers->map(function ($barber) {
+        // جلب الخدمات
+        $services = $barber->barberServices()
+            ->where('is_active', true)
+            ->get()
+            ->map(function($service) {
+                return [
+                    'id' => $service->id,
+                    'name' => $service->name,
+                    'description' => $service->description,
+                    'price' => (float) $service->price,
+                    'duration_minutes' => (int) $service->duration_minutes,
+                ];
+            });
 
-    public function getSalon($id, ?float $latitude = null, ?float $longitude = null, ?string $date = null, ?int $barberId = null, ?int $serviceId = null): AuthResult
-    {
-        try {
-            $salonId = (int) $id;
+        return [
+            'id' => $barber->id,
+            'name' => $barber->name,
+            'phone' => $barber->phone,
+            'avatar' => $barber->getAvatarUrlAttribute(),
+            'is_active' => $barber->is_active,
+            // 'rating' => $this->getBarberRatingData($barber),
+            'services' => $services,
+            'services_count' => $services->count(),
+        ];
+    })->toArray();
+}
 
-            if ($salonId <= 0) {
-                return AuthResult::error('معرف الصالون غير صالح', null, 400);
-            }
+   public function getSalon($id, ?float $latitude = null, ?float $longitude = null, ?string $date = null, ?int $barberId = null, ?int $serviceId = null): AuthResult
+{
+    try {
+        $salonId = (int) $id;
 
-            $salon = Salon::where('salons.is_active', true)
-                ->with([
-                    'barbers' => function($q) {
-                        $q->where('users.is_active', true);
-                    },
-                    'barbers.barberServices' => function($q) {
-                        $q->where('is_active', true);
-                    },
-                    'workingHours'
-                ])
-                ->find($salonId);
-
-            if (!$salon) {
-                return AuthResult::error('الصالون غير موجود', null, 404);
-            }
-
-            $data = $this->formatSalonDataWithImagesAndRatings($salon, $latitude, $longitude);
-
-            // إضافة تفاصيل إضافية للصالون
-            $data['barbers'] = $this->getBarbersDataWithRatings($salon);
-            $data['working_hours'] = $this->getWorkingHoursFormatted($salon);
-            $data['services'] = $this->getSalonServices($salon);
-
-
-            if ($barberId) {
-                // إذا لم يتم إرسال تاريخ، استخدم تاريخ اليوم
-                $parsedDate = $this->parseDate($date);
-                $barber = $salon->barbers->where('id', $barberId)->first();
-
-                if ($barber) {
-                    $freeSlots = $this->getBarberFreeSlots($barber, $parsedDate, $serviceId);
-                    $data['barber_free_slots'] = $freeSlots;
-                    $data['selected_barber'] = [
-                        'id' => $barber->id,
-                        'name' => $barber->name,
-                        'avatar' => $barber->getAvatarUrlAttribute(),
-                    ];
-                    $data['selected_date'] = $parsedDate;
-                    $data['selected_date_formatted'] = $this->formatDateInArabic($parsedDate);
-                    // $data['selected_service_id'] = $serviceId;
-                } else {
-                    $data['barber_free_slots'] = [
-                        'is_working_day' => false,
-                        'message' => 'الحلاق غير موجود في هذا الصالون',
-                        'slots' => [],
-                        'slots_count' => 0
-                    ];
-                }
-            }
-
-            return AuthResult::success('تم جلب بيانات الصالون بنجاح', $data);
-
-        } catch (\Exception $e) {
-            Log::error('Get salon error: ' . $e->getMessage());
-            return AuthResult::error('حدث خطأ أثناء جلب بيانات الصالون', config('app.debug') ? $e->getMessage() : null, 500);
+        if ($salonId <= 0) {
+            return AuthResult::error('معرف الصالون غير صالح', null, 400);
         }
+
+        $salon = Salon::where('salons.is_active', true)
+            ->with([
+                'barbers' => function($q) {
+                    $q->where('users.is_active', true);
+                },
+                'barbers.barberServices' => function($q) {
+                    $q->where('is_active', true);
+                },
+                'workingHours'
+            ])
+            ->find($salonId);
+
+        if (!$salon) {
+            return AuthResult::error('الصالون غير موجود', null, 404);
+        }
+
+        $data = $this->formatSalonDataWithImagesAndRatings($salon, $latitude, $longitude);
+
+
+         $barbersData = $this->getBarbersDataWithRatingsAndServices($salon);
+        $data['barbers'] = $barbersData;
+        $data['working_hours'] = $this->getWorkingHoursFormatted($salon);
+        $data['services'] = $this->getSalonServices($salon);
+
+        if ($barberId) {
+            $parsedDate = $this->parseDate($date);
+            $barber = $salon->barbers->where('id', $barberId)->first();
+
+            if ($barber) {
+                $freeSlots = $this->getBarberFreeSlots($barber, $parsedDate, $serviceId);
+                $data['barber_free_slots'] = $freeSlots;
+                $data['selected_barber'] = [
+                    'id' => $barber->id,
+                    'name' => $barber->name,
+                    'avatar' => $barber->getAvatarUrlAttribute(),
+
+                    'services' => $barber->barberServices()
+                        ->where('is_active', true)
+                        ->get()
+                        ->map(function($service) {
+                            return [
+                                'id' => $service->id,
+                                'name' => $service->name,
+                                'description' => $service->description,
+                                'price' => (float) $service->price,
+                                'duration_minutes' => (int) $service->duration_minutes,
+                                'is_active' => (bool) $service->is_active,
+                            ];
+                        }),
+                ];
+                $data['selected_date'] = $parsedDate;
+                $data['selected_date_formatted'] = $this->formatDateInArabic($parsedDate);
+            } else {
+                $data['barber_free_slots'] = [
+                    'is_working_day' => false,
+                    'message' => 'الحلاق غير موجود في هذا الصالون',
+                    'slots' => [],
+                    'slots_count' => 0
+                ];
+            }
+        }
+
+        return AuthResult::success('تم جلب بيانات الصالون بنجاح', $data);
+
+    } catch (\Exception $e) {
+        Log::error('Get salon error: ' . $e->getMessage());
+        return AuthResult::error('حدث خطأ أثناء جلب بيانات الصالون', config('app.debug') ? $e->getMessage() : null, 500);
     }
+}
 
  /**
  * جلب أوقات الفراغ لحلاق معين في يوم محدد

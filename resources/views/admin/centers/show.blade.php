@@ -88,8 +88,8 @@
             </div>
 
             <!-- إحصائيات سريعة -->
-            <div class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden"
-                style="     margin-top: 10px;     margin-bottom: 10px">
+            <!-- إحصائيات سريعة -->
+            <div class="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
                 <div class="bg-gradient-to-r from-purple-50 to-pink-50 px-5 py-3 border-b border-purple-100">
                     <h3 class="font-bold text-lg text-purple-700">
                         <i class="fas fa-chart-line text-purple-500 ml-2"></i>
@@ -97,55 +97,56 @@
                     </h3>
                 </div>
                 <div class="p-4">
-                    <!-- ترتيب عرضي مع تمرير أفقي للشاشات الصغيرة -->
-                    <div class="overflow-x-auto pb-2" style="scrollbar-width: thin;">
-                        <div class="flex flex-row gap-4" style="min-width: min-content;">
-                            <!-- عدد الحلاقين -->
-                            <div class="text-center p-3 rounded-xl hover:bg-purple-50 transition duration-200 min-w-[120px]"
-                                style="margin:30px ">
-                                <div
-                                    class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                                    <i class="fas fa-cut text-purple-600"></i>
-                                </div>
-                                <p class="text-2xl font-bold text-gray-800">{{ $salon->barbers()->count() ?? 0 }}</p>
-                                <p class="text-xs text-gray-500">عدد الحلاقين</p>
-                            </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
 
-                            <!-- إجمالي الحجوزات -->
-                            <div class="text-center p-3 rounded-xl hover:bg-blue-50 transition duration-200 min-w-[120px]"
-                                style="margin:30px ">
-                                <div
-                                    class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                                    <i class="fas fa-calendar-check text-blue-600"></i>
-                                </div>
-                                <p class="text-2xl font-bold text-gray-800">0</p>
-                                <p class="text-xs text-gray-500">إجمالي الحجوزات</p>
+                        <!-- إجمالي الحجوزات -->
+                        <div class="text-center p-4 rounded-xl bg-blue-50 hover:bg-blue-100 transition duration-200">
+                            <div
+                                class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                                <i class="fas fa-calendar-check text-blue-600 text-xl"></i>
                             </div>
-
-                            <!-- متوسط التقييم -->
-                            <div class="text-center p-3 rounded-xl hover:bg-yellow-50 transition duration-200 min-w-[120px]"
-                                style="margin:30px ">
-                                <div
-                                    class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                                    <i class="fas fa-star text-yellow-600"></i>
-                                </div>
-                                <p class="text-2xl font-bold text-gray-800">{{
-                                    number_format($salon->ratings()->avg('rating') ?? 0, 1) }}</p>
-                                <p class="text-xs text-gray-500">متوسط التقييم</p>
-                            </div>
-
-                            <!-- عدد الصور -->
-                            <div class="text-center p-3 rounded-xl hover:bg-green-50 transition duration-200 min-w-[120px]"
-                                style="margin:30px ">
-                                <div
-                                    class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                                    <i class="fas fa-image text-green-600"></i>
-                                </div>
-                                <p class="text-2xl font-bold text-gray-800">{{ $salon->getMedia('salon_images')->count()
-                                    ?? 0 }}</p>
-                                <p class="text-xs text-gray-500">عدد الصور</p>
-                            </div>
+                            <p class="text-2xl font-bold text-gray-800">{{ $totalAppointments ?? 0 }}</p>
+                            <p class="text-xs text-gray-500">إجمالي الحجوزات</p>
                         </div>
+
+                        <!-- متوسط التقييم -->
+                        <div
+                            class="text-center p-4 rounded-xl bg-yellow-50 hover:bg-yellow-100 transition duration-200">
+                            <div
+                                class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                                <i class="fas fa-star text-yellow-600 text-xl"></i>
+                            </div>
+                            <p class="text-2xl font-bold text-gray-800">
+                                {{ number_format($averageRating ?? 0, 1) }}
+                                <span class="text-sm text-gray-400">/ 5</span>
+                            </p>
+                            <p class="text-xs text-gray-500">متوسط التقييم</p>
+                            @if($ratingsCount > 0)
+                            <p class="text-xs text-gray-400 mt-1">({{ $ratingsCount }} تقييم)</p>
+                            @endif
+                        </div>
+
+                        <!-- عدد الحلاقين -->
+                        <div
+                            class="text-center p-4 rounded-xl bg-purple-50 hover:bg-purple-100 transition duration-200">
+                            <div
+                                class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                                <i class="fas fa-cut text-purple-600 text-xl"></i>
+                            </div>
+                            <p class="text-2xl font-bold text-gray-800">{{ $barbersCount ?? 0 }}</p>
+                            <p class="text-xs text-gray-500">عدد الحلاقين</p>
+                        </div>
+
+                        <!-- عدد الصور -->
+                        <div class="text-center p-4 rounded-xl bg-green-50 hover:bg-green-100 transition duration-200">
+                            <div
+                                class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                                <i class="fas fa-image text-green-600 text-xl"></i>
+                            </div>
+                            <p class="text-2xl font-bold text-gray-800">{{ $imagesCount ?? 0 }}</p>
+                            <p class="text-xs text-gray-500">عدد الصور</p>
+                        </div>
+
                     </div>
                 </div>
             </div>

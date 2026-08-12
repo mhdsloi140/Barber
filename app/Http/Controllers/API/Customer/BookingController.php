@@ -158,7 +158,7 @@ public function confirmed()
             'reason' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $result = $this->bookingService->cancelAppointment(
+        $result = $this->bookingService->cancelAppointmentByCustomer(
             auth()->user(),
             (int) $id,
             $request->reason

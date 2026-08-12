@@ -183,4 +183,55 @@ class Appointment extends Model
             }
         );
     }
+       public function scopeActive($query)
+    {
+        return $query->where('status', '!=', 'cancelled');
+    }
+      public function scopeStatus($query, $status)
+    {
+        return $query->where('status', $status);
+    }
+      public static function isTimeSlotAvailable(int $barberId, string $date, string $time, ?int $excludeId = null): bool
+    {
+        $query = self::where('barber_id', $barberId)
+            ->where('appointment_date', $date)
+            ->where('appointment_time', $time)
+            ->where('status', '!=', 'cancelled');
+
+        if ($excludeId) {
+            $query->where('id', '!=', $excludeId);
+        }
+
+        return !$query->exists();
+    }
+       public static function getBookedTimes(int $barberId, string $date): array
+    {
+        return self::where('barber_id', $barberId)
+            ->where('appointment_date', $date)
+            ->where('status', '!=', 'cancelled')
+            ->pluck('appointment_time')
+            ->toArray();
+    }
+       public static function getAvailableTimes(int $barberId, string $date, array $allTimes = []): array
+    {
+        $bookedTimes = self::getBookedTimes($barberId, $date);
+        return array_values(array_diff($allTimes, $bookedTimes));
+    }
+      public function cancel(string $cancelledBy, ?string $reason = null): bool
+    {
+        if (!in_array($this->status, ['pending', 'confirmed'])) {
+            return false;
+        }
+
+        $this->status = 'cancelled';
+        $this->cancelled_by = $cancelledBy;
+        // $this->cancelled_at = now();
+
+        if ($reason) {
+            $this->cancellation_reason = $reason;
+        }
+
+        return $this->save();
+    }
+
 }
